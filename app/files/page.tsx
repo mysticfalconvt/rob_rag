@@ -224,24 +224,26 @@ export default function FilesPage() {
                                         </div>
                                     </td>
                                     <td>{new Date(file.lastIndexed).toLocaleString()}</td>
-                                    <td className={styles.actionsCell}>
-                                        {file.needsReindexing && !file.fileMissing && (
+                                    <td>
+                                        <div className={styles.actionsCell}>
+                                            {file.needsReindexing && !file.fileMissing && (
+                                                <button
+                                                    onClick={() => handleReindex(file.filePath)}
+                                                    className={styles.reindexButton}
+                                                    title="Re-index File"
+                                                    disabled={isScanning}
+                                                >
+                                                    <i className={`fas fa-sync ${isScanning ? 'fa-spin' : ''}`}></i>
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => handleReindex(file.filePath)}
-                                                className={styles.reindexButton}
-                                                title="Re-index File"
-                                                disabled={isScanning}
+                                                onClick={() => handleDelete(file.filePath)}
+                                                className={styles.deleteButton}
+                                                title="Delete file"
                                             >
-                                                <i className={`fas fa-sync ${isScanning ? 'fa-spin' : ''}`}></i>
+                                                <i className="fas fa-trash"></i>
                                             </button>
-                                        )}
-                                        <button
-                                            onClick={() => handleDelete(file.filePath)}
-                                            className={styles.deleteButton}
-                                            title="Delete Index"
-                                        >
-                                            <i className="fas fa-trash"></i>
-                                        </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))

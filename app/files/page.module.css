@@ -109,6 +109,12 @@
     border-bottom: none;
 }
 
+.table th:last-child,
+.table td:last-child {
+    width: 120px;
+    text-align: center;
+}
+
 .pathCell {
     max-width: 400px;
     overflow: hidden;
@@ -257,6 +263,7 @@
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    justify-content: center;
 }
 
 .reindexButton {
