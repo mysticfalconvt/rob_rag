@@ -1,0 +1,37 @@
+
+> rob_rag@0.1.0 build /home/rboskind/code/rob_rag
+> next build
+
+   ▲ Next.js 16.0.3 (Turbopack)
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 3.3s
+   Running TypeScript ...
+   Collecting page data using 15 workers ...
+Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
+Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
+Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
+Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
+   Generating static pages using 15 workers (0/10) ...
+   Generating static pages using 15 workers (2/10) 
+   Generating static pages using 15 workers (4/10) 
+Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
+   Generating static pages using 15 workers (7/10) 
+ ✓ Generating static pages using 15 workers (10/10) in 866.1ms
+   Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/chat
+├ ƒ /api/files
+├ ƒ /api/scan
+├ ƒ /api/status
+├ ○ /files
+└ ○ /status
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

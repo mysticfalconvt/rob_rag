@@ -5,7 +5,6 @@
 ### 1.1 Initialize Project
 - [ ] Create Next.js 14+ project with TypeScript and App Router
 - [ ] Configure TypeScript with strict mode
-- [ ] Set up ESLint and Prettier
 - [ ] Install core dependencies:
   - `@qdrant/js-client-rest` - Qdrant vector DB client
   - `langchain` - RAG orchestration
@@ -13,6 +12,7 @@
   - `pdf-parse` - PDF processing
   - `mammoth` - Word doc processing (if needed)
   - `gray-matter` - Markdown frontmatter parsing
+  
 - [ ] Set up Font Awesome Web Components integration
 
 ### 1.2 Environment Configuration

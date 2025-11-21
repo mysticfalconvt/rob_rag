@@ -1,0 +1,20 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model IndexedFile {
+  id           String   @id @default(uuid())
+  filePath     String   @unique
+  fileHash     String
+  lastModified DateTime
+  lastIndexed  DateTime @default(now())
+  chunkCount   Int
+  status       String   @default("indexed") // indexed, pending, error
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

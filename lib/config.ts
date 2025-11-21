@@ -1,0 +1,19 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+    LM_STUDIO_API_URL: z.string().url().default('http://localhost:1234/v1'),
+    LM_STUDIO_API_KEY: z.string().optional(),
+    QDRANT_URL: z.string().url().default('http://localhost:6333'),
+    DOCUMENTS_FOLDER_PATH: z.string(),
+    EMBEDDING_MODEL_NAME: z.string().default('nomic-embed-text'),
+    CHAT_MODEL_NAME: z.string().default('llama-3.2-1b-instruct'),
+});
+
+export const config = envSchema.parse({
+    LM_STUDIO_API_URL: process.env.LM_STUDIO_API_URL,
+    LM_STUDIO_API_KEY: process.env.LM_STUDIO_API_KEY,
+    QDRANT_URL: process.env.QDRANT_URL,
+    DOCUMENTS_FOLDER_PATH: process.env.DOCUMENTS_FOLDER_PATH,
+    EMBEDDING_MODEL_NAME: process.env.EMBEDDING_MODEL_NAME,
+    CHAT_MODEL_NAME: process.env.CHAT_MODEL_NAME,
+});

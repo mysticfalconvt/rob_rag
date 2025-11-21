@@ -1,0 +1,53 @@
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+Testing end-to-end indexing...
+
+1. Indexing test.md...
+Indexing file: /home/rboskind/code/rob_rag/documents/test.md
+Generated 1 chunks for /home/rboskind/code/rob_rag/documents/test.md
+Error indexing /home/rboskind/code/rob_rag/documents/test.md: ApiError: Bad Request
+    at Object.fun [as upsertPoints] (/home/rboskind/code/rob_rag/node_modules/.pnpm/@qdrant+openapi-typescript-fetch@1.2.6/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/fetcher.js:172:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async QdrantClient.upsert (/home/rboskind/code/rob_rag/node_modules/.pnpm/@qdrant+js-client-rest@1.16.0_typescript@5.9.3/node_modules/@qdrant/js-client-rest/dist/cjs/qdrant-client.js:579:26)
+    at async indexFile (/home/rboskind/code/rob_rag/lib/indexer.ts:61:13)
+    at async testIndexing (/home/rboskind/code/rob_rag/scripts/test-indexing.ts:13:9) {
+  headers: Headers {
+    'transfer-encoding': 'chunked',
+    'content-type': 'application/json',
+    'content-encoding': 'gzip',
+    vary: 'accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+    date: 'Fri, 21 Nov 2025 12:25:14 GMT'
+  },
+  url: 'http://10.0.0.50:4344/collections/documents/points?wait=true',
+  status: 400,
+  statusText: 'Bad Request',
+  data: {
+    status: {
+      error: 'Wrong input: Vector dimension error: expected dim: 768, got 256'
+    },
+    time: 0.001209633
+  }
+}
+✗ Test failed: ApiError: Bad Request
+    at Object.fun [as upsertPoints] (/home/rboskind/code/rob_rag/node_modules/.pnpm/@qdrant+openapi-typescript-fetch@1.2.6/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/fetcher.js:172:23)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async QdrantClient.upsert (/home/rboskind/code/rob_rag/node_modules/.pnpm/@qdrant+js-client-rest@1.16.0_typescript@5.9.3/node_modules/@qdrant/js-client-rest/dist/cjs/qdrant-client.js:579:26)
+    at async indexFile (/home/rboskind/code/rob_rag/lib/indexer.ts:61:13)
+    at async testIndexing (/home/rboskind/code/rob_rag/scripts/test-indexing.ts:13:9) {
+  headers: Headers {
+    'transfer-encoding': 'chunked',
+    'content-type': 'application/json',
+    'content-encoding': 'gzip',
+    vary: 'accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
+    date: 'Fri, 21 Nov 2025 12:25:14 GMT'
+  },
+  url: 'http://10.0.0.50:4344/collections/documents/points?wait=true',
+  status: 400,
+  statusText: 'Bad Request',
+  data: {
+    status: {
+      error: 'Wrong input: Vector dimension error: expected dim: 768, got 256'
+    },
+    time: 0.001209633
+  }
+}
