@@ -89,6 +89,89 @@
     color: #666;
 }
 
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.cardHeader h2 {
+    margin-bottom: 0;
+}
+
+.defaultBadge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.formGroup {
+    margin-bottom: 1rem;
+}
+
+.formGroup label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+.warningIcon {
+    font-size: 1rem;
+    cursor: help;
+}
+
+.select {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e5e5e5;
+    border-radius: 0.5rem;
+    background-color: #fff;
+    color: #374151;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.select:hover:not(:disabled) {
+    border-color: #3b82f6;
+}
+
+.select:disabled {
+    background-color: #f3f4f6;
+    cursor: not-allowed;
+}
+
+.saveButton {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.75rem 1.5rem;
+    background-color: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.saveButton:hover:not(:disabled) {
+    background-color: #2563eb;
+}
+
+.saveButton:disabled {
+    background-color: #9ca3af;
+    cursor: not-allowed;
+}
+
 @media (prefers-color-scheme: dark) {
     .card {
         background: #171717;
@@ -116,5 +199,28 @@
     .code {
         background-color: #262626;
         color: #ededed;
+    }
+
+    .defaultBadge {
+        background-color: #78350f;
+        color: #fef3c7;
+    }
+
+    .formGroup label {
+        color: #ededed;
+    }
+
+    .select {
+        background-color: #262626;
+        border-color: #333;
+        color: #ededed;
+    }
+
+    .select:hover:not(:disabled) {
+        border-color: #3b82f6;
+    }
+
+    .select:disabled {
+        background-color: #171717;
     }
 }

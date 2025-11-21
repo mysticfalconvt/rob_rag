@@ -158,6 +158,28 @@
     margin: 0;
 }
 
+/* Highlighted chunk styles */
+.content :global(mark) {
+    background-color: #fef08a;
+    color: #854d0e;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+    animation: highlight-pulse 1s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+
+    0%,
+    100% {
+        background-color: #fef08a;
+    }
+
+    50% {
+        background-color: #fde047;
+    }
+}
+
 @media (prefers-color-scheme: dark) {
     .metadata {
         background: #1f2937;
@@ -184,5 +206,10 @@
 
     .plainText {
         color: #e5e7eb;
+    }
+
+    .content :global(mark) {
+        background-color: #854d0e;
+        color: #fef08a;
     }
 }

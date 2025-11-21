@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import styles from './page.module.css';
@@ -21,9 +21,12 @@ interface FileData {
 
 export default function FileViewerPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
+    const contentRef = useRef<HTMLDivElement>(null);
     const [fileData, setFileData] = useState<FileData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [highlightedContent, setHighlightedContent] = useState<string>('');
 
     useEffect(() => {
         const fetchFile = async () => {
@@ -46,6 +49,94 @@ export default function FileViewerPage() {
 
         fetchFile();
     }, [params.path]);
+
+    // Prepare content with markers for highlighting
+    useEffect(() => {
+        if (!fileData) return;
+
+        const chunkText = searchParams.get('chunk');
+        if (!chunkText) {
+            setHighlightedContent('');
+            return;
+        }
+
+        // For plain text files, inject HTML directly
+        if (fileData.fileType !== 'md' && fileData.fileType !== 'markdown') {
+            const content = fileData.content;
+            const chunkIndex = content.indexOf(chunkText);
+
+            if (chunkIndex !== -1) {
+                const before = content.substring(0, chunkIndex);
+                const chunk = content.substring(chunkIndex, chunkIndex + chunkText.length);
+                const after = content.substring(chunkIndex + chunkText.length);
+
+                setHighlightedContent(before + '<mark id="highlighted-chunk">' + chunk + '</mark>' + after);
+            } else {
+                setHighlightedContent(fileData.content);
+            }
+        } else {
+            // For markdown, inject unique markers that will survive markdown rendering
+            const content = fileData.content;
+            const chunkIndex = content.indexOf(chunkText);
+
+            if (chunkIndex !== -1) {
+                const before = content.substring(0, chunkIndex);
+                const chunk = content.substring(chunkIndex, chunkIndex + chunkText.length);
+                const after = content.substring(chunkIndex + chunkText.length);
+
+                // Use unique markers that ReactMarkdown will render as text
+                const markedContent = before + '⟪HIGHLIGHT_START⟫' + chunk + '⟪HIGHLIGHT_END⟫' + after;
+                setHighlightedContent(markedContent);
+            } else {
+                setHighlightedContent('');
+            }
+        }
+    }, [fileData, searchParams]);
+
+    // Replace markers with actual mark tags after rendering
+    useEffect(() => {
+        const chunkText = searchParams.get('chunk');
+        if (!chunkText || !contentRef.current || !fileData) return;
+
+        if (fileData.fileType === 'md' || fileData.fileType === 'markdown') {
+            // Wait for ReactMarkdown to render
+            const timer = setTimeout(() => {
+                const contentElement = contentRef.current;
+                if (!contentElement) return;
+
+                // Find and replace the markers with actual mark tags
+                const innerHTML = contentElement.innerHTML;
+
+                if (innerHTML.includes('⟪HIGHLIGHT_START⟫') && innerHTML.includes('⟪HIGHLIGHT_END⟫')) {
+                    const newHTML = innerHTML
+                        .replace('⟪HIGHLIGHT_START⟫', '<mark id="highlighted-chunk">')
+                        .replace('⟪HIGHLIGHT_END⟫', '</mark>');
+
+                    contentElement.innerHTML = newHTML;
+
+                    // Scroll to highlight
+                    setTimeout(() => {
+                        const mark = document.getElementById('highlighted-chunk');
+                        if (mark) {
+                            mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }, 100);
+                }
+            }, 300);
+
+            return () => clearTimeout(timer);
+        } else {
+            // For plain text, scroll to the mark tag
+            const timer = setTimeout(() => {
+                const highlightedElement = document.getElementById('highlighted-chunk');
+                if (highlightedElement) {
+                    highlightedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 200);
+
+            return () => clearTimeout(timer);
+        }
+    }, [fileData, searchParams, highlightedContent]);
 
     if (isLoading) {
         return (
@@ -111,13 +202,18 @@ export default function FileViewerPage() {
                 </div>
             </div>
 
-            <div className={styles.content}>
+            <div className={styles.content} ref={contentRef}>
                 {fileData.fileType === 'md' || fileData.fileType === 'markdown' ? (
                     <div className={styles.markdown}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{fileData.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {highlightedContent || fileData.content}
+                        </ReactMarkdown>
                     </div>
                 ) : (
-                    <pre className={styles.plainText}>{fileData.content}</pre>
+                    <pre
+                        className={styles.plainText}
+                        dangerouslySetInnerHTML={{ __html: highlightedContent || fileData.content }}
+                    />
                 )}
             </div>
         </div>

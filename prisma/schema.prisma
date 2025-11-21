@@ -38,3 +38,12 @@ model Message {
   
   @@index([conversationId])
 }
+
+model Settings {
+  id                      String   @id @default("singleton")
+  embeddingModel          String
+  chatModel               String
+  embeddingModelDimension Int      @default(1024)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
