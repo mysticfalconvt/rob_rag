@@ -115,6 +115,32 @@ ${context}`;
                 try {
                     const { value, done } = await iterator.next();
                     if (done) {
+                        // Generate title if this is the first message
+                        if (messages.length === 1) {
+                            try {
+                                const titlePrompt = `Generate a short, concise title (maximum 10 words) for this conversation based on the following exchange:
+User: ${query}
+Assistant: ${fullResponse}
+
+Title:`;
+                                const titleResponse = await chatModel.invoke([
+                                    new HumanMessage(titlePrompt)
+                                ]);
+                                const newTitle = typeof titleResponse.content === 'string'
+                                    ? titleResponse.content.replace(/^["']|["']$/g, '').trim()
+                                    : '';
+
+                                if (newTitle) {
+                                    await prisma.conversation.update({
+                                        where: { id: convId },
+                                        data: { title: newTitle }
+                                    });
+                                }
+                            } catch (error) {
+                                console.error('Failed to generate title:', error);
+                            }
+                        }
+
                         // Save assistant message to database
                         const sourcesData = {
                             type: 'sources',

@@ -17,6 +17,7 @@ function SidebarContent() {
     const searchParams = useSearchParams();
     const currentConversationId = searchParams.get('conversation');
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const isActive = (path: string) => pathname === path;
 
@@ -98,31 +99,44 @@ function SidebarContent() {
                 </Link>
             </nav>
 
+            <div className={styles.searchContainer}>
+                <input
+                    type="text"
+                    placeholder="Search conversations..."
+                    className={styles.searchInput}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
+            </div>
+
             {conversations.length > 0 && (
                 <div className={styles.conversations}>
                     <div className={styles.conversationsHeader}>Recent Chats</div>
                     <div className={styles.conversationsList}>
-                        {conversations.map((conv) => (
-                            <Link
-                                key={conv.id}
-                                href={`/?conversation=${conv.id}`}
-                                className={`${styles.conversationItem} ${conv.id === currentConversationId ? styles.activeConversation : ''}`}
-                            >
-                                <div className={styles.conversationContent}>
-                                    <div className={styles.conversationTitle}>{conv.title}</div>
-                                    <div className={styles.conversationMeta}>
-                                        {formatRelativeTime(conv.updatedAt)} · {conv._count.messages} msgs
-                                    </div>
-                                </div>
-                                <button
-                                    className={styles.deleteButton}
-                                    onClick={(e) => handleDeleteConversation(conv.id, e)}
-                                    title="Delete conversation"
+                        {conversations
+                            .filter(conv => conv.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                            .map((conv) => (
+                                <Link
+                                    key={conv.id}
+                                    href={`/?conversation=${conv.id}`}
+                                    className={`${styles.conversationItem} ${conv.id === currentConversationId ? styles.activeConversation : ''}`}
+                                    title={conv.title}
                                 >
-                                    <i className="fas fa-trash"></i>
-                                </button>
-                            </Link>
-                        ))}
+                                    <div className={styles.conversationContent}>
+                                        <div className={styles.conversationTitle}>{conv.title}</div>
+                                        <div className={styles.conversationMeta}>
+                                            {formatRelativeTime(conv.updatedAt)} · {conv._count.messages} msgs
+                                        </div>
+                                    </div>
+                                    <button
+                                        className={styles.deleteButton}
+                                        onClick={(e) => handleDeleteConversation(conv.id, e)}
+                                        title="Delete conversation"
+                                    >
+                                        <i className="fas fa-trash"></i>
+                                    </button>
+                                </Link>
+                            ))}
                     </div>
                 </div>
             )}

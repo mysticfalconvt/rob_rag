@@ -51,6 +51,33 @@ export default function FilesPage() {
         }
     };
 
+    const handleForceReindex = async () => {
+        const confirmed = confirm(
+            '⚠️ Force Reindex All Files\n\n' +
+            'This will clear the entire index and re-scan all documents from scratch.\n' +
+            'This may take several minutes depending on the number of files.\n\n' +
+            'Are you sure you want to continue?'
+        );
+
+        if (!confirmed) return;
+
+        setIsScanning(true);
+        try {
+            const res = await fetch('/api/reindex', { method: 'POST' });
+            if (res.ok) {
+                await fetchFiles();
+                alert('✅ Re-indexing complete!');
+            } else {
+                alert('❌ Re-indexing failed. Check console for details.');
+            }
+        } catch (error) {
+            console.error('Error force re-indexing:', error);
+            alert('❌ Re-indexing failed. Check console for details.');
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
     const handleReindex = async (filePath: string) => {
         setIsScanning(true);
         try {
@@ -138,6 +165,15 @@ export default function FilesPage() {
                     >
                         <i className={`fas fa-sync ${isScanning ? 'fa-spin' : ''}`}></i>
                         {isScanning ? 'Scanning...' : 'Scan Now'}
+                    </button>
+                    <button
+                        onClick={handleForceReindex}
+                        disabled={isScanning}
+                        className={styles.forceReindexButton}
+                        title="Clear index and re-scan all files"
+                    >
+                        <i className={`fas fa-redo ${isScanning ? 'fa-spin' : ''}`}></i>
+                        Force Reindex All
                     </button>
                 </div>
             </div>
