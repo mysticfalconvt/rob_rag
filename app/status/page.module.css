@@ -224,3 +224,29 @@
         background-color: #171717;
     }
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .card {
+        padding: 1rem;
+    }
+
+    .value {
+        font-size: 2rem;
+    }
+
+    .select,
+    .saveButton {
+        padding: 0.75rem;
+        /* Larger touch target */
+    }
+
+    .item {
+        padding: 0.625rem 0;
+    }
+}

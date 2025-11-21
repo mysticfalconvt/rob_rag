@@ -20,6 +20,8 @@ export const metadata: Metadata = {
 
 import Sidebar from "@/components/Sidebar";
 
+import styles from "./layout.module.css";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,9 +30,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <div style={{ display: 'flex' }}>
+        <div className={styles.container}>
           <Sidebar />
-          <main style={{ flex: 1, marginLeft: '250px', padding: '2rem' }}>
+          <main className={styles.main}>
             {children}
           </main>
         </div>

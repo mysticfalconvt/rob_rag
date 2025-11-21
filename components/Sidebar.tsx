@@ -18,6 +18,7 @@ function SidebarContent() {
     const currentConversationId = searchParams.get('conversation');
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const isActive = (path: string) => pathname === path;
 
@@ -75,76 +76,121 @@ function SidebarContent() {
         return date.toLocaleDateString();
     };
 
+    const closeMobileMenu = () => {
+        setIsMobileMenuOpen(false);
+    };
+
     return (
-        <aside className={styles.sidebar}>
-            <div className={styles.logo}>
-                <i className="fas fa-robot"></i>
-                <span>RobRAG</span>
-            </div>
+        <>
+            {/* Hamburger Menu Button - Mobile Only */}
+            <button
+                className={styles.hamburger}
+                onClick={() => setIsMobileMenuOpen(true)}
+                aria-label="Open menu"
+            >
+                <i className="fas fa-bars"></i>
+            </button>
 
-            <nav className={styles.nav}>
-                <Link href="/" className={`${styles.link} ${isActive('/') && !currentConversationId ? styles.active : ''}`}>
-                    <i className="fas fa-plus"></i>
-                    <span>New Chat</span>
-                </Link>
-
-                <Link href="/files" className={`${styles.link} ${isActive('/files') ? styles.active : ''}`}>
-                    <i className="fas fa-folder-open"></i>
-                    <span>Files</span>
-                </Link>
-
-                <Link href="/status" className={`${styles.link} ${isActive('/status') ? styles.active : ''}`}>
-                    <i className="fas fa-server"></i>
-                    <span>Status</span>
-                </Link>
-            </nav>
-
-            <div className={styles.searchContainer}>
-                <input
-                    type="text"
-                    placeholder="Search conversations..."
-                    className={styles.searchInput}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+            {/* Backdrop Overlay - Mobile Only */}
+            {isMobileMenuOpen && (
+                <div
+                    className={styles.backdrop}
+                    onClick={closeMobileMenu}
                 />
-            </div>
-
-            {conversations.length > 0 && (
-                <div className={styles.conversations}>
-                    <div className={styles.conversationsHeader}>Recent Chats</div>
-                    <div className={styles.conversationsList}>
-                        {conversations
-                            .filter(conv => conv.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                            .map((conv) => (
-                                <Link
-                                    key={conv.id}
-                                    href={`/?conversation=${conv.id}`}
-                                    className={`${styles.conversationItem} ${conv.id === currentConversationId ? styles.activeConversation : ''}`}
-                                    title={conv.title}
-                                >
-                                    <div className={styles.conversationContent}>
-                                        <div className={styles.conversationTitle}>{conv.title}</div>
-                                        <div className={styles.conversationMeta}>
-                                            {formatRelativeTime(conv.updatedAt)} · {conv._count.messages} msgs
-                                        </div>
-                                    </div>
-                                    <button
-                                        className={styles.deleteButton}
-                                        onClick={(e) => handleDeleteConversation(conv.id, e)}
-                                        title="Delete conversation"
-                                    >
-                                        <i className="fas fa-trash"></i>
-                                    </button>
-                                </Link>
-                            ))}
-                    </div>
-                </div>
             )}
 
-            <div className={styles.footer}>
-                <p>v0.1.0</p>
-            </div>
-        </aside>
+            <aside className={`${styles.sidebar} ${isMobileMenuOpen ? styles.open : ''}`}>
+                <div className={styles.sidebarHeader}>
+                    <div className={styles.logo}>
+                        <i className="fas fa-robot"></i>
+                        <span>RobRAG</span>
+                    </div>
+                    <button
+                        className={styles.closeButton}
+                        onClick={closeMobileMenu}
+                        aria-label="Close menu"
+                    >
+                        <i className="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <nav className={styles.nav}>
+                    <Link
+                        href="/"
+                        className={`${styles.link} ${isActive('/') && !currentConversationId ? styles.active : ''}`}
+                        onClick={closeMobileMenu}
+                    >
+                        <i className="fas fa-plus"></i>
+                        <span>New Chat</span>
+                    </Link>
+
+                    <Link
+                        href="/files"
+                        className={`${styles.link} ${isActive('/files') ? styles.active : ''}`}
+                        onClick={closeMobileMenu}
+                    >
+                        <i className="fas fa-folder-open"></i>
+                        <span>Files</span>
+                    </Link>
+
+                    <Link
+                        href="/status"
+                        className={`${styles.link} ${isActive('/status') ? styles.active : ''}`}
+                        onClick={closeMobileMenu}
+                    >
+                        <i className="fas fa-server"></i>
+                        <span>Status</span>
+                    </Link>
+                </nav>
+
+                <div className={styles.searchContainer}>
+                    <input
+                        type="text"
+                        placeholder="Search conversations..."
+                        className={styles.searchInput}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
+
+                {conversations.length > 0 && (
+                    <div className={styles.conversations}>
+                        <div className={styles.conversationsHeader}>Recent Chats</div>
+                        <div className={styles.conversationsList}>
+                            {conversations
+                                .filter(conv => conv.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                                .map((conv) => (
+                                    <Link
+                                        key={conv.id}
+                                        href={`/?conversation=${conv.id}`}
+                                        className={`${styles.conversationItem} ${conv.id === currentConversationId ? styles.activeConversation : ''}`}
+                                        title={conv.title}
+                                        onClick={closeMobileMenu}
+                                    >
+                                        <div className={styles.conversationContent}>
+                                            <div className={styles.conversationTitle}>{conv.title}</div>
+                                            <div className={styles.conversationMeta}>
+                                                {formatRelativeTime(conv.updatedAt)} · {conv._count.messages} msgs
+                                            </div>
+                                        </div>
+                                        <button
+                                            className={styles.deleteButton}
+                                            onClick={(e) => handleDeleteConversation(conv.id, e)}
+                                            title="Delete conversation"
+                                        >
+                                            <i className="fas fa-trash"></i>
+                                        </button>
+                                    </Link>
+                                ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className={styles.footer}>
+                    <p>v0.1.0</p>
+                </div>
+            </aside>
+        </>
     );
 }
 
@@ -155,3 +201,4 @@ export default function Sidebar() {
         </Suspense>
     );
 }
+
