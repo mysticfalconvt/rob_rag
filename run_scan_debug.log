@@ -1,0 +1,14 @@
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+Running full scan of all documents...
+Starting full scan...
+Indexing file /home/rboskind/code/rob_rag/documents/rag-implementation-plan.md...
+Indexing file: /home/rboskind/code/rob_rag/documents/rag-implementation-plan.md
+File /home/rboskind/code/rob_rag/documents/rag-implementation-plan.md is already up to date.
+✅ Indexed /home/rboskind/code/rob_rag/documents/rag-implementation-plan.md
+Indexing file /home/rboskind/code/rob_rag/documents/test.md...
+Indexing file: /home/rboskind/code/rob_rag/documents/test.md
+File /home/rboskind/code/rob_rag/documents/test.md is already up to date.
+✅ Indexed /home/rboskind/code/rob_rag/documents/test.md
+Scan complete. Indexed: 2, Deleted: 0
+Scan result: { indexedCount: 2, deletedCount: 0 }

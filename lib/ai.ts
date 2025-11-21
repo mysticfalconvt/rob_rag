@@ -3,7 +3,7 @@ import { config } from './config';
 
 // Initialize the Chat Model (LLM)
 export const chatModel = new ChatOpenAI({
-    openAIApiKey: config.LM_STUDIO_API_KEY || 'lm-studio',
+    apiKey: config.LM_STUDIO_API_KEY || 'lm-studio',
     configuration: {
         baseURL: config.LM_STUDIO_API_URL,
     },
@@ -11,20 +11,36 @@ export const chatModel = new ChatOpenAI({
     temperature: 0.7,
 });
 
-// Initialize the Embeddings Model
-export const embeddingsModel = new OpenAIEmbeddings({
-    openAIApiKey: config.LM_STUDIO_API_KEY || 'lm-studio',
-    configuration: {
-        baseURL: config.LM_STUDIO_API_URL,
-    },
-    modelName: config.EMBEDDING_MODEL_NAME,
-});
-
+// Direct HTTP embedding function (bypasses LangChain due to compatibility issues)
 export async function generateEmbedding(text: string): Promise<number[]> {
     try {
         // Remove newlines to improve embedding quality
         const cleanText = text.replace(/\n/g, ' ');
-        const embedding = await embeddingsModel.embedQuery(cleanText);
+        console.log('[Embedding] Generating for text:', cleanText.substring(0, 100) + '...');
+
+        const response = await fetch(`${config.LM_STUDIO_API_URL}/embeddings`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: config.EMBEDDING_MODEL_NAME,
+                input: cleanText,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Embedding API returned ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const embedding = data.data[0].embedding;
+
+        console.log('[Embedding] Result length:', embedding.length);
+        console.log('[Embedding] First 5 values:', embedding.slice(0, 5));
+        console.log('[Embedding] Sum:', embedding.reduce((a: number, b: number) => a + b, 0));
+        console.log('[Embedding] All zeros?', embedding.every((v: number) => v === 0));
+
         return embedding;
     } catch (error) {
         console.error('Error generating embedding:', error);

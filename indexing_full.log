@@ -1,5 +1,5 @@
-[dotenv@17.2.3] injecting env (7) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
-[dotenv@17.2.3] injecting env (0) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
 Testing end-to-end indexing...
 
 1. Indexing test.md...
@@ -19,7 +19,7 @@ File /home/rboskind/code/rob_rag/documents/test.md is already up to date.
 ]
 [Embedding] Sum: -0.25308843341463216
 [Embedding] All zeros? false
-Error searching: ApiError: Bad Request
+Error searching: ApiError: Not Found
     at Object.fun [as searchPoints] (/home/rboskind/code/rob_rag/node_modules/.pnpm/@qdrant+openapi-typescript-fetch@1.2.6/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/fetcher.js:172:23)
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
     at async QdrantClient.search (/home/rboskind/code/rob_rag/node_modules/.pnpm/@qdrant+js-client-rest@1.16.0_typescript@5.9.3/node_modules/@qdrant/js-client-rest/dist/cjs/qdrant-client.js:170:26)
@@ -27,19 +27,17 @@ Error searching: ApiError: Bad Request
     at async testIndexing (/home/rboskind/code/rob_rag/scripts/test-indexing.ts:17:25) {
   headers: Headers {
     'transfer-encoding': 'chunked',
+    'content-type': 'application/json',
     vary: 'accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers',
     'content-encoding': 'gzip',
-    'content-type': 'application/json',
-    date: 'Fri, 21 Nov 2025 13:28:33 GMT'
+    date: 'Fri, 21 Nov 2025 13:30:07 GMT'
   },
   url: 'http://10.0.0.50:4344/collections/documents/points/search',
-  status: 400,
-  statusText: 'Bad Request',
+  status: 404,
+  statusText: 'Not Found',
   data: {
-    status: {
-      error: 'Wrong input: Vector dimension error: expected dim: 256, got 1024'
-    },
-    time: 0.000227943
+    status: { error: "Not found: Collection `documents` doesn't exist!" },
+    time: 0.00000159
   }
 }
 ✓ Found 0 results:

@@ -1,0 +1,33 @@
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+Testing embedding generation...
+
+Input text: This is a test sentence for embedding generation.
+
+Generating embedding...
+[Embedding] Generating for text: This is a test sentence for embedding generation....
+[Embedding] Result length: 1024
+[Embedding] First 5 values: [
+  0.006089682690799236,
+  0.012346780858933926,
+  0.003903191303834319,
+  0.007012672256678343,
+  -0.027325931936502457
+]
+[Embedding] Sum: -0.18419393798831152
+[Embedding] All zeros? false
+Embedding length: 1024
+First 10 values: [
+  0.006089682690799236,
+  0.012346780858933926,
+  0.003903191303834319,
+  0.007012672256678343,
+  -0.027325931936502457,
+  -0.0337647870182991,
+  0.002991448389366269,
+  -0.016902374103665352,
+  0.030004486441612244,
+  -0.008121617138385773
+]
+Sum of values: -0.18419393798831152
+All zeros? false

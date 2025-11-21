@@ -1,19 +1,34 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import SourceCitation from '@/components/SourceCitation';
 import styles from './page.module.css';
+
+interface Source {
+  fileName: string;
+  filePath: string;
+  chunk: string;
+  score: number;
+}
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  sources?: Source[];
 }
 
 export default function ChatPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const conversationId = searchParams.get('conversation');
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -23,6 +38,41 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load conversation when conversationId changes
+  useEffect(() => {
+    const loadConversation = async () => {
+      if (conversationId) {
+        try {
+          const res = await fetch(`/api/conversations/${conversationId}`);
+          if (res.ok) {
+            const data = await res.json();
+            const loadedMessages = data.messages.map((msg: any) => {
+              const sources = msg.sources ? JSON.parse(msg.sources) : undefined;
+              if (sources) {
+                console.log('Loaded sources:', sources);
+              }
+              return {
+                role: msg.role,
+                content: msg.content,
+                sources,
+              };
+            });
+            setMessages(loadedMessages);
+            setCurrentConversationId(conversationId);
+          }
+        } catch (error) {
+          console.error('Failed to load conversation:', error);
+        }
+      } else {
+        // New conversation
+        setMessages([]);
+        setCurrentConversationId(null);
+      }
+    };
+
+    loadConversation();
+  }, [conversationId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +87,10 @@ export default function ChatPage() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [...messages, userMessage] }),
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+          conversationId: currentConversationId,
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to send message');
@@ -48,15 +101,62 @@ export default function ChatPage() {
       const assistantMessage: Message = { role: 'assistant', content: '' };
       setMessages((prev) => [...prev, assistantMessage]);
 
+      let buffer = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const text = new TextDecoder().decode(value);
+        buffer += text;
+
+        // Check if we received the sources marker
+        if (buffer.includes('__SOURCES__:')) {
+          const [contentPart, sourcesPart] = buffer.split('__SOURCES__:');
+
+          // Update content without the marker
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: contentPart.trim(),
+            };
+            return newMessages;
+          });
+
+          // Parse and add sources + update conversation ID
+          try {
+            const sourcesData = JSON.parse(sourcesPart);
+            console.log('Received sources from stream:', sourcesData.sources);
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              const lastIndex = newMessages.length - 1;
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                sources: sourcesData.sources,
+              };
+              return newMessages;
+            });
+
+            // Update URL with conversation ID if this is a new conversation
+            if (sourcesData.conversationId && !currentConversationId) {
+              setCurrentConversationId(sourcesData.conversationId);
+              router.push(`/?conversation=${sourcesData.conversationId}`);
+            }
+          } catch (e) {
+            console.error('Failed to parse sources:', e);
+          }
+          break;
+        }
+
+        // Normal streaming update
         setMessages((prev) => {
           const newMessages = [...prev];
-          const lastMsg = newMessages[newMessages.length - 1];
-          lastMsg.content += text;
+          const lastIndex = newMessages.length - 1;
+          newMessages[lastIndex] = {
+            ...newMessages[lastIndex],
+            content: buffer,
+          };
           return newMessages;
         });
       }
@@ -96,6 +196,9 @@ export default function ChatPage() {
             </div>
             <div className={styles.content}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              {msg.role === 'assistant' && msg.sources && (
+                <SourceCitation sources={msg.sources} />
+              )}
             </div>
           </div>
         ))}

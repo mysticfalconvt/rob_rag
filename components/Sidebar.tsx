@@ -1,13 +1,78 @@
 'use client';
 
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import styles from './Sidebar.module.css';
 
-export default function Sidebar() {
+interface Conversation {
+    id: string;
+    title: string;
+    updatedAt: string;
+    _count: { messages: number };
+}
+
+function SidebarContent() {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const currentConversationId = searchParams.get('conversation');
+    const [conversations, setConversations] = useState<Conversation[]>([]);
 
     const isActive = (path: string) => pathname === path;
+
+    useEffect(() => {
+        const fetchConversations = async () => {
+            try {
+                const res = await fetch('/api/conversations');
+                if (res.ok) {
+                    const data = await res.json();
+                    setConversations(data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch conversations:', error);
+            }
+        };
+
+        fetchConversations();
+        // Refresh conversations every 5 seconds when on chat page
+        const interval = setInterval(fetchConversations, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!confirm('Delete this conversation?')) return;
+
+        try {
+            const res = await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setConversations(prev => prev.filter(c => c.id !== id));
+                // If deleting current conversation, redirect to new chat
+                if (id === currentConversationId) {
+                    window.location.href = '/';
+                }
+            }
+        } catch (error) {
+            console.error('Failed to delete conversation:', error);
+        }
+    };
+
+    const formatRelativeTime = (dateString: string) => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+    };
 
     return (
         <aside className={styles.sidebar}>
@@ -17,9 +82,9 @@ export default function Sidebar() {
             </div>
 
             <nav className={styles.nav}>
-                <Link href="/" className={`${styles.link} ${isActive('/') ? styles.active : ''}`}>
-                    <i className="fas fa-comments"></i>
-                    <span>Chat</span>
+                <Link href="/" className={`${styles.link} ${isActive('/') && !currentConversationId ? styles.active : ''}`}>
+                    <i className="fas fa-plus"></i>
+                    <span>New Chat</span>
                 </Link>
 
                 <Link href="/files" className={`${styles.link} ${isActive('/files') ? styles.active : ''}`}>
@@ -33,9 +98,46 @@ export default function Sidebar() {
                 </Link>
             </nav>
 
+            {conversations.length > 0 && (
+                <div className={styles.conversations}>
+                    <div className={styles.conversationsHeader}>Recent Chats</div>
+                    <div className={styles.conversationsList}>
+                        {conversations.map((conv) => (
+                            <Link
+                                key={conv.id}
+                                href={`/?conversation=${conv.id}`}
+                                className={`${styles.conversationItem} ${conv.id === currentConversationId ? styles.activeConversation : ''}`}
+                            >
+                                <div className={styles.conversationContent}>
+                                    <div className={styles.conversationTitle}>{conv.title}</div>
+                                    <div className={styles.conversationMeta}>
+                                        {formatRelativeTime(conv.updatedAt)} · {conv._count.messages} msgs
+                                    </div>
+                                </div>
+                                <button
+                                    className={styles.deleteButton}
+                                    onClick={(e) => handleDeleteConversation(conv.id, e)}
+                                    title="Delete conversation"
+                                >
+                                    <i className="fas fa-trash"></i>
+                                </button>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className={styles.footer}>
                 <p>v0.1.0</p>
             </div>
         </aside>
+    );
+}
+
+export default function Sidebar() {
+    return (
+        <Suspense fallback={<div className={styles.sidebar}>Loading...</div>}>
+            <SidebarContent />
+        </Suspense>
     );
 }

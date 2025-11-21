@@ -1,8 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { processFile, getFileHash } from './files';
+import path from 'path';
+
+import { processFile, getFileHash, getAllFiles } from './files';
 import { generateEmbedding } from './ai';
 import { qdrantClient, COLLECTION_NAME, ensureCollection } from './qdrant';
 import prisma from './prisma';
+import { config } from './config';
 
 export async function indexFile(filePath: string) {
     try {
@@ -33,6 +36,7 @@ export async function indexFile(filePath: string) {
                 vector: embedding,
                 payload: {
                     content: chunk.content,
+                    // chunk.metadata already contains filePath, fileName, etc.
                     ...chunk.metadata,
                 },
             });
@@ -58,10 +62,27 @@ export async function indexFile(filePath: string) {
 
         // Upsert new points
         if (points.length > 0) {
-            await qdrantClient.upsert(COLLECTION_NAME, {
-                wait: true,
-                points,
-            });
+            console.log(`Generated ${points.length} points. Upserting to Qdrant via fetch...`);
+            try {
+                const response = await fetch(`${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ points }),
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`Qdrant upsert failed: ${response.status} ${response.statusText} - ${errText}`);
+                }
+
+                const result = await response.json();
+                // console.log('✅ Upsert result:', JSON.stringify(result));
+            } catch (upErr) {
+                console.error('❌ Upsert failed for file', filePath, upErr);
+                throw upErr;
+            }
+        } else {
+            console.warn(`No points generated for ${filePath}`);
         }
 
         // 5. Update SQLite
@@ -132,9 +153,6 @@ export async function deleteFileIndex(filePath: string) {
     }
 }
 
-import { getAllFiles } from './files';
-import { config } from './config';
-
 export async function scanAllFiles() {
     console.log('Starting full scan...');
     const allFiles = await getAllFiles(config.DOCUMENTS_FOLDER_PATH);
@@ -143,7 +161,9 @@ export async function scanAllFiles() {
     let indexedCount = 0;
     for (const filePath of allFiles) {
         try {
+            console.log(`Indexing file ${filePath}...`);
             await indexFile(filePath);
+            console.log(`✅ Indexed ${filePath}`);
             indexedCount++;
         } catch (error) {
             console.error(`Failed to index ${filePath} during scan:`, error);

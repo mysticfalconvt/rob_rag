@@ -1,5 +1,7 @@
 import { generateEmbedding } from './ai';
-import { qdrantClient, COLLECTION_NAME } from './qdrant';
+import { qdrantClient, COLLECTION_NAME, ensureCollection } from './qdrant';
+import { config } from './config';
+// Using built‑in fetch (Node 18+ / Turbopack provides a global fetch)
 
 export interface SearchResult {
     content: string;
@@ -11,21 +13,38 @@ export async function search(query: string, limit: number = 5): Promise<SearchRe
     try {
         const queryEmbedding = await generateEmbedding(query);
 
-        const searchResult = await qdrantClient.search(COLLECTION_NAME, {
-            vector: queryEmbedding,
-            limit,
-            with_payload: true,
+        // Ensure the collection exists (creates it if missing)
+        await ensureCollection();
+        console.log('[Qdrant] Performing search via direct HTTP POST');
+        const response = await fetch(`${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                vector: queryEmbedding,
+                top: limit, // Qdrant expects 'top' for number of results
+                with_payload: true,
+            }),
         });
 
-        return searchResult.map((res) => ({
-            content: res.payload?.content as string,
+        if (!response.ok) {
+            const errBody = await response.text();
+            throw new Error(`Qdrant search failed ${response.status}: ${response.statusText} – ${errBody}`);
+        }
+
+        const data = await response.json();
+        // Qdrant search response format: { result: [ { id, score, payload, ... }, ... ], status: 'ok', ... }
+        const points = Array.isArray(data.result) ? data.result : [];
+        // console.log('[Qdrant] Search returned', points.length, 'points');
+
+        return points.map((p: any) => ({
+            content: p.payload?.content as string,
             metadata: {
-                filePath: res.payload?.filePath,
-                fileName: res.payload?.fileName,
-                fileType: res.payload?.fileType,
-                ...res.payload,
+                filePath: p.payload?.filePath,
+                fileName: p.payload?.fileName,
+                fileType: p.payload?.fileType,
+                ...p.payload,
             },
-            score: res.score,
+            score: p.score ?? 0,
         }));
     } catch (error) {
         console.error('Error searching:', error);

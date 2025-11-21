@@ -13,3 +13,6 @@ The RAG system supports:
 ## How it works
 
 Documents are chunked into smaller pieces, embedded using LM Studio, and stored in Qdrant for semantic search.
+
+
+

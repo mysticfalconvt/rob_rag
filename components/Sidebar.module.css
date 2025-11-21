@@ -57,26 +57,127 @@
   font-size: 0.875rem;
 }
 
+.conversations {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e5e5;
+}
+
+.conversationsHeader {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.conversationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.conversationItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  color: #666;
+  text-decoration: none;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.conversationItem:hover {
+  background-color: #f3f4f6;
+}
+
+.conversationItem:hover .deleteButton {
+  opacity: 1;
+}
+
+.activeConversation {
+  background-color: #e5e7eb;
+  color: var(--foreground);
+}
+
+.conversationContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversationTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversationMeta {
+  font-size: 0.75rem;
+  color: #999;
+  margin-top: 0.25rem;
+}
+
+.deleteButton {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.deleteButton:hover {
+  background-color: #fee2e2;
+}
+
 @media (prefers-color-scheme: dark) {
   .sidebar {
     border-right-color: #333;
   }
-  
+
   .link {
     color: #999;
   }
-  
+
   .link:hover {
     background-color: #1f2937;
     color: #fff;
   }
-  
+
   .active {
     background-color: #374151;
     color: #fff;
   }
-  
+
   .footer {
     border-top-color: #333;
+  }
+
+  .conversations {
+    border-top-color: #333;
+  }
+
+  .conversationItem:hover {
+    background-color: #1f2937;
+  }
+
+  .activeConversation {
+    background-color: #374151;
+    color: #fff;
+  }
+
+  .deleteButton:hover {
+    background-color: #7f1d1d;
   }
 }

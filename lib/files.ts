@@ -49,6 +49,12 @@ export async function readFileContent(filePath: string): Promise<{ content: stri
         return { content, metadata: data };
     }
 
+    // Check for supported text-based extensions
+    const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.ts', '.tsx', '.js', '.jsx', '.css', '.html', '.pdf', '.docx'];
+    if (!supportedExtensions.includes(ext)) {
+        throw new Error(`Unsupported file type: ${ext}`);
+    }
+
     // Default to text
     const content = await fs.readFile(filePath, 'utf-8');
     return { content, metadata: {} };
@@ -87,6 +93,7 @@ export async function processFile(filePath: string): Promise<ProcessedChunk[]> {
 export async function getAllFiles(dirPath: string): Promise<string[]> {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const files: string[] = [];
+    const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.ts', '.tsx', '.js', '.jsx', '.css', '.html', '.pdf', '.docx'];
 
     for (const entry of entries) {
         const fullPath = path.join(dirPath, entry.name);
@@ -95,7 +102,11 @@ export async function getAllFiles(dirPath: string): Promise<string[]> {
             files.push(...(await getAllFiles(fullPath)));
         } else {
             if (entry.name.startsWith('.')) continue; // Skip dot files
-            files.push(fullPath);
+
+            const ext = path.extname(entry.name).toLowerCase();
+            if (supportedExtensions.includes(ext)) {
+                files.push(fullPath);
+            }
         }
     }
 

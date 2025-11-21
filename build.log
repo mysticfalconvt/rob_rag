@@ -6,32 +6,30 @@
    - Environments: .env.local, .env
 
    Creating an optimized production build ...
- ✓ Compiled successfully in 3.3s
+ ✓ Compiled successfully in 3.5s
    Running TypeScript ...
    Collecting page data using 15 workers ...
-Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
-Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
-Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
-Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
-   Generating static pages using 15 workers (0/10) ...
-   Generating static pages using 15 workers (2/10) 
-   Generating static pages using 15 workers (4/10) 
-Failed to obtain server version. Unable to check client-server compatibility. Set checkCompatibility=false to skip version check.
-   Generating static pages using 15 workers (7/10) 
- ✓ Generating static pages using 15 workers (10/10) in 866.1ms
-   Finalizing page optimization ...
-
-Route (app)
-┌ ○ /
-├ ○ /_not-found
-├ ƒ /api/chat
-├ ƒ /api/files
-├ ƒ /api/scan
-├ ƒ /api/status
-├ ○ /files
-└ ○ /status
-
-
-○  (Static)   prerendered as static content
-ƒ  (Dynamic)  server-rendered on demand
-
+   Generating static pages using 15 workers (0/11) ...
+   Generating static pages using 15 workers (2/11) 
+   Generating static pages using 15 workers (5/11) 
+ ⨯ useSearchParams() should be wrapped in a suspense boundary at page "/404". Read more: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+    at S (/home/rboskind/code/rob_rag/.next/server/chunks/ssr/node_modules__pnpm_f525226f._.js:2:2111)
+    at p (/home/rboskind/code/rob_rag/.next/server/chunks/ssr/node_modules__pnpm_f525226f._.js:4:4846)
+    at g (/home/rboskind/code/rob_rag/.next/server/chunks/ssr/[root-of-the-server]__064c81d7._.js:1:2232)
+    at ar (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:84366)
+    at aa (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:86185)
+    at aa (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:104714)
+    at as (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107952)
+    at ao (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105374)
+    at ah (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:112881)
+    at al (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:109984)
+    at as (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:108230)
+    at ao (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105374)
+    at ah (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:112881)
+    at aa (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:98814)
+    at as (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:107952)
+    at ao (/home/rboskind/code/rob_rag/node_modules/.pnpm/next@16.0.3_babel-plugin-react-compiler@1.0.0_react-dom@19.2.0_react@19.2.0__react@19.2.0/node_modules/next/dist/compiled/next-server/app-page-turbo.runtime.prod.js:2:105374)
+Error occurred prerendering page "/_not-found". Read more: https://nextjs.org/docs/messages/prerender-error
+Export encountered an error on /_not-found/page: /_not-found, exiting the build.
+ ⨯ Next.js build worker exited with code: 1 and signal: null
+ ELIFECYCLE  Command failed with exit code 1.

@@ -14,8 +14,15 @@ export async function ensureCollection() {
     if (!exists) {
         await qdrantClient.createCollection(COLLECTION_NAME, {
             vectors: {
-                size: 256, // nomic-embed-text uses 256 dimensions
+                size: 1024, // mxbai-embed-large-v1 uses 1024 dimensions
                 distance: 'Cosine',
+            },
+            // Define searchable payload fields
+            payload_schema: {
+                properties: {
+                    filePath: { type: 'keyword' },
+                    fileName: { type: 'keyword' },
+                },
             },
         });
         console.log(`Collection '${COLLECTION_NAME}' created.`);
