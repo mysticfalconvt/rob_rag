@@ -7,9 +7,9 @@ if [ ! -f /app/prisma/schema.prisma ]; then
   cp /app/prisma-schema/schema.prisma /app/prisma/schema.prisma
 fi
 
-# Run Prisma migrations
+# Run Prisma migrations using the installed version (not npx)
 echo "Running Prisma migrations..."
-npx prisma migrate deploy
+pnpm exec prisma migrate deploy
 
 # Start the application
 echo "Starting application..."
