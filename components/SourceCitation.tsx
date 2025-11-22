@@ -9,6 +9,7 @@ interface Source {
     filePath: string;
     chunk: string;
     score: number;
+    source?: string;
 }
 
 interface SourceCitationProps {
@@ -38,7 +39,9 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
                                 href={`/files/${encodeURIComponent(source.filePath)}?chunk=${encodeURIComponent(source.chunk)}`}
                                 className={styles.sourceLink}
                             >
-                                <i className="fas fa-file-alt"></i>
+                                {source.source === 'paperless' ? '🗂️' :
+                                    source.source === 'uploaded' ? '📤' :
+                                        '🔄'}
                                 {source.fileName}
                                 <span className={styles.score}>
                                     {(source.score * 100).toFixed(0)}%

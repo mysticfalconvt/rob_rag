@@ -7,6 +7,7 @@ const envSchema = z.object({
     DOCUMENTS_FOLDER_PATH: z.string(),
     EMBEDDING_MODEL_NAME: z.string().default('nomic-embed-text'),
     CHAT_MODEL_NAME: z.string().default('llama-3.2-1b-instruct'),
+    APP_NAME: z.string().default('RobRAG'),
 });
 
 export const config = envSchema.parse({
@@ -16,6 +17,7 @@ export const config = envSchema.parse({
     DOCUMENTS_FOLDER_PATH: process.env.DOCUMENTS_FOLDER_PATH,
     EMBEDDING_MODEL_NAME: process.env.EMBEDDING_MODEL_NAME,
     CHAT_MODEL_NAME: process.env.CHAT_MODEL_NAME,
+    APP_NAME: process.env.APP_NAME,
 });
 
 // Get active configuration from database with fallback to env vars

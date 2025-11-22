@@ -12,7 +12,11 @@ interface Conversation {
     _count: { messages: number };
 }
 
-function SidebarContent() {
+interface SidebarContentProps {
+    appName: string;
+}
+
+function SidebarContent({ appName }: SidebarContentProps) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const currentConversationId = searchParams.get('conversation');
@@ -103,7 +107,7 @@ function SidebarContent() {
                 <div className={styles.sidebarHeader}>
                     <div className={styles.logo}>
                         <i className="fas fa-robot"></i>
-                        <span>RobRAG</span>
+                        <span>{appName}</span>
                     </div>
                     <button
                         className={styles.closeButton}
@@ -194,10 +198,14 @@ function SidebarContent() {
     );
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+    appName: string;
+}
+
+export default function Sidebar({ appName }: SidebarProps) {
     return (
         <Suspense fallback={<div className={styles.sidebar}>Loading...</div>}>
-            <SidebarContent />
+            <SidebarContent appName={appName} />
         </Suspense>
     );
 }

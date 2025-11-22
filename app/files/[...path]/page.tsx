@@ -178,18 +178,17 @@ export default function FileViewerPage() {
     const isPaperless = fileData.source === 'paperless';
     const isUploaded = fileData.source === 'uploaded';
     const isSynced = fileData.source === 'synced' || fileData.source === 'local' || !fileData.source;
-
+    console.log(fileData);
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <div className={styles.titleSection}>
                     <i className={`fas ${isPaperless ? 'fa-file-archive' : isUploaded ? 'fa-upload' : 'fa-sync'} ${styles.icon}`}></i>
                     <h1>{fileData.fileName}</h1>
-                    <span className={`${styles.sourceBadge} ${
-                        isPaperless ? styles.paperless : 
-                        isUploaded ? styles.uploaded : 
-                        styles.synced
-                    }`}>
+                    <span className={`${styles.sourceBadge} ${isPaperless ? styles.paperless :
+                            isUploaded ? styles.uploaded :
+                                styles.synced
+                        }`}>
                         {isPaperless ? (
                             <>
                                 <i className="fas fa-file-archive"></i> Paperless-ngx
@@ -208,9 +207,9 @@ export default function FileViewerPage() {
 
                 {isPaperless && fileData.paperlessUrl && (
                     <div className={styles.paperlessLink}>
-                        <a 
-                            href={fileData.paperlessUrl} 
-                            target="_blank" 
+                        <a
+                            href={fileData.paperlessUrl}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className={styles.viewInPaperless}
                         >

@@ -12,6 +12,7 @@ interface Source {
   filePath: string;
   chunk: string;
   score: number;
+  source?: string;
 }
 
 interface Message {
@@ -93,7 +94,7 @@ export default function ChatPage() {
       if (useUploaded) activeSources.push('uploaded');
       if (useSynced) activeSources.push('synced');
       if (usePaperless) activeSources.push('paperless');
-      
+
       if (activeSources.length === 3) {
         sourceFilter = 'all';
       } else if (activeSources.length === 1) {

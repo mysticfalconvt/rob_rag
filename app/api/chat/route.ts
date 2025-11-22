@@ -114,8 +114,49 @@ ${context}`;
         const parser = new StringOutputParser();
         const stream = await chatModel.pipe(parser).stream(langchainMessages);
 
+        // Prepare sources data
+        const sourcesData = {
+            type: 'sources',
+            sources: searchResults.map(r => ({
+                fileName: r.metadata.fileName,
+                filePath: r.metadata.filePath,
+                chunk: r.content,
+                score: r.score,
+                source: r.metadata.source || 'synced',
+            })),
+        };
+
+        // Create assistant message record early so it's saved even if client disconnects
+        const assistantMessage = await prisma.message.create({
+            data: {
+                conversationId: convId,
+                role: 'assistant',
+                content: '', // Will be updated as content streams
+                sources: JSON.stringify(sourcesData.sources),
+            },
+        });
+
         // Collect response for saving
         let fullResponse = '';
+        let lastSaveTime = Date.now();
+        const SAVE_INTERVAL_MS = 2000; // Save every 2 seconds
+        const MIN_CHARS_FOR_SAVE = 50; // Also save after accumulating 50 chars
+
+        // Helper function to save message incrementally
+        const saveMessage = async (content: string) => {
+            try {
+                await prisma.message.update({
+                    where: { id: assistantMessage.id },
+                    data: { content },
+                });
+                await prisma.conversation.update({
+                    where: { id: convId },
+                    data: { updatedAt: new Date() },
+                });
+            } catch (error) {
+                console.error('Error saving message incrementally:', error);
+            }
+        };
 
         // Convert string stream to byte stream for NextResponse
         const iterator = stream[Symbol.asyncIterator]();
@@ -124,6 +165,9 @@ ${context}`;
                 try {
                     const { value, done } = await iterator.next();
                     if (done) {
+                        // Final save with complete content
+                        await saveMessage(fullResponse);
+
                         // Generate title if this is the first message
                         if (messages.length === 1) {
                             try {
@@ -150,32 +194,6 @@ Title:`;
                             }
                         }
 
-                        // Save assistant message to database
-                        const sourcesData = {
-                            type: 'sources',
-                            sources: searchResults.map(r => ({
-                                fileName: r.metadata.fileName,
-                                filePath: r.metadata.filePath,
-                                chunk: r.content,
-                                score: r.score,
-                            })),
-                        };
-
-                        await prisma.message.create({
-                            data: {
-                                conversationId: convId,
-                                role: 'assistant',
-                                content: fullResponse,
-                                sources: JSON.stringify(sourcesData.sources),
-                            },
-                        });
-
-                        // Update conversation timestamp
-                        await prisma.conversation.update({
-                            where: { id: convId },
-                            data: { updatedAt: new Date() },
-                        });
-
                         // Send sources and conversation ID
                         const finalData = {
                             ...sourcesData,
@@ -188,10 +206,38 @@ Title:`;
                     } else {
                         fullResponse += value;
                         controller.enqueue(new TextEncoder().encode(value));
+
+                        // Save incrementally: either after time interval or after accumulating enough chars
+                        const now = Date.now();
+                        const shouldSave = 
+                            (now - lastSaveTime >= SAVE_INTERVAL_MS) || 
+                            (fullResponse.length >= MIN_CHARS_FOR_SAVE && fullResponse.length % MIN_CHARS_FOR_SAVE < value.length);
+
+                        if (shouldSave) {
+                            lastSaveTime = now;
+                            // Don't await to avoid blocking the stream
+                            saveMessage(fullResponse).catch(err => 
+                                console.error('Background save error:', err)
+                            );
+                        }
                     }
                 } catch (error) {
                     console.error('Stream error:', error);
+                    // Ensure message is saved even on error
+                    if (fullResponse) {
+                        saveMessage(fullResponse).catch(err => 
+                            console.error('Error saving on stream error:', err)
+                        );
+                    }
                     controller.error(error);
+                }
+            },
+            cancel() {
+                // Client disconnected - save what we have so far
+                if (fullResponse) {
+                    saveMessage(fullResponse).catch(err => 
+                        console.error('Error saving on cancel:', err)
+                    );
                 }
             },
         });
