@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { qdrantClient } from '@/lib/qdrant';
 import { config } from '@/lib/config';
+import { getPaperlessClient } from '@/lib/paperless';
 
 export async function GET() {
     try {
@@ -23,7 +24,40 @@ export async function GET() {
             console.error('LM Studio check failed:', e);
         }
 
-        // 3. Get Stats
+        // 3. Check Paperless-ngx
+        let paperlessStatus: 'connected' | 'disconnected' | 'not_configured' | 'disabled' = 'not_configured';
+        let paperlessDocCount = 0;
+        
+        try {
+            const settings = await prisma.settings.findUnique({
+                where: { id: 'singleton' }
+            });
+
+            if (settings && settings.paperlessUrl && settings.paperlessApiToken) {
+                if (!settings.paperlessEnabled) {
+                    paperlessStatus = 'disabled';
+                } else {
+                    const client = await getPaperlessClient();
+                    if (client) {
+                        const isConnected = await client.testConnection();
+                        paperlessStatus = isConnected ? 'connected' : 'disconnected';
+                        
+                        if (isConnected) {
+                            paperlessDocCount = await prisma.indexedFile.count({
+                                where: { source: 'paperless' }
+                            });
+                        }
+                    } else {
+                        paperlessStatus = 'disconnected';
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Paperless-ngx check failed:', e);
+            paperlessStatus = 'disconnected';
+        }
+
+        // 4. Get Stats
         const fileCount = await prisma.indexedFile.count();
         const chunkStats = await prisma.indexedFile.aggregate({
             _sum: { chunkCount: true },
@@ -32,8 +66,10 @@ export async function GET() {
         return NextResponse.json({
             qdrant: qdrantStatus,
             lmStudio: lmStudioStatus,
+            paperless: paperlessStatus,
             totalFiles: fileCount,
             totalChunks: chunkStats._sum.chunkCount || 0,
+            paperlessDocuments: paperlessDocCount,
             config: {
                 embeddingModel: config.EMBEDDING_MODEL_NAME,
                 chatModel: config.CHAT_MODEL_NAME,

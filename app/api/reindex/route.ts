@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { scanAllFiles } from '@/lib/indexer';
+import { qdrantClient, COLLECTION_NAME } from '@/lib/qdrant';
 
 export async function POST() {
     try {
@@ -9,6 +10,14 @@ export async function POST() {
         // Delete all records from IndexedFile table
         await prisma.indexedFile.deleteMany({});
         console.log('✅ Cleared IndexedFile table.');
+
+        // Delete and recreate Qdrant collection to clear all vectors
+        try {
+            await qdrantClient.deleteCollection(COLLECTION_NAME);
+            console.log('✅ Deleted Qdrant collection.');
+        } catch (error) {
+            console.log('Collection might not exist, continuing...');
+        }
 
         console.log('Running full re-scan...');
         const result = await scanAllFiles();

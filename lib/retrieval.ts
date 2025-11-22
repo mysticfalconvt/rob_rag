@@ -9,13 +9,30 @@ export interface SearchResult {
     score: number;
 }
 
-export async function search(query: string, limit: number = 5): Promise<SearchResult[]> {
+export async function search(
+    query: string, 
+    limit: number = 5, 
+    sourceFilter?: 'all' | 'uploaded' | 'synced' | 'paperless' | 'none'
+): Promise<SearchResult[]> {
     try {
         const queryEmbedding = await generateEmbedding(query);
 
         // Ensure the collection exists (creates it if missing)
         await ensureCollection();
         console.log('[Qdrant] Performing search via direct HTTP POST');
+        
+        // Build filter based on source
+        const filter: any = sourceFilter && sourceFilter !== 'all' ? {
+            must: [
+                {
+                    key: 'source',
+                    match: {
+                        value: sourceFilter
+                    }
+                }
+            ]
+        } : undefined;
+
         const response = await fetch(`${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -23,6 +40,7 @@ export async function search(query: string, limit: number = 5): Promise<SearchRe
                 vector: queryEmbedding,
                 top: limit, // Qdrant expects 'top' for number of results
                 with_payload: true,
+                filter,
             }),
         });
 

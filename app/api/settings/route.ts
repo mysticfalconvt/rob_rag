@@ -15,7 +15,11 @@ export async function GET() {
                 embeddingModel: config.EMBEDDING_MODEL_NAME,
                 chatModel: config.CHAT_MODEL_NAME,
                 embeddingModelDimension: 1024,
-                isDefault: true
+                isDefault: true,
+                paperlessUrl: null,
+                paperlessExternalUrl: null,
+                paperlessEnabled: false,
+                paperlessConfigured: false
             });
         }
 
@@ -23,7 +27,11 @@ export async function GET() {
             embeddingModel: settings.embeddingModel,
             chatModel: settings.chatModel,
             embeddingModelDimension: settings.embeddingModelDimension,
-            isDefault: false
+            isDefault: false,
+            paperlessUrl: settings.paperlessUrl,
+            paperlessExternalUrl: settings.paperlessExternalUrl,
+            paperlessEnabled: settings.paperlessEnabled,
+            paperlessConfigured: !!settings.paperlessApiToken
         });
     } catch (error) {
         console.error('Error fetching settings:', error);
@@ -33,24 +41,79 @@ export async function GET() {
 
 export async function POST(req: Request) {
     try {
-        const { embeddingModel, chatModel, embeddingModelDimension } = await req.json();
+        const { 
+            embeddingModel, 
+            chatModel, 
+            embeddingModelDimension,
+            paperlessUrl,
+            paperlessExternalUrl,
+            paperlessApiToken,
+            paperlessEnabled
+        } = await req.json();
+
+        // Validate Paperless URL if provided
+        if (paperlessUrl) {
+            try {
+                new URL(paperlessUrl);
+            } catch (error) {
+                return NextResponse.json({ error: 'Invalid Paperless-ngx URL format' }, { status: 400 });
+            }
+        }
+
+        // Validate Paperless External URL if provided
+        if (paperlessExternalUrl) {
+            try {
+                new URL(paperlessExternalUrl);
+            } catch (error) {
+                return NextResponse.json({ error: 'Invalid Paperless-ngx External URL format' }, { status: 400 });
+            }
+        }
+
+        // Prepare update data
+        const updateData: any = {
+            embeddingModel,
+            chatModel,
+            embeddingModelDimension: embeddingModelDimension || 1024
+        };
+
+        // Only update Paperless fields if they are provided
+        if (paperlessUrl !== undefined) {
+            updateData.paperlessUrl = paperlessUrl;
+        }
+        if (paperlessExternalUrl !== undefined) {
+            updateData.paperlessExternalUrl = paperlessExternalUrl;
+        }
+        if (paperlessApiToken !== undefined) {
+            updateData.paperlessApiToken = paperlessApiToken;
+        }
+        if (paperlessEnabled !== undefined) {
+            updateData.paperlessEnabled = paperlessEnabled;
+        }
 
         const settings = await prisma.settings.upsert({
             where: { id: 'singleton' },
-            update: {
-                embeddingModel,
-                chatModel,
-                embeddingModelDimension: embeddingModelDimension || 1024
-            },
+            update: updateData,
             create: {
                 id: 'singleton',
                 embeddingModel,
                 chatModel,
-                embeddingModelDimension: embeddingModelDimension || 1024
+                embeddingModelDimension: embeddingModelDimension || 1024,
+                paperlessUrl: paperlessUrl || null,
+                paperlessExternalUrl: paperlessExternalUrl || null,
+                paperlessApiToken: paperlessApiToken || null,
+                paperlessEnabled: paperlessEnabled || false
             }
         });
 
-        return NextResponse.json(settings);
+        return NextResponse.json({
+            embeddingModel: settings.embeddingModel,
+            chatModel: settings.chatModel,
+            embeddingModelDimension: settings.embeddingModelDimension,
+            paperlessUrl: settings.paperlessUrl,
+            paperlessExternalUrl: settings.paperlessExternalUrl,
+            paperlessEnabled: settings.paperlessEnabled,
+            paperlessConfigured: !!settings.paperlessApiToken
+        });
     } catch (error) {
         console.error('Error updating settings:', error);
         return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });

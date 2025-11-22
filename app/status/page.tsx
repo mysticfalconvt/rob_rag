@@ -6,8 +6,10 @@ import styles from './page.module.css';
 interface SystemStatus {
     qdrant: 'connected' | 'disconnected';
     lmStudio: 'connected' | 'disconnected';
+    paperless: 'connected' | 'disconnected' | 'not_configured' | 'disabled';
     totalFiles: number;
     totalChunks: number;
+    paperlessDocuments?: number;
     config: {
         embeddingModel: string;
         chatModel: string;
@@ -19,6 +21,10 @@ interface Settings {
     chatModel: string;
     embeddingModelDimension: number;
     isDefault?: boolean;
+    paperlessUrl: string | null;
+    paperlessExternalUrl: string | null;
+    paperlessEnabled: boolean;
+    paperlessConfigured: boolean;
 }
 
 export default function StatusPage() {
@@ -30,6 +36,13 @@ export default function StatusPage() {
     const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('');
     const [selectedChatModel, setSelectedChatModel] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    
+    // Paperless-ngx state
+    const [paperlessUrl, setPaperlessUrl] = useState('');
+    const [paperlessExternalUrl, setPaperlessExternalUrl] = useState('');
+    const [paperlessApiToken, setPaperlessApiToken] = useState('');
+    const [paperlessEnabled, setPaperlessEnabled] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
 
     const fetchStatus = async () => {
         try {
@@ -79,6 +92,9 @@ export default function StatusPage() {
                 setSettings(data);
                 setSelectedEmbeddingModel(data.embeddingModel);
                 setSelectedChatModel(data.chatModel);
+                setPaperlessUrl(data.paperlessUrl || '');
+                setPaperlessExternalUrl(data.paperlessExternalUrl || '');
+                setPaperlessEnabled(data.paperlessEnabled || false);
             }
         } catch (error) {
             console.error('Error fetching settings:', error);
@@ -144,6 +160,84 @@ export default function StatusPage() {
         selectedChatModel !== settings.chatModel
     );
 
+    const handleTestPaperlessConnection = async () => {
+        if (!paperlessUrl) {
+            alert('Please enter a Paperless-ngx URL');
+            return;
+        }
+
+        setIsTesting(true);
+        try {
+            // Save temporarily to test
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    embeddingModel: selectedEmbeddingModel,
+                    chatModel: selectedChatModel,
+                    embeddingModelDimension: 1024,
+                    paperlessUrl,
+                    paperlessExternalUrl: paperlessExternalUrl || undefined,
+                    paperlessApiToken: paperlessApiToken || undefined,
+                    paperlessEnabled: true
+                })
+            });
+
+            if (res.ok) {
+                // Test the connection
+                const statusRes = await fetch('/api/status');
+                if (statusRes.ok) {
+                    const statusData = await statusRes.json();
+                    if (statusData.paperless === 'connected') {
+                        alert('✅ Connection successful!');
+                    } else {
+                        alert('❌ Connection failed. Please check your URL and API token.');
+                    }
+                }
+            } else {
+                alert('❌ Failed to test connection');
+            }
+        } catch (error) {
+            console.error('Error testing connection:', error);
+            alert('❌ Failed to test connection');
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    const handleSavePaperlessSettings = async () => {
+        setIsSaving(true);
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    embeddingModel: selectedEmbeddingModel,
+                    chatModel: selectedChatModel,
+                    embeddingModelDimension: 1024,
+                    paperlessUrl: paperlessUrl || null,
+                    paperlessExternalUrl: paperlessExternalUrl || null,
+                    paperlessApiToken: paperlessApiToken || undefined,
+                    paperlessEnabled
+                })
+            });
+
+            if (res.ok) {
+                await fetchSettings();
+                await fetchStatus();
+                alert('✅ Paperless-ngx settings saved successfully!');
+                setPaperlessApiToken(''); // Clear token input after save
+            } else {
+                alert('❌ Failed to save settings');
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            alert('❌ Failed to save settings');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     if (isLoading) return <div className={styles.loading}>Loading status...</div>;
     if (!status) return <div className={styles.error}>Failed to load status.</div>;
 
@@ -166,6 +260,12 @@ export default function StatusPage() {
                             {status.lmStudio}
                         </span>
                     </div>
+                    <div className={styles.item}>
+                        <span>Paperless-ngx</span>
+                        <span className={`${styles.badge} ${styles[status.paperless]}`}>
+                            {status.paperless.replace('_', ' ')}
+                        </span>
+                    </div>
                 </div>
 
                 <div className={styles.card}>
@@ -178,6 +278,12 @@ export default function StatusPage() {
                         <span className={styles.value}>{status.totalChunks}</span>
                         <span className={styles.label}>Total Chunks</span>
                     </div>
+                    {status.paperlessDocuments !== undefined && status.paperlessDocuments > 0 && (
+                        <div className={styles.stat}>
+                            <span className={styles.value}>{status.paperlessDocuments}</span>
+                            <span className={styles.label}>Paperless Docs</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className={styles.card}>
@@ -236,6 +342,80 @@ export default function StatusPage() {
                     >
                         {isSaving ? 'Saving...' : 'Save Settings'}
                     </button>
+                </div>
+
+                <div className={styles.card}>
+                    <h2>Paperless-ngx Configuration</h2>
+
+                    <div className={styles.formGroup}>
+                        <label htmlFor="paperlessUrl">Paperless-ngx API URL</label>
+                        <input
+                            id="paperlessUrl"
+                            type="text"
+                            value={paperlessUrl}
+                            onChange={(e) => setPaperlessUrl(e.target.value)}
+                            placeholder="http://localhost:8000"
+                            className={styles.input}
+                            disabled={isSaving}
+                        />
+                        <small className={styles.helpText}>Internal URL for API connections</small>
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label htmlFor="paperlessExternalUrl">External URL (Optional)</label>
+                        <input
+                            id="paperlessExternalUrl"
+                            type="text"
+                            value={paperlessExternalUrl}
+                            onChange={(e) => setPaperlessExternalUrl(e.target.value)}
+                            placeholder="https://paperless.example.com"
+                            className={styles.input}
+                            disabled={isSaving}
+                        />
+                        <small className={styles.helpText}>Public URL for browser links (leave empty to use API URL)</small>
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label htmlFor="paperlessApiToken">API Token</label>
+                        <input
+                            id="paperlessApiToken"
+                            type="password"
+                            value={paperlessApiToken}
+                            onChange={(e) => setPaperlessApiToken(e.target.value)}
+                            placeholder={settings?.paperlessConfigured ? '••••••••' : 'Enter API token'}
+                            className={styles.input}
+                            disabled={isSaving}
+                        />
+                    </div>
+
+                    <div className={styles.formGroup}>
+                        <label>
+                            <input
+                                type="checkbox"
+                                checked={paperlessEnabled}
+                                onChange={(e) => setPaperlessEnabled(e.target.checked)}
+                                disabled={isSaving}
+                            />
+                            {' '}Enable Paperless-ngx Integration
+                        </label>
+                    </div>
+
+                    <div className={styles.buttonGroup}>
+                        <button
+                            onClick={handleTestPaperlessConnection}
+                            disabled={!paperlessUrl || isTesting}
+                            className={styles.testButton}
+                        >
+                            {isTesting ? 'Testing...' : 'Test Connection'}
+                        </button>
+                        <button
+                            onClick={handleSavePaperlessSettings}
+                            disabled={isSaving}
+                            className={styles.saveButton}
+                        >
+                            {isSaving ? 'Saving...' : 'Save Paperless Settings'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

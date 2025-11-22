@@ -35,7 +35,7 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
                             onMouseLeave={() => setHoveredIndex(null)}
                         >
                             <Link
-                                href={`/files${source.filePath}?chunk=${encodeURIComponent(source.chunk)}`}
+                                href={`/files/${encodeURIComponent(source.filePath)}?chunk=${encodeURIComponent(source.chunk)}`}
                                 className={styles.sourceLink}
                             >
                                 <i className="fas fa-file-alt"></i>

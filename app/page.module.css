@@ -249,3 +249,117 @@
     height: 2.5rem;
   }
 }
+
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.filterLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.filterToggles {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.filterToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid #e5e5e5;
+  background: #fff;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #6b7280;
+  position: relative;
+}
+
+.filterToggle:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.filterToggle.active {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+.filterToggle i:first-child {
+  font-size: 0.875rem;
+}
+
+.filterToggle i:last-child {
+  font-size: 0.75rem;
+  margin-left: auto;
+  padding-left: 0.5rem;
+}
+
+.filterToggle:not(.active) i.fa-circle {
+  opacity: 0.3;
+}
+
+@media (prefers-color-scheme: dark) {
+  .filterBar {
+    background: #262626;
+  }
+
+  .filterLabel {
+    color: #9ca3af;
+  }
+
+  .filterToggle {
+    background: #171717;
+    border-color: #333;
+    color: #9ca3af;
+  }
+
+  .filterToggle:hover {
+    border-color: #3b82f6;
+    color: #3b82f6;
+  }
+
+  .filterToggle.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+  }
+}
+
+@media (max-width: 768px) {
+  .filterBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .filterLabel {
+    font-size: 0.8125rem;
+  }
+
+  .filterToggles {
+    flex-direction: column;
+  }
+
+  .filterToggle {
+    justify-content: flex-start;
+    padding: 0.625rem 1rem;
+    font-size: 0.8125rem;
+  }
+}

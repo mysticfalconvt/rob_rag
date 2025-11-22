@@ -29,6 +29,9 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId);
+  const [useUploaded, setUseUploaded] = useState(true);
+  const [useSynced, setUseSynced] = useState(true);
+  const [usePaperless, setUsePaperless] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -84,12 +87,32 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
+      // Determine source filter based on toggles
+      let sourceFilter: 'all' | 'uploaded' | 'synced' | 'paperless' | 'none' = 'none';
+      const activeSources = [];
+      if (useUploaded) activeSources.push('uploaded');
+      if (useSynced) activeSources.push('synced');
+      if (usePaperless) activeSources.push('paperless');
+      
+      if (activeSources.length === 3) {
+        sourceFilter = 'all';
+      } else if (activeSources.length === 1) {
+        sourceFilter = activeSources[0] as 'uploaded' | 'synced' | 'paperless';
+      } else if (activeSources.length === 0) {
+        sourceFilter = 'none';
+      } else {
+        // Multiple sources selected - for now use 'all' and let backend handle
+        // In future, could pass array of sources
+        sourceFilter = 'all';
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...messages, userMessage],
           conversationId: currentConversationId,
+          sourceFilter,
         }),
       });
 
@@ -216,6 +239,38 @@ export default function ChatPage() {
       </div>
 
       <form onSubmit={handleSubmit} className={styles.inputForm}>
+        <div className={styles.filterBar}>
+          <span className={styles.filterLabel}>Search in:</span>
+          <div className={styles.filterToggles}>
+            <button
+              type="button"
+              className={`${styles.filterToggle} ${useUploaded ? styles.active : ''}`}
+              onClick={() => setUseUploaded(!useUploaded)}
+            >
+              <i className="fas fa-upload"></i>
+              Uploaded
+              <i className={`fas ${useUploaded ? 'fa-check-circle' : 'fa-circle'}`}></i>
+            </button>
+            <button
+              type="button"
+              className={`${styles.filterToggle} ${useSynced ? styles.active : ''}`}
+              onClick={() => setUseSynced(!useSynced)}
+            >
+              <i className="fas fa-sync"></i>
+              Synced
+              <i className={`fas ${useSynced ? 'fa-check-circle' : 'fa-circle'}`}></i>
+            </button>
+            <button
+              type="button"
+              className={`${styles.filterToggle} ${usePaperless ? styles.active : ''}`}
+              onClick={() => setUsePaperless(!usePaperless)}
+            >
+              <i className="fas fa-file-archive"></i>
+              Paperless
+              <i className={`fas ${usePaperless ? 'fa-check-circle' : 'fa-circle'}`}></i>
+            </button>
+          </div>
+        </div>
         <div className={styles.inputWrapper}>
           <input
             type="text"

@@ -11,6 +11,11 @@ interface FileData {
     filePath: string;
     fileType: string;
     content: string;
+    source?: string;
+    paperlessId?: number;
+    paperlessUrl?: string;
+    paperlessTags?: string[];
+    paperlessCorrespondent?: string;
     metadata: {
         size: number;
         lastModified: string;
@@ -170,18 +175,70 @@ export default function FileViewerPage() {
         return new Date(dateString).toLocaleString();
     };
 
+    const isPaperless = fileData.source === 'paperless';
+    const isUploaded = fileData.source === 'uploaded';
+    const isSynced = fileData.source === 'synced' || fileData.source === 'local' || !fileData.source;
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <div className={styles.titleSection}>
-                    <i className={`fas fa-file-alt ${styles.icon}`}></i>
+                    <i className={`fas ${isPaperless ? 'fa-file-archive' : isUploaded ? 'fa-upload' : 'fa-sync'} ${styles.icon}`}></i>
                     <h1>{fileData.fileName}</h1>
+                    <span className={`${styles.sourceBadge} ${
+                        isPaperless ? styles.paperless : 
+                        isUploaded ? styles.uploaded : 
+                        styles.synced
+                    }`}>
+                        {isPaperless ? (
+                            <>
+                                <i className="fas fa-file-archive"></i> Paperless-ngx
+                            </>
+                        ) : isUploaded ? (
+                            <>
+                                <i className="fas fa-upload"></i> Uploaded File
+                            </>
+                        ) : (
+                            <>
+                                <i className="fas fa-sync"></i> Synced File
+                            </>
+                        )}
+                    </span>
                 </div>
 
+                {isPaperless && fileData.paperlessUrl && (
+                    <div className={styles.paperlessLink}>
+                        <a 
+                            href={fileData.paperlessUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className={styles.viewInPaperless}
+                        >
+                            <i className="fas fa-external-link-alt"></i> View in Paperless-ngx
+                        </a>
+                    </div>
+                )}
+
                 <div className={styles.metadata}>
+                    {isPaperless && fileData.paperlessTags && fileData.paperlessTags.length > 0 && (
+                        <div className={styles.metadataItem}>
+                            <span className={styles.metadataLabel}>Tags:</span>
+                            <span className={styles.metadataValue}>
+                                {fileData.paperlessTags.map((tag, idx) => (
+                                    <span key={idx} className={styles.tag}>{tag}</span>
+                                ))}
+                            </span>
+                        </div>
+                    )}
+                    {isPaperless && fileData.paperlessCorrespondent && (
+                        <div className={styles.metadataItem}>
+                            <span className={styles.metadataLabel}>Correspondent:</span>
+                            <span className={styles.metadataValue}>{fileData.paperlessCorrespondent}</span>
+                        </div>
+                    )}
                     <div className={styles.metadataItem}>
                         <span className={styles.metadataLabel}>Type:</span>
-                        <span className={styles.metadataValue}>{fileData.fileType.toUpperCase()}</span>
+                        <span className={styles.metadataValue}>{isPaperless ? 'Paperless Document' : fileData.fileType.toUpperCase()}</span>
                     </div>
                     <div className={styles.metadataItem}>
                         <span className={styles.metadataLabel}>Size:</span>

@@ -9,8 +9,13 @@ export async function GET() {
             orderBy: { lastIndexed: 'desc' },
         });
 
-        // Check if files need re-indexing
+        // Check if files need re-indexing (only for local files)
         const filesWithStatus = await Promise.all(files.map(async (file) => {
+            // Skip file system check for Paperless-ngx documents
+            if (file.source === 'paperless') {
+                return { ...file, needsReindexing: false };
+            }
+
             try {
                 const stats = await fs.stat(file.filePath);
                 const lastModified = stats.mtime;
@@ -54,11 +59,15 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: 'Missing path parameter' }, { status: 400 });
         }
 
+        // Check if this is a Paperless-ngx document
+        const isPaperless = filePath.startsWith('paperless://');
+
         // Delete from index
         await deleteFileIndex(filePath);
 
-        // Delete from disk ONLY if it is in the "File Uploads" directory
-        if (filePath.includes('/File Uploads/')) {
+        // Delete from disk ONLY if it is a local file in the "File Uploads" directory
+        // Paperless-ngx documents are never deleted from disk
+        if (!isPaperless && filePath.includes('/File Uploads/')) {
             try {
                 await fs.unlink(filePath);
                 console.log(`Deleted file from disk: ${filePath}`);
@@ -72,7 +81,12 @@ export async function DELETE(req: NextRequest) {
             }
         }
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ 
+            success: true,
+            message: isPaperless 
+                ? 'Paperless-ngx document removed from index' 
+                : 'File deleted successfully'
+        });
     } catch (error) {
         console.error('Error deleting file:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

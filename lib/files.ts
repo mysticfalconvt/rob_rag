@@ -112,3 +112,48 @@ export async function getAllFiles(dirPath: string): Promise<string[]> {
 
     return files;
 }
+
+
+export async function processPaperlessDocument(
+    content: string,
+    metadata: {
+        id: number;
+        title: string;
+        tags: string[];
+        correspondent: string | null;
+        created: Date;
+        modified: Date;
+    }
+): Promise<ProcessedChunk[]> {
+    const fileHash = crypto.createHash('sha256')
+        .update(content + metadata.modified.toISOString())
+        .digest('hex');
+
+    const splitter = new RecursiveCharacterTextSplitter({
+        chunkSize: 800,
+        chunkOverlap: 200,
+    });
+
+    const chunks = await splitter.createDocuments([content]);
+
+    const filePath = `paperless://${metadata.id}`;
+
+    return chunks.map((chunk, index) => ({
+        content: chunk.pageContent,
+        metadata: {
+            filePath,
+            fileName: metadata.title,
+            fileType: 'paperless',
+            parentFolder: 'paperless',
+            chunkIndex: index,
+            totalChunks: chunks.length,
+            fileHash,
+            source: 'paperless',
+            paperlessId: metadata.id,
+            paperlessTags: metadata.tags,
+            paperlessCorrespondent: metadata.correspondent,
+            paperlessCreated: metadata.created.toISOString(),
+            paperlessModified: metadata.modified.toISOString(),
+        },
+    }));
+}
