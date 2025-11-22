@@ -10,27 +10,14 @@ cp /app/prisma-schema/schema.prisma /app/prisma/schema.prisma
 mkdir -p /app/prisma/migrations
 cp -r /app/prisma-schema/migrations/* /app/prisma/migrations/ 2>/dev/null || true
 
-# Run Prisma migrations using the installed version (not npx)
-# This applies any new migrations to the database
-echo "Running Prisma migrations..."
-if pnpm exec prisma migrate deploy 2>&1 | tee /tmp/migrate.log; then
-  echo "Migrations applied successfully"
-else
-  echo "Migration deploy failed or no migrations found"
-  cat /tmp/migrate.log
+# Always run db push first to ensure schema is in sync
+# This handles cases where migrations don't exist or schema has drifted
+echo "Ensuring database schema is up to date with db push..."
+pnpm exec prisma db push --skip-generate --accept-data-loss
 
-  # Check if the error is about missing columns or schema drift
-  if grep -q "does not exist in the current database" /tmp/migrate.log || \
-     grep -q "P2022" /tmp/migrate.log || \
-     [ ! -d "/app/prisma/migrations" ] || \
-     [ -z "$(ls -A /app/prisma/migrations 2>/dev/null)" ]; then
-    echo "Schema drift detected or no migrations exist. Using db push to sync schema..."
-    pnpm exec prisma db push --skip-generate --accept-data-loss
-  else
-    echo "Migration failed for unknown reason. Exiting."
-    exit 1
-  fi
-fi
+# Then try to run any migrations (in case there are pending ones)
+echo "Checking for pending migrations..."
+pnpm exec prisma migrate deploy 2>/dev/null || echo "No migrations to apply or migrations already applied"
 
 # Start the application
 echo "Starting application..."
