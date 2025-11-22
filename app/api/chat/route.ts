@@ -70,14 +70,20 @@ export async function POST(req: NextRequest) {
 
         const fileResults = groupedResults[filePath];
         const totalChunks = result.metadata.totalChunks || 100; // Default to high if missing
+        const source = result.metadata.source;
+
+        // For Goodreads books and Paperless docs, always use chunk content (no file to read)
+        const isVirtualSource =
+          source === "goodreads" || source === "paperless";
 
         // Heuristic: Load full file if:
         // 1. File is small (<= 5 chunks)
         // 2. We have a significant portion of the file (> 30% of chunks)
+        // 3. NOT a virtual source (Goodreads/Paperless)
         const isSmallFile = totalChunks <= 5;
         const hasSignificantPortion = fileResults.length / totalChunks > 0.3;
 
-        if (isSmallFile || hasSignificantPortion) {
+        if (!isVirtualSource && (isSmallFile || hasSignificantPortion)) {
           try {
             console.log(
               `Loading full content for ${result.metadata.fileName} (Chunks: ${totalChunks}, Found: ${fileResults.length})`,
@@ -98,7 +104,7 @@ export async function POST(req: NextRequest) {
             );
           }
         } else {
-          // Add just this chunk
+          // Add just this chunk (for virtual sources or when we don't want full content)
           contextParts.push(
             `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
           );

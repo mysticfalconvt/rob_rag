@@ -363,3 +363,73 @@
     color: #9ca3af;
   }
 }
+
+.userCard {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.userCard h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+  color: #111827;
+}
+
+.userCard p {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  .userCard {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+
+  .userCard h3 {
+    color: #f9fafb;
+  }
+
+  .userCard p {
+    color: #9ca3af;
+  }
+}
+
+.reindexSection {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.reindexSection h3 {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.reindexButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reindexButtons button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .reindexSection {
+    border-top-color: #374151;
+  }
+
+  .reindexSection h3 {
+    color: #ededed;
+  }
+}

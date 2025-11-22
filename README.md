@@ -10,6 +10,8 @@ A RAG (Retrieval-Augmented Generation) application built with Next.js that enabl
 - **File Management**: Browse and manage indexed documents through a web interface
 - **Conversation History**: Save and manage chat conversations
 - **Real-time Updates**: Automatically re-indexes files when they change
+- **Goodreads Integration**: Import and query your reading history from Goodreads
+- **Paperless-ngx Integration**: Connect to Paperless-ngx for document management
 
 ## Tech Stack
 
@@ -118,6 +120,9 @@ You can also manually trigger indexing via the Status page or API endpoints.
 - Visit `/status` to check system health
 - View indexing status
 - Monitor Qdrant and LM Studio connections
+- Configure Paperless-ngx integration
+- Manage Goodreads RSS feeds
+- Reindex specific document sources
 
 ## Configuration
 
@@ -135,6 +140,98 @@ APP_NAME=My Custom RAG App
 - Microsoft Word (`.docx`)
 - Markdown (`.md`)
 - Plain Text (`.txt`)
+
+## Integrations
+
+### Goodreads Integration
+
+Query your reading history using natural language! RobRAG can import your Goodreads library and make it searchable.
+
+#### Setup
+
+1. **Create a User**
+   - Go to `/status` page
+   - Under "Goodreads Users", click "Add User"
+   - Enter your name
+
+2. **Import Your Library (One-time)**
+   - Export your Goodreads library as CSV:
+     - Go to [Goodreads My Books](https://www.goodreads.com/review/list)
+     - Click "Import and export" at the bottom
+     - Click "Export Library"
+   - Use the API to upload your CSV:
+     ```bash
+     curl -X POST http://localhost:3000/api/goodreads/upload-csv \
+       -F "userId=YOUR_USER_ID" \
+       -F "file=@goodreads_library_export.csv"
+     ```
+
+3. **Set Up RSS Auto-Sync**
+   - Get your Goodreads RSS feed URL:
+     - Go to your Goodreads profile
+     - Look for "RSS" link or construct: `https://www.goodreads.com/review/list_rss/YOUR_USER_ID?key=YOUR_KEY&shelf=%23ALL%23`
+   - Add RSS feed via API:
+     ```bash
+     curl -X POST http://localhost:3000/api/goodreads/rss \
+       -H "Content-Type: application/json" \
+       -d '{"userId":"YOUR_USER_ID","rssFeedUrl":"YOUR_RSS_URL"}'
+     ```
+
+4. **Sync Your Library**
+   - Manual sync via API:
+     ```bash
+     curl -X POST http://localhost:3000/api/goodreads/sync \
+       -H "Content-Type: application/json" \
+       -d '{"userId":"YOUR_USER_ID"}'
+     ```
+   - Or sync all users:
+     ```bash
+     curl -X POST http://localhost:3000/api/goodreads/sync-all
+     ```
+   - Tip: Set up a cron job to sync periodically
+
+5. **Index Your Books**
+   - Go to `/status` page
+   - Click "Reindex Goodreads" button
+   - Your books are now searchable!
+
+#### Usage
+
+Ask questions like:
+- "What Brandon Sanderson books have I read?"
+- "What 5-star books did I read in 2024?"
+- "Show me books I've read multiple times"
+- "What science fiction books are on my to-read shelf?"
+
+#### Features
+
+- **Read History Tracking**: Automatically tracks when you read/reread books
+- **Multiple Read Dates**: Stores all dates you've read a book, not just the most recent
+- **Read Count**: Automatically increments when RSS feed shows a new read date
+- **Metadata**: Stores ratings, reviews, shelves, dates, page counts, and more
+- **Smart Updates**: RSS sync only updates changed data, preserves read count from CSV imports
+
+#### API Endpoints
+
+- `GET /api/goodreads/users` - List all users
+- `POST /api/goodreads/users` - Create a new user
+- `POST /api/goodreads/upload-csv` - Upload Goodreads CSV export
+- `POST /api/goodreads/rss` - Configure RSS feed for a user
+- `POST /api/goodreads/sync` - Sync one user's RSS feed
+- `POST /api/goodreads/sync-all` - Sync all users' RSS feeds
+- `POST /api/reindex/source` - Reindex specific source (including `goodreads`)
+
+### Paperless-ngx Integration
+
+Connect to your Paperless-ngx instance to search your document archive.
+
+#### Setup
+
+1. Go to `/status` page
+2. Scroll to "Paperless-ngx Configuration"
+3. Enter your Paperless-ngx URL and API token
+4. Save settings
+5. Documents will be automatically indexed and searchable
 
 ## API Endpoints
 

@@ -16,11 +16,18 @@ interface FileData {
   paperlessUrl?: string;
   paperlessTags?: string[];
   paperlessCorrespondent?: string;
+  goodreadsBookId?: string;
   metadata: {
-    size: number;
-    lastModified: string;
+    size?: number;
+    lastModified?: string;
     chunkCount: number;
     lastIndexed: string;
+    author?: string;
+    rating?: number | null;
+    dateRead?: string | null;
+    dateAdded?: string | null;
+    shelves?: string[];
+    userName?: string;
   };
 }
 
@@ -192,6 +199,7 @@ function FileViewerPageContent() {
   };
 
   const isPaperless = fileData.source === "paperless";
+  const isGoodreads = fileData.source === "goodreads";
   const isUploaded = fileData.source === "uploaded";
   const _isSynced =
     fileData.source === "synced" ||
@@ -203,19 +211,25 @@ function FileViewerPageContent() {
       <div className={styles.header}>
         <div className={styles.titleSection}>
           <i
-            className={`fas ${isPaperless ? "fa-file-archive" : isUploaded ? "fa-upload" : "fa-sync"} ${styles.icon}`}
+            className={`fas ${isGoodreads ? "fa-book" : isPaperless ? "fa-file-archive" : isUploaded ? "fa-upload" : "fa-sync"} ${styles.icon}`}
           ></i>
           <h1>{fileData.fileName}</h1>
           <span
             className={`${styles.sourceBadge} ${
-              isPaperless
-                ? styles.paperless
-                : isUploaded
-                  ? styles.uploaded
-                  : styles.synced
+              isGoodreads
+                ? styles.goodreads
+                : isPaperless
+                  ? styles.paperless
+                  : isUploaded
+                    ? styles.uploaded
+                    : styles.synced
             }`}
           >
-            {isPaperless ? (
+            {isGoodreads ? (
+              <>
+                <i className="fas fa-book"></i> Goodreads Book
+              </>
+            ) : isPaperless ? (
               <>
                 <i className="fas fa-file-archive"></i> Paperless-ngx
               </>
@@ -245,6 +259,52 @@ function FileViewerPageContent() {
         )}
 
         <div className={styles.metadata}>
+          {isGoodreads && fileData.metadata.author && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Author:</span>
+              <span className={styles.metadataValue}>
+                {fileData.metadata.author}
+              </span>
+            </div>
+          )}
+          {isGoodreads && fileData.metadata.rating && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>My Rating:</span>
+              <span className={styles.metadataValue}>
+                {"⭐".repeat(fileData.metadata.rating)}
+              </span>
+            </div>
+          )}
+          {isGoodreads && fileData.metadata.dateRead && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Date Read:</span>
+              <span className={styles.metadataValue}>
+                {formatDate(fileData.metadata.dateRead)}
+              </span>
+            </div>
+          )}
+          {isGoodreads &&
+            fileData.metadata.shelves &&
+            fileData.metadata.shelves.length > 0 && (
+              <div className={styles.metadataItem}>
+                <span className={styles.metadataLabel}>Shelves:</span>
+                <span className={styles.metadataValue}>
+                  {fileData.metadata.shelves.map((shelf, idx) => (
+                    <span key={idx} className={styles.tag}>
+                      {shelf}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            )}
+          {isGoodreads && fileData.metadata.userName && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Library:</span>
+              <span className={styles.metadataValue}>
+                {fileData.metadata.userName}
+              </span>
+            </div>
+          )}
           {isPaperless &&
             fileData.paperlessTags &&
             fileData.paperlessTags.length > 0 && (
@@ -267,32 +327,38 @@ function FileViewerPageContent() {
               </span>
             </div>
           )}
-          <div className={styles.metadataItem}>
-            <span className={styles.metadataLabel}>Type:</span>
-            <span className={styles.metadataValue}>
-              {isPaperless
-                ? "Paperless Document"
-                : fileData.fileType.toUpperCase()}
-            </span>
-          </div>
-          <div className={styles.metadataItem}>
-            <span className={styles.metadataLabel}>Size:</span>
-            <span className={styles.metadataValue}>
-              {formatFileSize(fileData.metadata.size)}
-            </span>
-          </div>
+          {!isGoodreads && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Type:</span>
+              <span className={styles.metadataValue}>
+                {isPaperless
+                  ? "Paperless Document"
+                  : fileData.fileType.toUpperCase()}
+              </span>
+            </div>
+          )}
+          {!isGoodreads && fileData.metadata.size && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Size:</span>
+              <span className={styles.metadataValue}>
+                {formatFileSize(fileData.metadata.size)}
+              </span>
+            </div>
+          )}
           <div className={styles.metadataItem}>
             <span className={styles.metadataLabel}>Chunks:</span>
             <span className={styles.metadataValue}>
               {fileData.metadata.chunkCount}
             </span>
           </div>
-          <div className={styles.metadataItem}>
-            <span className={styles.metadataLabel}>Last Modified:</span>
-            <span className={styles.metadataValue}>
-              {formatDate(fileData.metadata.lastModified)}
-            </span>
-          </div>
+          {!isGoodreads && fileData.metadata.lastModified && (
+            <div className={styles.metadataItem}>
+              <span className={styles.metadataLabel}>Last Modified:</span>
+              <span className={styles.metadataValue}>
+                {formatDate(fileData.metadata.lastModified)}
+              </span>
+            </div>
+          )}
           <div className={styles.metadataItem}>
             <span className={styles.metadataLabel}>Last Indexed:</span>
             <span className={styles.metadataValue}>
@@ -303,7 +369,9 @@ function FileViewerPageContent() {
       </div>
 
       <div className={styles.content} ref={contentRef}>
-        {fileData.fileType === "md" || fileData.fileType === "markdown" ? (
+        {fileData.fileType === "md" ||
+        fileData.fileType === "markdown" ||
+        fileData.fileType === "goodreads" ? (
           <div className={styles.markdown}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {highlightedContent || fileData.content}

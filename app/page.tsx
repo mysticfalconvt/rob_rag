@@ -35,6 +35,7 @@ function ChatPageContent() {
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);
+  const [useGoodreads, setUseGoodreads] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<{
@@ -126,17 +127,27 @@ function ChatPageContent() {
 
     try {
       // Determine source filter based on toggles
-      let sourceFilter: "all" | "uploaded" | "synced" | "paperless" | "none" =
-        "none";
+      let sourceFilter:
+        | "all"
+        | "uploaded"
+        | "synced"
+        | "paperless"
+        | "goodreads"
+        | "none" = "none";
       const activeSources = [];
       if (useUploaded) activeSources.push("uploaded");
       if (useSynced) activeSources.push("synced");
       if (usePaperless) activeSources.push("paperless");
+      if (useGoodreads) activeSources.push("goodreads");
 
-      if (activeSources.length === 3) {
+      if (activeSources.length === 4) {
         sourceFilter = "all";
       } else if (activeSources.length === 1) {
-        sourceFilter = activeSources[0] as "uploaded" | "synced" | "paperless";
+        sourceFilter = activeSources[0] as
+          | "uploaded"
+          | "synced"
+          | "paperless"
+          | "goodreads";
       } else if (activeSources.length === 0) {
         sourceFilter = "none";
       } else {
@@ -418,6 +429,17 @@ function ChatPageContent() {
               Paperless
               <i
                 className={`fas ${usePaperless ? "fa-check-circle" : "fa-circle"}`}
+              ></i>
+            </button>
+            <button
+              type="button"
+              className={`${styles.filterToggle} ${useGoodreads ? styles.active : ""}`}
+              onClick={() => setUseGoodreads(!useGoodreads)}
+            >
+              <i className="fas fa-book"></i>
+              Goodreads
+              <i
+                className={`fas ${useGoodreads ? "fa-check-circle" : "fa-circle"}`}
               ></i>
             </button>
           </div>

@@ -29,7 +29,35 @@ export async function GET() {
       }),
     );
 
-    return NextResponse.json(filesWithStatus);
+    // Also fetch Goodreads books
+    const goodreadsBooks = await prisma.goodreadsBook.findMany({
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    // Transform books to match IndexedFile interface
+    const booksAsFiles = goodreadsBooks.map((book) => ({
+      id: book.id,
+      filePath: `goodreads://${book.userId}/${book.id}`,
+      chunkCount: 1, // Each book is one chunk
+      lastIndexed: book.updatedAt.toISOString(),
+      status: "indexed",
+      source: "goodreads",
+      needsReindexing: false,
+      // Add book-specific fields
+      goodreadsTitle: book.title,
+      goodreadsAuthor: book.author,
+      goodreadsRating: book.userRating,
+      userName: book.user.name,
+    }));
+
+    return NextResponse.json([...filesWithStatus, ...booksAsFiles]);
   } catch (error) {
     console.error("Error fetching files:", error);
     return NextResponse.json(

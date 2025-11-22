@@ -61,7 +61,23 @@ export async function GET() {
       paperlessStatus = "disconnected";
     }
 
-    // 4. Get Stats
+    // 4. Check Goodreads
+    let goodreadsStatus: "connected" | "not_configured" = "not_configured";
+    let goodreadsUserCount = 0;
+    let goodreadsBookCount = 0;
+
+    try {
+      goodreadsUserCount = await prisma.user.count();
+      goodreadsBookCount = await prisma.goodreadsBook.count();
+
+      if (goodreadsUserCount > 0) {
+        goodreadsStatus = "connected";
+      }
+    } catch (e) {
+      console.error("Goodreads check failed:", e);
+    }
+
+    // 5. Get Stats
     const fileCount = await prisma.indexedFile.count();
     const chunkStats = await prisma.indexedFile.aggregate({
       _sum: { chunkCount: true },
@@ -71,9 +87,12 @@ export async function GET() {
       qdrant: qdrantStatus,
       lmStudio: lmStudioStatus,
       paperless: paperlessStatus,
+      goodreads: goodreadsStatus,
       totalFiles: fileCount,
       totalChunks: chunkStats._sum.chunkCount || 0,
       paperlessDocuments: paperlessDocCount,
+      goodreadsUsers: goodreadsUserCount,
+      goodreadsBooks: goodreadsBookCount,
       config: {
         embeddingModel: config.EMBEDDING_MODEL_NAME,
         chatModel: config.CHAT_MODEL_NAME,

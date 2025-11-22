@@ -22,10 +22,27 @@ export async function POST() {
     console.log("Running full re-scan...");
     const result = await scanAllFiles();
 
+    // Also reindex Goodreads books
+    console.log("Re-indexing Goodreads books...");
+    let goodreadsCount = 0;
+    try {
+      const { indexGoodreadsBooks } = await import("@/lib/goodreads");
+      const users = await prisma.user.findMany();
+
+      for (const user of users) {
+        const count = await indexGoodreadsBooks(user.id);
+        goodreadsCount += count;
+        console.log(`✅ Indexed ${count} books for ${user.name}`);
+      }
+    } catch (error) {
+      console.error("Error indexing Goodreads books:", error);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Re-indexing complete",
       ...result,
+      goodreadsIndexed: goodreadsCount,
     });
   } catch (error) {
     console.error("Error during force reindex:", error);

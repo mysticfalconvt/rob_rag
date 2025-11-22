@@ -17,6 +17,10 @@ interface IndexedFile {
   paperlessTitle?: string;
   paperlessTags?: string;
   paperlessCorrespondent?: string;
+  goodreadsTitle?: string;
+  goodreadsAuthor?: string;
+  goodreadsRating?: number | null;
+  userName?: string;
 }
 
 export default function FilesPage() {
@@ -28,6 +32,7 @@ export default function FilesPage() {
   const [showUploaded, setShowUploaded] = useState(true);
   const [showSynced, setShowSynced] = useState(true);
   const [showPaperless, setShowPaperless] = useState(true);
+  const [showGoodreads, setShowGoodreads] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(20);
 
@@ -175,10 +180,12 @@ export default function FilesPage() {
     const isSynced =
       file.source === "synced" || file.source === "local" || !file.source;
     const isPaperless = file.source === "paperless";
+    const isGoodreads = file.source === "goodreads";
 
     if (isUploaded && !showUploaded) return false;
     if (isSynced && !showSynced) return false;
     if (isPaperless && !showPaperless) return false;
+    if (isGoodreads && !showGoodreads) return false;
 
     return true;
   });
@@ -272,6 +279,16 @@ export default function FilesPage() {
                 ({files.filter((f) => f.source === "paperless").length})
               </span>
             </button>
+            <button
+              className={`${styles.filterToggle} ${showGoodreads ? styles.active : ""}`}
+              onClick={() => setShowGoodreads(!showGoodreads)}
+            >
+              <i className="fas fa-book"></i>
+              Goodreads
+              <span className={styles.count}>
+                ({files.filter((f) => f.source === "goodreads").length})
+              </span>
+            </button>
           </div>
         </div>
         <div className={styles.statsSection}>
@@ -311,9 +328,12 @@ export default function FilesPage() {
             ) : (
               paginatedFiles.map((file) => {
                 const isPaperless = file.source === "paperless";
+                const isGoodreads = file.source === "goodreads";
                 const displayName = isPaperless
                   ? file.paperlessTitle || `Document ${file.paperlessId}`
-                  : file.filePath.split("/").pop();
+                  : isGoodreads
+                    ? file.goodreadsTitle || "Unknown Book"
+                    : file.filePath.split("/").pop();
 
                 let tags: string[] = [];
                 if (isPaperless && file.paperlessTags) {
@@ -327,27 +347,61 @@ export default function FilesPage() {
                 return (
                   <tr
                     key={file.id}
-                    className={isPaperless ? styles.paperlessRow : ""}
+                    className={
+                      isPaperless
+                        ? styles.paperlessRow
+                        : isGoodreads
+                          ? styles.goodreadsRow
+                          : ""
+                    }
                   >
                     <td>
                       <span
                         className={`${styles.sourceBadge} ${
                           isPaperless
                             ? styles.paperless
-                            : file.source === "uploaded"
-                              ? styles.uploaded
-                              : styles.synced
+                            : isGoodreads
+                              ? styles.goodreads
+                              : file.source === "uploaded"
+                                ? styles.uploaded
+                                : styles.synced
                         }`}
                       >
                         {isPaperless
                           ? "🗂️ Paperless"
-                          : file.source === "uploaded"
-                            ? "📤 Uploaded"
-                            : "🔄 Synced"}
+                          : isGoodreads
+                            ? "📚 Goodreads"
+                            : file.source === "uploaded"
+                              ? "📤 Uploaded"
+                              : "🔄 Synced"}
                       </span>
                     </td>
                     <td className={styles.pathCell}>
-                      {isPaperless ? (
+                      {isGoodreads ? (
+                        <div>
+                          <Link
+                            href={`/files/${encodeURIComponent(file.filePath)}`}
+                            className={styles.fileLink}
+                          >
+                            {displayName}
+                          </Link>
+                          {file.goodreadsAuthor && (
+                            <div className={styles.bookAuthor}>
+                              by {file.goodreadsAuthor}
+                            </div>
+                          )}
+                          {file.goodreadsRating && (
+                            <div className={styles.bookRating}>
+                              {"⭐".repeat(file.goodreadsRating)}
+                            </div>
+                          )}
+                          {file.userName && (
+                            <div className={styles.userName}>
+                              {file.userName}'s library
+                            </div>
+                          )}
+                        </div>
+                      ) : isPaperless ? (
                         <div>
                           <Link
                             href={`/files/${encodeURIComponent(file.filePath)}`}
@@ -417,7 +471,8 @@ export default function FilesPage() {
                       <div className={styles.actionsCell}>
                         {file.needsReindexing &&
                           !file.fileMissing &&
-                          !isPaperless && (
+                          !isPaperless &&
+                          !isGoodreads && (
                             <button
                               onClick={() => handleReindex(file.filePath)}
                               className={styles.reindexButton}
@@ -429,15 +484,17 @@ export default function FilesPage() {
                               ></i>
                             </button>
                           )}
-                        <button
-                          onClick={() => handleDelete(file.filePath)}
-                          className={styles.deleteButton}
-                          title={
-                            isPaperless ? "Remove from index" : "Delete file"
-                          }
-                        >
-                          <i className="fas fa-trash"></i>
-                        </button>
+                        {!isGoodreads && (
+                          <button
+                            onClick={() => handleDelete(file.filePath)}
+                            className={styles.deleteButton}
+                            title={
+                              isPaperless ? "Remove from index" : "Delete file"
+                            }
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

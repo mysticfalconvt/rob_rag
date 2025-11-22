@@ -362,8 +362,17 @@
   color: #9f1239;
 }
 
+.sourceBadge.goodreads {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
 .paperlessRow {
   background-color: #fef3f9;
+}
+
+.goodreadsRow {
+  background-color: #fefce8;
 }
 
 .fileName {
@@ -396,6 +405,24 @@
   font-style: italic;
 }
 
+.bookAuthor {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+.bookRating {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.userName {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
 @media (prefers-color-scheme: dark) {
   .sourceBadge.uploaded {
     background-color: #1e3a8a;
@@ -412,8 +439,17 @@
     color: #fce7f3;
   }
 
+  .sourceBadge.goodreads {
+    background-color: #78350f;
+    color: #fef3c7;
+  }
+
   .paperlessRow {
     background-color: #1a0a12;
+  }
+
+  .goodreadsRow {
+    background-color: #1c1917;
   }
 
   .fileName {
@@ -427,6 +463,14 @@
 
   .correspondent {
     color: #9ca3af;
+  }
+
+  .bookAuthor {
+    color: #9ca3af;
+  }
+
+  .userName {
+    color: #6b7280;
   }
 }
 

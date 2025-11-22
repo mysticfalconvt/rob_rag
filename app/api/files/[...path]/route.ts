@@ -13,12 +13,123 @@ export async function GET(
     const decodedPath = path
       .map((segment) => decodeURIComponent(segment))
       .join("/");
-    // For Paperless paths, they come as a single encoded segment like "paperless:%2F%2F75"
+    // For Paperless and Goodreads paths, they come as a single encoded segment
     // We need to handle both cases: already has leading slash or needs one
     const filePath =
-      decodedPath.startsWith("/") || decodedPath.startsWith("paperless:")
+      decodedPath.startsWith("/") ||
+      decodedPath.startsWith("paperless:") ||
+      decodedPath.startsWith("goodreads:")
         ? decodedPath
         : `/${decodedPath}`;
+
+    // Check if this is a Goodreads book
+    if (filePath.startsWith("goodreads://")) {
+      // Extract userId and bookId from path: goodreads://userId/bookId
+      const parts = filePath.replace("goodreads://", "").split("/");
+      if (parts.length !== 2) {
+        return NextResponse.json(
+          { error: "Invalid Goodreads path format" },
+          { status: 400 },
+        );
+      }
+
+      const [userId, bookId] = parts;
+
+      // Fetch book from database
+      const book = await prisma.goodreadsBook.findUnique({
+        where: { id: bookId },
+        include: {
+          user: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
+
+      if (!book) {
+        return NextResponse.json({ error: "Book not found" }, { status: 404 });
+      }
+
+      // Parse shelves
+      let shelves: string[] = [];
+      if (book.shelves) {
+        try {
+          shelves = JSON.parse(book.shelves);
+        } catch (e) {
+          // Fallback for comma-separated format
+          shelves = book.shelves
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+      }
+
+      // Parse read dates
+      let readDates: string[] = [];
+      if (book.readDates) {
+        try {
+          readDates = JSON.parse(book.readDates);
+        } catch (e) {
+          console.error("Error parsing readDates:", e);
+        }
+      }
+
+      // Format book content as markdown
+      const content = `# ${book.title}
+
+**Author:** ${book.author}${book.additionalAuthors ? ` (with ${book.additionalAuthors})` : ""}
+
+${book.userRating ? `**My Rating:** ${"⭐".repeat(book.userRating)}` : ""}
+
+${book.averageRating ? `**Average Rating:** ${book.averageRating.toFixed(2)} / 5` : ""}
+
+${readDates.length > 0 ? `**Read Dates:** ${readDates.map((d) => new Date(d).toLocaleDateString()).join(", ")}` : book.dateRead ? `**Date Read:** ${new Date(book.dateRead).toLocaleDateString()}` : ""}
+
+${book.dateAdded ? `**Date Added:** ${new Date(book.dateAdded).toLocaleDateString()}` : ""}
+
+${book.readCount && book.readCount > 1 ? `**Read Count:** ${book.readCount} times` : ""}
+
+${shelves.length > 0 ? `**Shelves:** ${shelves.join(", ")}` : ""}
+
+${book.pages ? `**Pages:** ${book.pages}` : ""}
+
+${book.yearPublished ? `**Year Published:** ${book.yearPublished}` : ""}
+
+${book.isbn ? `**ISBN:** ${book.isbn}` : ""}
+
+${book.isbn13 ? `**ISBN13:** ${book.isbn13}` : ""}
+
+${book.goodreadsBookId ? `**Goodreads Book ID:** ${book.goodreadsBookId}` : ""}
+
+${book.reviewText ? `## My Review\n\n${book.reviewText}` : ""}
+
+${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
+
+---
+
+*From ${book.user.name}'s Goodreads library*`;
+
+      return NextResponse.json({
+        fileName: book.title,
+        filePath,
+        fileType: "goodreads",
+        content,
+        source: "goodreads",
+        goodreadsBookId: book.goodreadsBookId,
+        metadata: {
+          author: book.author,
+          rating: book.userRating,
+          dateRead: book.dateRead,
+          dateAdded: book.dateAdded,
+          shelves,
+          userName: book.user.name,
+          chunkCount: 1,
+          lastIndexed: book.updatedAt,
+        },
+      });
+    }
 
     // Get file metadata from database
     const fileRecord = await prisma.indexedFile.findUnique({

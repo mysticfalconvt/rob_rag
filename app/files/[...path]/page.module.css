@@ -238,6 +238,11 @@
   color: #9f1239;
 }
 
+.sourceBadge.goodreads {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .paperlessLink {
   margin-bottom: 1rem;
 }
@@ -289,6 +294,11 @@
   .sourceBadge.paperless {
     background: #831843;
     color: #fce7f3;
+  }
+
+  .sourceBadge.goodreads {
+    background: #78350f;
+    color: #fef3c7;
   }
 
   .viewInPaperless {

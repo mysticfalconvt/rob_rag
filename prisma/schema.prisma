@@ -64,3 +64,55 @@ model Settings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  goodreadsSources GoodreadsSource[]
+  goodreadsBooks   GoodreadsBook[]
+}
+
+model GoodreadsSource {
+  id           String    @id @default(uuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rssFeedUrl   String
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model GoodreadsBook {
+  id                 String    @id @default(uuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goodreadsBookId    String
+  title              String
+  author             String
+  additionalAuthors  String?
+  isbn               String?
+  isbn13             String?
+  userRating         Int? // 0-5
+  averageRating      Float?
+  dateRead           DateTime? // Most recent read date (for backward compatibility)
+  readDates          String? // JSON array of all read dates
+  dateAdded          DateTime?
+  shelves            String? // JSON array of shelf names
+  reviewText         String?
+  spoiler            Boolean   @default(false)
+  privateNotes       String?
+  pages              Int?
+  yearPublished      Int?
+  readCount          Int       @default(1)
+  imageUrl           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([userId, goodreadsBookId])
+  @@index([userId])
+  @@index([goodreadsBookId])
+}

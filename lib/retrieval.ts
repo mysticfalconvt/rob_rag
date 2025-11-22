@@ -12,7 +12,13 @@ export interface SearchResult {
 export async function search(
   query: string,
   limit: number = 5,
-  sourceFilter?: "all" | "uploaded" | "synced" | "paperless" | "none",
+  sourceFilter?:
+    | "all"
+    | "uploaded"
+    | "synced"
+    | "paperless"
+    | "goodreads"
+    | "none",
 ): Promise<SearchResult[]> {
   try {
     const queryEmbedding = await generateEmbedding(query);
