@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import SourceCitation from '@/components/SourceCitation';
-import styles from './page.module.css';
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import SourceCitation from "@/components/SourceCitation";
+import styles from "./page.module.css";
 
 interface Source {
   fileName: string;
@@ -16,32 +16,34 @@ interface Source {
 }
 
 interface Message {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   sources?: Source[];
 }
 
-export default function ChatPage() {
+function ChatPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const conversationId = searchParams.get('conversation');
+  const conversationId = searchParams.get("conversation");
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(conversationId);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(conversationId);
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [scrollToBottom]);
 
   // Load conversation when conversationId changes
   useEffect(() => {
@@ -54,7 +56,7 @@ export default function ChatPage() {
             const loadedMessages = data.messages.map((msg: any) => {
               const sources = msg.sources ? JSON.parse(msg.sources) : undefined;
               if (sources) {
-                console.log('Loaded sources:', sources);
+                console.log("Loaded sources:", sources);
               }
               return {
                 role: msg.role,
@@ -66,7 +68,7 @@ export default function ChatPage() {
             setCurrentConversationId(conversationId);
           }
         } catch (error) {
-          console.error('Failed to load conversation:', error);
+          console.error("Failed to load conversation:", error);
         }
       } else {
         // New conversation
@@ -82,34 +84,35 @@ export default function ChatPage() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const userMessage: Message = { role: 'user', content: input };
+    const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    setInput("");
     setIsLoading(true);
 
     try {
       // Determine source filter based on toggles
-      let sourceFilter: 'all' | 'uploaded' | 'synced' | 'paperless' | 'none' = 'none';
+      let sourceFilter: "all" | "uploaded" | "synced" | "paperless" | "none" =
+        "none";
       const activeSources = [];
-      if (useUploaded) activeSources.push('uploaded');
-      if (useSynced) activeSources.push('synced');
-      if (usePaperless) activeSources.push('paperless');
+      if (useUploaded) activeSources.push("uploaded");
+      if (useSynced) activeSources.push("synced");
+      if (usePaperless) activeSources.push("paperless");
 
       if (activeSources.length === 3) {
-        sourceFilter = 'all';
+        sourceFilter = "all";
       } else if (activeSources.length === 1) {
-        sourceFilter = activeSources[0] as 'uploaded' | 'synced' | 'paperless';
+        sourceFilter = activeSources[0] as "uploaded" | "synced" | "paperless";
       } else if (activeSources.length === 0) {
-        sourceFilter = 'none';
+        sourceFilter = "none";
       } else {
         // Multiple sources selected - for now use 'all' and let backend handle
         // In future, could pass array of sources
-        sourceFilter = 'all';
+        sourceFilter = "all";
       }
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [...messages, userMessage],
           conversationId: currentConversationId,
@@ -117,15 +120,15 @@ export default function ChatPage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to send message');
+      if (!response.ok) throw new Error("Failed to send message");
 
       const reader = response.body?.getReader();
       if (!reader) return;
 
-      const assistantMessage: Message = { role: 'assistant', content: '' };
+      const assistantMessage: Message = { role: "assistant", content: "" };
       setMessages((prev) => [...prev, assistantMessage]);
 
-      let buffer = '';
+      let buffer = "";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -134,8 +137,8 @@ export default function ChatPage() {
         buffer += text;
 
         // Check if we received the sources marker
-        if (buffer.includes('__SOURCES__:')) {
-          const [contentPart, sourcesPart] = buffer.split('__SOURCES__:');
+        if (buffer.includes("__SOURCES__:")) {
+          const [contentPart, sourcesPart] = buffer.split("__SOURCES__:");
 
           // Update content without the marker
           setMessages((prev) => {
@@ -151,7 +154,7 @@ export default function ChatPage() {
           // Parse and add sources + update conversation ID
           try {
             const sourcesData = JSON.parse(sourcesPart);
-            console.log('Received sources from stream:', sourcesData.sources);
+            console.log("Received sources from stream:", sourcesData.sources);
             setMessages((prev) => {
               const newMessages = [...prev];
               const lastIndex = newMessages.length - 1;
@@ -168,7 +171,7 @@ export default function ChatPage() {
               router.push(`/?conversation=${sourcesData.conversationId}`);
             }
           } catch (e) {
-            console.error('Failed to parse sources:', e);
+            console.error("Failed to parse sources:", e);
           }
           break;
         }
@@ -185,10 +188,10 @@ export default function ChatPage() {
         });
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: 'Sorry, something went wrong.' },
+        { role: "assistant", content: "Sorry, something went wrong." },
       ]);
     } finally {
       setIsLoading(false);
@@ -212,21 +215,23 @@ export default function ChatPage() {
         {messages.map((msg, index) => (
           <div key={index} className={`${styles.message} ${styles[msg.role]}`}>
             <div className={styles.avatar}>
-              {msg.role === 'user' ? (
+              {msg.role === "user" ? (
                 <i className="fas fa-user"></i>
               ) : (
                 <i className="fas fa-robot"></i>
               )}
             </div>
             <div className={styles.content}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-              {msg.role === 'assistant' && msg.sources && (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {msg.content}
+              </ReactMarkdown>
+              {msg.role === "assistant" && msg.sources && (
                 <SourceCitation sources={msg.sources} />
               )}
             </div>
           </div>
         ))}
-        {isLoading && messages[messages.length - 1]?.role === 'user' && (
+        {isLoading && messages[messages.length - 1]?.role === "user" && (
           <div className={`${styles.message} ${styles.assistant}`}>
             <div className={styles.avatar}>
               <i className="fas fa-robot"></i>
@@ -245,30 +250,36 @@ export default function ChatPage() {
           <div className={styles.filterToggles}>
             <button
               type="button"
-              className={`${styles.filterToggle} ${useUploaded ? styles.active : ''}`}
+              className={`${styles.filterToggle} ${useUploaded ? styles.active : ""}`}
               onClick={() => setUseUploaded(!useUploaded)}
             >
               <i className="fas fa-upload"></i>
               Uploaded
-              <i className={`fas ${useUploaded ? 'fa-check-circle' : 'fa-circle'}`}></i>
+              <i
+                className={`fas ${useUploaded ? "fa-check-circle" : "fa-circle"}`}
+              ></i>
             </button>
             <button
               type="button"
-              className={`${styles.filterToggle} ${useSynced ? styles.active : ''}`}
+              className={`${styles.filterToggle} ${useSynced ? styles.active : ""}`}
               onClick={() => setUseSynced(!useSynced)}
             >
               <i className="fas fa-sync"></i>
               Synced
-              <i className={`fas ${useSynced ? 'fa-check-circle' : 'fa-circle'}`}></i>
+              <i
+                className={`fas ${useSynced ? "fa-check-circle" : "fa-circle"}`}
+              ></i>
             </button>
             <button
               type="button"
-              className={`${styles.filterToggle} ${usePaperless ? styles.active : ''}`}
+              className={`${styles.filterToggle} ${usePaperless ? styles.active : ""}`}
               onClick={() => setUsePaperless(!usePaperless)}
             >
               <i className="fas fa-file-archive"></i>
               Paperless
-              <i className={`fas ${usePaperless ? 'fa-check-circle' : 'fa-circle'}`}></i>
+              <i
+                className={`fas ${usePaperless ? "fa-check-circle" : "fa-circle"}`}
+              ></i>
             </button>
           </div>
         </div>
@@ -286,5 +297,21 @@ export default function ChatPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className={styles.container}>
+          <div className={styles.header}>
+            <h1>Loading...</h1>
+          </div>
+        </div>
+      }
+    >
+      <ChatPageContent />
+    </Suspense>
   );
 }

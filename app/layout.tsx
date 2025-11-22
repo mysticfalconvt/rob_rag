@@ -16,7 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: config.APP_NAME,
-  description: "A RAG (Retrieval-Augmented Generation) application for document-based question answering",
+  description:
+    "A RAG (Retrieval-Augmented Generation) application for document-based question answering",
 };
 
 import Sidebar from "@/components/Sidebar";
@@ -33,9 +34,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         <div className={styles.container}>
           <Sidebar appName={config.APP_NAME} />
-          <main className={styles.main}>
-            {children}
-          </main>
+          <main className={styles.main}>{children}</main>
         </div>
       </body>
     </html>

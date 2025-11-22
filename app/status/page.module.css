@@ -1,367 +1,365 @@
 .container {
-    max-width: 900px;
-    margin: 0 auto;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .title {
-    margin-bottom: 2rem;
+  margin-bottom: 2rem;
 }
 
 .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
 }
 
 .card {
-    background: #fff;
-    border-radius: 1rem;
-    border: 1px solid #e5e5e5;
-    padding: 1.5rem;
+  background: #fff;
+  border-radius: 1rem;
+  border: 1px solid #e5e5e5;
+  padding: 1.5rem;
 }
 
 .card h2 {
-    font-size: 1.25rem;
-    margin-bottom: 1.5rem;
-    color: #374151;
+  font-size: 1.25rem;
+  margin-bottom: 1.5rem;
+  color: #374151;
 }
 
 .item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f3f4f6;
 }
 
 .item:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .badge {
-    padding: 0.25rem 0.75rem;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    text-transform: capitalize;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-transform: capitalize;
 }
 
 .badge.connected {
-    background-color: #d1fae5;
-    color: #065f46;
+  background-color: #d1fae5;
+  color: #065f46;
 }
 
 .badge.disconnected {
-    background-color: #fee2e2;
-    color: #991b1b;
+  background-color: #fee2e2;
+  color: #991b1b;
 }
 
 .stat {
-    text-align: center;
-    padding: 1rem;
+  text-align: center;
+  padding: 1rem;
 }
 
 .value {
-    display: block;
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #3b82f6;
+  display: block;
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #3b82f6;
 }
 
 .label {
-    color: #666;
-    font-size: 0.875rem;
+  color: #666;
+  font-size: 0.875rem;
 }
 
 .code {
-    font-family: monospace;
-    background-color: #f3f4f6;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.875rem;
-    color: #374151;
+  font-family: monospace;
+  background-color: #f3f4f6;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: #374151;
 }
 
 .loading,
 .error {
-    text-align: center;
-    padding: 3rem;
-    color: #666;
+  text-align: center;
+  padding: 3rem;
+  color: #666;
 }
 
 .cardHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
 }
 
 .cardHeader h2 {
-    margin-bottom: 0;
+  margin-bottom: 0;
 }
 
 .defaultBadge {
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background-color: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fcd34d;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
 }
 
 .formGroup {
-    margin-bottom: 1rem;
+  margin-bottom: 1rem;
 }
 
 .formGroup label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
-    margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
 }
 
 .warningIcon {
-    font-size: 1rem;
-    cursor: help;
+  font-size: 1rem;
+  cursor: help;
 }
 
 .select {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #e5e5e5;
-    border-radius: 0.5rem;
-    background-color: #fff;
-    color: #374151;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: border-color 0.2s;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.5rem;
+  background-color: #fff;
+  color: #374151;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
 }
 
 .select:hover:not(:disabled) {
-    border-color: #3b82f6;
+  border-color: #3b82f6;
 }
 
 .select:disabled {
-    background-color: #f3f4f6;
-    cursor: not-allowed;
+  background-color: #f3f4f6;
+  cursor: not-allowed;
 }
 
 .saveButton {
-    width: 100%;
-    margin-top: 1rem;
-    padding: 0.75rem 1.5rem;
-    background-color: #3b82f6;
-    color: #fff;
-    border: none;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s;
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
 }
 
 .saveButton:hover:not(:disabled) {
-    background-color: #2563eb;
+  background-color: #2563eb;
 }
 
 .saveButton:disabled {
-    background-color: #9ca3af;
-    cursor: not-allowed;
+  background-color: #9ca3af;
+  cursor: not-allowed;
 }
 
 @media (prefers-color-scheme: dark) {
-    .card {
-        background: #171717;
-        border-color: #333;
-    }
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
 
-    .card h2 {
-        color: #ededed;
-    }
+  .card h2 {
+    color: #ededed;
+  }
 
-    .item {
-        border-bottom-color: #333;
-    }
+  .item {
+    border-bottom-color: #333;
+  }
 
-    .badge.connected {
-        background-color: #064e3b;
-        color: #d1fae5;
-    }
+  .badge.connected {
+    background-color: #064e3b;
+    color: #d1fae5;
+  }
 
-    .badge.disconnected {
-        background-color: #7f1d1d;
-        color: #fee2e2;
-    }
+  .badge.disconnected {
+    background-color: #7f1d1d;
+    color: #fee2e2;
+  }
 
-    .code {
-        background-color: #262626;
-        color: #ededed;
-    }
+  .code {
+    background-color: #262626;
+    color: #ededed;
+  }
 
-    .defaultBadge {
-        background-color: #78350f;
-        color: #fef3c7;
-    }
+  .defaultBadge {
+    background-color: #78350f;
+    color: #fef3c7;
+  }
 
-    .formGroup label {
-        color: #ededed;
-    }
+  .formGroup label {
+    color: #ededed;
+  }
 
-    .select {
-        background-color: #262626;
-        border-color: #333;
-        color: #ededed;
-    }
+  .select {
+    background-color: #262626;
+    border-color: #333;
+    color: #ededed;
+  }
 
-    .select:hover:not(:disabled) {
-        border-color: #3b82f6;
-    }
+  .select:hover:not(:disabled) {
+    border-color: #3b82f6;
+  }
 
-    .select:disabled {
-        background-color: #171717;
-    }
+  .select:disabled {
+    background-color: #171717;
+  }
 }
 
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
-    .grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 
-    .card {
-        padding: 1rem;
-    }
+  .card {
+    padding: 1rem;
+  }
 
-    .value {
-        font-size: 2rem;
-    }
+  .value {
+    font-size: 2rem;
+  }
 
-    .select,
-    .saveButton {
-        padding: 0.75rem;
-        /* Larger touch target */
-    }
+  .select,
+  .saveButton {
+    padding: 0.75rem;
+    /* Larger touch target */
+  }
 
-    .item {
-        padding: 0.625rem 0;
-    }
+  .item {
+    padding: 0.625rem 0;
+  }
 }
 
-.in
-put {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid #e5e5e5;
-    border-radius: 0.5rem;
-    background-color: #fff;
-    color: #374151;
-    font-size: 0.875rem;
-    transition: border-color 0.2s;
+.in put {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.5rem;
+  background-color: #fff;
+  color: #374151;
+  font-size: 0.875rem;
+  transition: border-color 0.2s;
 }
 
 .input:hover:not(:disabled) {
-    border-color: #3b82f6;
+  border-color: #3b82f6;
 }
 
 .input:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .input:disabled {
-    background-color: #f3f4f6;
-    cursor: not-allowed;
+  background-color: #f3f4f6;
+  cursor: not-allowed;
 }
 
 .buttonGroup {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .testButton {
-    flex: 1;
-    padding: 0.75rem 1.5rem;
-    background-color: #10b981;
-    color: #fff;
-    border: none;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background-color 0.2s;
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  background-color: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
 }
 
 .testButton:hover:not(:disabled) {
-    background-color: #059669;
+  background-color: #059669;
 }
 
 .testButton:disabled {
-    background-color: #9ca3af;
-    cursor: not-allowed;
+  background-color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .badge.not_configured {
-    background-color: #f3f4f6;
-    color: #6b7280;
+  background-color: #f3f4f6;
+  color: #6b7280;
 }
 
 .badge.disabled {
-    background-color: #fef3c7;
-    color: #92400e;
+  background-color: #fef3c7;
+  color: #92400e;
 }
 
 @media (prefers-color-scheme: dark) {
-    .input {
-        background-color: #262626;
-        border-color: #333;
-        color: #ededed;
-    }
+  .input {
+    background-color: #262626;
+    border-color: #333;
+    color: #ededed;
+  }
 
-    .input:hover:not(:disabled) {
-        border-color: #3b82f6;
-    }
+  .input:hover:not(:disabled) {
+    border-color: #3b82f6;
+  }
 
-    .input:disabled {
-        background-color: #171717;
-    }
+  .input:disabled {
+    background-color: #171717;
+  }
 
-    .badge.not_configured {
-        background-color: #262626;
-        color: #9ca3af;
-    }
+  .badge.not_configured {
+    background-color: #262626;
+    color: #9ca3af;
+  }
 
-    .badge.disabled {
-        background-color: #78350f;
-        color: #fef3c7;
-    }
+  .badge.disabled {
+    background-color: #78350f;
+    color: #fef3c7;
+  }
 }
 
 @media (max-width: 768px) {
-    .buttonGroup {
-        flex-direction: column;
-    }
+  .buttonGroup {
+    flex-direction: column;
+  }
 
-    .testButton {
-        width: 100%;
-    }
+  .testButton {
+    width: 100%;
+  }
 }
 
-
 .helpText {
-    display: block;
-    margin-top: 0.25rem;
-    font-size: 0.75rem;
-    color: #6b7280;
-    font-style: italic;
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-style: italic;
 }
 
 @media (prefers-color-scheme: dark) {
-    .helpText {
-        color: #9ca3af;
-    }
+  .helpText {
+    color: #9ca3af;
+  }
 }
