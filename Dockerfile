@@ -34,14 +34,14 @@ COPY pnpm-lock.yaml* ./
 # Copy Prisma schema to a separate location (will be copied to mounted volume on startup)
 COPY prisma ./prisma-schema
 
-# Install all dependencies (including prisma CLI)
-RUN pnpm install --frozen-lockfile
+# Install production dependencies
+RUN pnpm install --prod --frozen-lockfile
+
+# Install Prisma CLI separately (needed for migrations)
+RUN pnpm add -D prisma@5.22.0
 
 # Generate Prisma client using the schema from prisma-schema
 RUN npx prisma generate --schema=./prisma-schema/schema.prisma
-
-# Remove dev dependencies after generating Prisma client
-RUN pnpm prune --prod
 
 # Copy built application from builder
 COPY --from=builder /app/.next ./.next
