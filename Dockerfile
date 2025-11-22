@@ -34,7 +34,7 @@ RUN npm install -g pnpm
 COPY package*.json ./
 COPY pnpm-lock.yaml* ./
 
-# Copy Prisma schema to a separate location (will be copied to mounted volume on startup)
+# Copy Prisma schema and migrations to a separate location (will be copied to mounted volume on startup)
 COPY prisma ./prisma-schema
 
 # Install production dependencies
