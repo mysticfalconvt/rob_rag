@@ -107,7 +107,8 @@ export default function StatusPage() {
     fetchSettings();
     const interval = setInterval(fetchStatus, 10000); // Refresh status every 10s
     return () => clearInterval(interval);
-  }, [fetchModels, fetchSettings, fetchStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveSettings = async () => {
     if (!settings) return;
