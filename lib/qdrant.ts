@@ -17,14 +17,18 @@ export async function ensureCollection() {
                 size: 1024, // mxbai-embed-large-v1 uses 1024 dimensions
                 distance: 'Cosine',
             },
-            // Define searchable payload fields
-            payload_schema: {
-                properties: {
-                    filePath: { type: 'keyword' },
-                    fileName: { type: 'keyword' },
-                },
-            },
         });
+
+        // Create payload indexes for efficient filtering
+        await qdrantClient.createPayloadIndex(COLLECTION_NAME, {
+            field_name: 'filePath',
+            field_schema: 'keyword',
+        });
+        await qdrantClient.createPayloadIndex(COLLECTION_NAME, {
+            field_name: 'fileName',
+            field_schema: 'keyword',
+        });
+
         console.log(`Collection '${COLLECTION_NAME}' created.`);
     }
 }
