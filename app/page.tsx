@@ -43,7 +43,7 @@ function ChatPageContent() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [scrollToBottom]);
+  }, [messages]);
 
   // Load conversation when conversationId changes
   useEffect(() => {

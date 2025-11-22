@@ -47,7 +47,8 @@ export default function FilesPage() {
 
   useEffect(() => {
     fetchFiles();
-  }, [fetchFiles]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleScan = async () => {
     setIsScanning(true);
