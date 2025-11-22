@@ -35,7 +35,14 @@ function ChatPageContent() {
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -44,6 +51,34 @@ function ChatPageContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showMenu]);
+
+  // Auto-hide toast after 3 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Load conversation when conversationId changes
   useEffect(() => {
@@ -198,10 +233,114 @@ function ChatPageContent() {
     }
   };
 
+  const handleSaveConversation = async () => {
+    if (!currentConversationId) {
+      setToast({
+        message: "Please send a message first to create a conversation.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setShowMenu(false);
+
+    try {
+      const response = await fetch(
+        `/api/conversations/${currentConversationId}/export`,
+        {
+          method: "POST",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to save conversation");
+      }
+
+      const data = await response.json();
+      setToast({
+        message: `Saved as ${data.filename} and indexed!`,
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Error saving conversation:", error);
+      setToast({
+        message: "Failed to save conversation. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!currentConversationId) return;
+
+    setShowMenu(false);
+
+    if (!confirm("Delete this conversation?")) return;
+
+    try {
+      const res = await fetch(`/api/conversations/${currentConversationId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setToast({
+          message: "Conversation deleted successfully!",
+          type: "success",
+        });
+        // Redirect to new chat after a brief delay
+        setTimeout(() => {
+          router.push("/");
+        }, 1000);
+      } else {
+        throw new Error("Failed to delete conversation");
+      }
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
+      setToast({
+        message: "Failed to delete conversation. Please try again.",
+        type: "error",
+      });
+    }
+  };
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>Chat with your Documents</h1>
+        {currentConversationId && (
+          <div className={styles.menuContainer} ref={menuRef}>
+            <button
+              className={styles.menuButton}
+              onClick={() => setShowMenu(!showMenu)}
+              disabled={isSaving}
+              title="More options"
+            >
+              <i className="fas fa-ellipsis-v"></i>
+            </button>
+            {showMenu && (
+              <div className={styles.menuDropdown}>
+                <button
+                  className={styles.menuItem}
+                  onClick={handleSaveConversation}
+                  disabled={isSaving}
+                >
+                  <i className="fas fa-save"></i>
+                  {isSaving ? "Saving..." : "Save as Document"}
+                </button>
+                <button
+                  className={`${styles.menuItem} ${styles.danger}`}
+                  onClick={handleDeleteConversation}
+                >
+                  <i className="fas fa-trash"></i>
+                  Delete Conversation
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className={styles.messages}>
@@ -296,6 +435,15 @@ function ChatPageContent() {
           </button>
         </div>
       </form>
+
+      {toast && (
+        <div className={`${styles.toast} ${styles[toast.type]}`}>
+          <i
+            className={`fas ${toast.type === "success" ? "fa-check-circle" : "fa-exclamation-circle"}`}
+          ></i>
+          <span>{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }
