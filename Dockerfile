@@ -24,6 +24,9 @@ FROM node:20-alpine AS runner
 
 WORKDIR /app
 
+# Install OpenSSL and other required dependencies for Prisma
+RUN apk add --no-cache openssl libc6-compat
+
 # Install pnpm
 RUN npm install -g pnpm
 
