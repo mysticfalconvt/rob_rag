@@ -31,11 +31,14 @@ RUN npm install -g pnpm
 COPY package*.json ./
 COPY pnpm-lock.yaml* ./
 
-# Copy Prisma schema
-COPY prisma ./prisma
+# Copy Prisma schema to a separate location (will be copied to mounted volume on startup)
+COPY prisma ./prisma-schema
 
-# Install all dependencies (including prisma CLI) and generate client
-RUN pnpm install --frozen-lockfile && npx prisma generate
+# Install all dependencies (including prisma CLI)
+RUN pnpm install --frozen-lockfile
+
+# Generate Prisma client using the schema from prisma-schema
+RUN npx prisma generate --schema=./prisma-schema/schema.prisma
 
 # Remove dev dependencies after generating Prisma client
 RUN pnpm prune --prod
@@ -59,5 +62,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/status', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Start script that runs migrations and starts the app
-CMD npx prisma migrate deploy && pnpm start
+ENTRYPOINT ["docker-entrypoint.sh"]

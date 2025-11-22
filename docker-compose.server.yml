@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/mysticfalconvt/rob_rag:latest
+    container_name: rob_rag_app
+    restart: unless-stopped
+    ports:
+      - "4345:3000"
+    environment:
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - DOCUMENTS_FOLDER_PATH=/app/documents
+      - QDRANT_URL=http://qdrant:6333
+      - LM_STUDIO_API_URL=${LM_STUDIO_API_URL}
+      - LM_STUDIO_API_KEY=${LM_STUDIO_API_KEY}
+      - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-nomic-embed-text}
+      - CHAT_MODEL_NAME=${CHAT_MODEL_NAME:-llama-3.2-1b-instruct}
+      - APP_NAME=${APP_NAME:-RobRAG}
+    volumes:
+      - /mnt/user/appdata/rob_rag/app/prisma:/app/prisma:z
+      - /mnt/user/appdata/rob_rag/app/documents:/app/documents:z
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-rag
+    restart: unless-stopped
+    ports:
+      - "4344:6333" # REST API (mapped to your custom port)
+      - "6334:6334" # gRPC API (optional, used for some client libraries)
+    volumes:
+      - /mnt/user/appdata/rob_rag/qdrant:/qdrant/storage:z
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - rag-network
+
+networks:
+  rag-network:
+    driver: bridge
