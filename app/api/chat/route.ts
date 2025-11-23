@@ -21,7 +21,12 @@ import { manageContext } from "@/lib/contextWindow";
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, conversationId, sourceFilter, sourceCount = 5 } = await req.json();
+    const {
+      messages,
+      conversationId,
+      sourceFilter,
+      sourceCount = 5,
+    } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const query = lastMessage.content;
 
@@ -103,7 +108,11 @@ export async function POST(req: NextRequest) {
         "count:",
         clampedSourceCount,
       );
-      searchResults = await search(searchQuery, clampedSourceCount, sourceFilter);
+      searchResults = await search(
+        searchQuery,
+        clampedSourceCount,
+        sourceFilter,
+      );
       console.log("Found", searchResults.length, "results");
       // console.log('Search result scores:', searchResults.map(r => ({ file: r.metadata.fileName, score: r.score })));
 
@@ -193,8 +202,10 @@ export async function POST(req: NextRequest) {
 
     // 3. Apply context window management to prevent token overflow
     const maxTokens = contextSettings?.maxContextTokens ?? 8000;
-    const strategy = (contextSettings?.contextStrategy ??
-      "smart") as "sliding" | "token" | "smart";
+    const strategy = (contextSettings?.contextStrategy ?? "smart") as
+      | "sliding"
+      | "token"
+      | "smart";
     const windowSize = contextSettings?.slidingWindowSize ?? 10;
 
     const {
@@ -214,7 +225,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Prepare messages for LangChain
-    const langchainMessages = [new SystemMessage(systemPrompt)];
+    const langchainMessages: (SystemMessage | HumanMessage | AIMessage)[] = [
+      new SystemMessage(systemPrompt),
+    ];
 
     // Add summary if we have one
     if (summary) {

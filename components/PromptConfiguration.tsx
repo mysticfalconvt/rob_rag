@@ -94,7 +94,9 @@ export default function PromptConfiguration({
 
   const handleResetPrompt = (promptKey: keyof typeof prompts) => {
     if (
-      confirm("Are you sure you want to reset this prompt to its default value?")
+      confirm(
+        "Are you sure you want to reset this prompt to its default value?",
+      )
     ) {
       setPrompts((prev) => ({
         ...prev,

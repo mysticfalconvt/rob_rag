@@ -149,7 +149,10 @@ export async function updateConversationTopics(
       : [];
 
     // Extract topics using LLM (only if we have a few messages)
-    if (conversation.messages.length >= 2 && conversation.messages.length <= 5) {
+    if (
+      conversation.messages.length >= 2 &&
+      conversation.messages.length <= 5
+    ) {
       try {
         const topicPrompt = `Based on this conversation, extract 2-4 main topics or themes. Return only a JSON array of topic strings, nothing else.
 
@@ -167,9 +170,7 @@ Topics (as JSON array):`;
         ]);
 
         const responseText =
-          typeof response.content === "string"
-            ? response.content.trim()
-            : "[]";
+          typeof response.content === "string" ? response.content.trim() : "[]";
 
         // Try to parse JSON array
         const match = responseText.match(/\[.*\]/s);
@@ -180,7 +181,9 @@ Topics (as JSON array):`;
               where: { id: conversationId },
               data: { topics: JSON.stringify(topics) },
             });
-            console.log(`[Topics] Updated for conversation: ${topics.join(", ")}`);
+            console.log(
+              `[Topics] Updated for conversation: ${topics.join(", ")}`,
+            );
             return topics;
           }
         }

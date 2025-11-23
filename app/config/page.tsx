@@ -59,10 +59,10 @@ export default function ConfigPage() {
         const data = await res.json();
         const allModels = data.models || [];
         const embedModels = allModels.filter((model: string) =>
-          model.toLowerCase().includes("embed")
+          model.toLowerCase().includes("embed"),
         );
         const chatModelsList = allModels.filter(
-          (model: string) => !model.toLowerCase().includes("embed")
+          (model: string) => !model.toLowerCase().includes("embed"),
         );
         setEmbeddingModels(embedModels);
         setChatModels(chatModelsList);
@@ -127,7 +127,7 @@ export default function ConfigPage() {
           "1. Go to the Files page\n" +
           '2. Click "Force Reindex All"\n' +
           "3. Wait for re-indexing to complete\n\n" +
-          "Are you sure you want to continue?"
+          "Are you sure you want to continue?",
       );
 
       if (!confirmed) return;
@@ -151,7 +151,7 @@ export default function ConfigPage() {
           "✅ Settings saved successfully!" +
             (embeddingModelChanged
               ? "\n\n⚠️ Remember to re-index all files!"
-              : "")
+              : ""),
         );
       } else {
         alert("❌ Failed to save settings");
@@ -276,7 +276,7 @@ export default function ConfigPage() {
       if (res.ok) {
         const data = await res.json();
         alert(
-          `✅ CSV uploaded! Created: ${data.created}, Updated: ${data.updated}`
+          `✅ CSV uploaded! Created: ${data.created}, Updated: ${data.updated}`,
         );
         await fetchUsers();
       } else {
@@ -320,7 +320,7 @@ export default function ConfigPage() {
       if (res.ok) {
         const data = await res.json();
         alert(
-          `✅ Sync complete! Created: ${data.created}, Updated: ${data.updated}`
+          `✅ Sync complete! Created: ${data.created}, Updated: ${data.updated}`,
         );
         await fetchUsers();
       } else {
@@ -333,12 +333,14 @@ export default function ConfigPage() {
     }
   };
 
-  const hasChanges =
+  const hasChanges = !!(
     settings &&
     (selectedEmbeddingModel !== settings.embeddingModel ||
-      selectedChatModel !== settings.chatModel);
+      selectedChatModel !== settings.chatModel)
+  );
 
-  if (isLoading) return <div className={styles.loading}>Loading configuration...</div>;
+  if (isLoading)
+    return <div className={styles.loading}>Loading configuration...</div>;
 
   return (
     <div className={styles.container}>

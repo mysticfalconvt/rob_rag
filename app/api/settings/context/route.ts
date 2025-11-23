@@ -97,9 +97,7 @@ export async function POST(req: NextRequest) {
         slidingWindowSize:
           slidingWindowSize !== undefined ? slidingWindowSize : undefined,
         enableContextSummary:
-          enableContextSummary !== undefined
-            ? enableContextSummary
-            : undefined,
+          enableContextSummary !== undefined ? enableContextSummary : undefined,
       },
     });
 

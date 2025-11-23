@@ -176,7 +176,8 @@ export default function ContextWindowSettings() {
               Number of recent messages to keep in full detail
               {contextStrategy === "smart"
                 ? " (older messages will be summarized)"
-                : ""}.
+                : ""}
+              .
             </p>
             <input
               id="slidingWindowSize"
@@ -204,9 +205,7 @@ export default function ContextWindowSettings() {
                 onChange={(e) => setEnableContextSummary(e.target.checked)}
                 className={styles.checkbox}
               />
-              <span>
-                Enable conversation summarization for older messages
-              </span>
+              <span>Enable conversation summarization for older messages</span>
             </label>
             <p className={styles.description}>
               When enabled, older messages are summarized to save tokens while

@@ -47,7 +47,7 @@ function FileViewerPageContent() {
   const highlightedContent = useFileHighlight(
     fileData?.content || "",
     fileData?.fileType || "",
-    chunkText
+    chunkText,
   );
 
   useEffect(() => {

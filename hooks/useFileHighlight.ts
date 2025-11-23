@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export function useFileHighlight(
   content: string,
   fileType: string,
-  chunkText: string | null
+  chunkText: string | null,
 ) {
   const [highlightedContent, setHighlightedContent] = useState<string>("");
 

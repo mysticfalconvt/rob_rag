@@ -48,7 +48,9 @@ export default function PaperlessConfiguration({
           className={styles.input}
           disabled={isSaving}
         />
-        <small className={styles.helpText}>Internal URL for API connections</small>
+        <small className={styles.helpText}>
+          Internal URL for API connections
+        </small>
       </div>
 
       <div className={styles.formGroup}>
@@ -100,7 +102,11 @@ export default function PaperlessConfiguration({
         >
           {isTesting ? "Testing..." : "Test Connection"}
         </button>
-        <button onClick={onSave} disabled={isSaving} className={styles.saveButton}>
+        <button
+          onClick={onSave}
+          disabled={isSaving}
+          className={styles.saveButton}
+        >
           {isSaving ? "Saving..." : "Save Paperless Settings"}
         </button>
       </div>

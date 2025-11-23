@@ -33,13 +33,13 @@ export default function Pagination({
           className={styles.paginationNumber}
         >
           1
-        </button>
+        </button>,
       );
       if (startPage > 2) {
         pages.push(
           <span key="ellipsis1" className={styles.ellipsis}>
             ...
-          </span>
+          </span>,
         );
       }
     }
@@ -52,7 +52,7 @@ export default function Pagination({
           className={`${styles.paginationNumber} ${i === currentPage ? styles.active : ""}`}
         >
           {i}
-        </button>
+        </button>,
       );
     }
 
@@ -61,7 +61,7 @@ export default function Pagination({
         pages.push(
           <span key="ellipsis2" className={styles.ellipsis}>
             ...
-          </span>
+          </span>,
         );
       }
       pages.push(
@@ -71,7 +71,7 @@ export default function Pagination({
           className={styles.paginationNumber}
         >
           {totalPages}
-        </button>
+        </button>,
       );
     }
 

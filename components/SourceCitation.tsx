@@ -57,7 +57,9 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
               {hoveredIndex === index && (
                 <div className={styles.tooltip}>
                   <div className={styles.tooltipHeader}>
-                    <span className={styles.tooltipFileName}>{source.fileName}</span>
+                    <span className={styles.tooltipFileName}>
+                      {source.fileName}
+                    </span>
                     <span className={styles.tooltipScore}>
                       Score: {(source.score * 100).toFixed(1)}%
                     </span>

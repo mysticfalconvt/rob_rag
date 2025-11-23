@@ -79,7 +79,7 @@ export default function FilesPage() {
       "⚠️ Force Reindex All Files\n\n" +
         "This will clear the entire index and re-scan all documents from scratch.\n" +
         "This may take several minutes depending on the number of files.\n\n" +
-        "Are you sure you want to continue?"
+        "Are you sure you want to continue?",
     );
 
     if (!confirmed) return;
@@ -168,7 +168,7 @@ export default function FilesPage() {
         `/api/files?path=${encodeURIComponent(filePath)}`,
         {
           method: "DELETE",
-        }
+        },
       );
       if (res.ok) {
         await fetchFiles();
@@ -200,7 +200,7 @@ export default function FilesPage() {
 
   const uploadedCount = files.filter((f) => f.source === "uploaded").length;
   const syncedCount = files.filter(
-    (f) => f.source === "synced" || f.source === "local" || !f.source
+    (f) => f.source === "synced" || f.source === "local" || !f.source,
   ).length;
   const paperlessCount = files.filter((f) => f.source === "paperless").length;
   const goodreadsCount = files.filter((f) => f.source === "goodreads").length;

@@ -138,7 +138,7 @@ export default function GoodreadsIntegration({
                       {" "}
                       - Last synced:{" "}
                       {new Date(
-                        user.goodreadsSources[0].lastSyncedAt
+                        user.goodreadsSources[0].lastSyncedAt,
                       ).toLocaleString()}
                     </span>
                   )}

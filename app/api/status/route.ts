@@ -65,7 +65,13 @@ export async function GET() {
     let goodreadsStatus: "connected" | "not_configured" = "not_configured";
     let goodreadsUserCount = 0;
     let goodreadsBookCount = 0;
-    let goodreadsUsersData = [];
+    let goodreadsUsersData: Array<{
+      id: string;
+      name: string | null;
+      email: string | null;
+      bookCount: number;
+      lastSyncedAt: Date | null | undefined;
+    }> = [];
 
     try {
       const users = await prisma.user.findMany({

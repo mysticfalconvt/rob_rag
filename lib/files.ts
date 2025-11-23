@@ -181,7 +181,9 @@ export async function processPaperlessDocument(
       fileHash,
       source: "paperless",
       paperlessId: metadata.id,
-      paperlessTags: Array.isArray(metadata.tags) ? metadata.tags.join("|") : "",
+      paperlessTags: Array.isArray(metadata.tags)
+        ? metadata.tags.join("|")
+        : "",
       paperlessCorrespondent: metadata.correspondent || "",
       paperlessCreated: metadata.created.toISOString(),
       paperlessModified: metadata.modified.toISOString(),

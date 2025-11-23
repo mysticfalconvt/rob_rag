@@ -23,7 +23,6 @@ export default function SourceFilterBar({
   onTogglePaperless,
   onToggleGoodreads,
 }: SourceFilterBarProps) {
-
   return (
     <div className={styles.filterBar}>
       <span className={styles.filterLabel}>Search in:</span>

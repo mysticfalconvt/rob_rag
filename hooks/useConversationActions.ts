@@ -24,7 +24,7 @@ export function useConversationActions(conversationId: string | null) {
         `/api/conversations/${conversationId}/export`,
         {
           method: "POST",
-        }
+        },
       );
 
       if (!response.ok) {

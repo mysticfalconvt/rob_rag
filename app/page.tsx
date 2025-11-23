@@ -111,9 +111,9 @@ function ChatPageContent() {
         conversationId={null}
         showMenu={false}
         isSaving={false}
-        onToggleMenu={() => { }}
-        onSaveConversation={() => { }}
-        onDeleteConversation={() => { }}
+        onToggleMenu={() => {}}
+        onSaveConversation={() => {}}
+        onDeleteConversation={() => {}}
       />
 
       <div className={styles.messages}>

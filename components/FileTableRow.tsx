@@ -129,10 +129,7 @@ export default function FileTableRow({
           </div>
         ) : (
           <>
-            <Link
-              href={`/files${file.filePath}`}
-              className={styles.fileLink}
-            >
+            <Link href={`/files${file.filePath}`} className={styles.fileLink}>
               {displayName}
             </Link>
             <span className={styles.fullPath}>{file.filePath}</span>
@@ -176,9 +173,7 @@ export default function FileTableRow({
                 title="Re-index File"
                 disabled={isScanning}
               >
-                <i
-                  className={`fas fa-sync ${isScanning ? "fa-spin" : ""}`}
-                ></i>
+                <i className={`fas fa-sync ${isScanning ? "fa-spin" : ""}`}></i>
               </button>
             )}
           {!isGoodreads && (
