@@ -1,5 +1,6 @@
 "use client";
 
+import Card from "./Card";
 import styles from "./PaperlessConfiguration.module.css";
 
 interface PaperlessConfigurationProps {
@@ -34,8 +35,7 @@ export default function PaperlessConfiguration({
   onSave,
 }: PaperlessConfigurationProps) {
   return (
-    <div className={styles.card}>
-      <h2>Paperless-ngx Configuration</h2>
+    <Card title="Paperless-ngx Configuration">
 
       <div className={styles.formGroup}>
         <label htmlFor="paperlessUrl">Paperless-ngx API URL</label>
@@ -110,6 +110,6 @@ export default function PaperlessConfiguration({
           {isSaving ? "Saving..." : "Save Paperless Settings"}
         </button>
       </div>
-    </div>
+    </Card>
   );
 }

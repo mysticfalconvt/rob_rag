@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Card from "./Card";
 import Toast from "@/components/Toast";
 import styles from "./UserProfile.module.css";
 
@@ -73,23 +74,18 @@ export default function UserProfile() {
 
   if (loading) {
     return (
-      <div className={styles.card}>
-        <h2 className={styles.cardTitle}>User Profile</h2>
+      <Card title="User Profile">
         <div className={styles.loading}>Loading profile...</div>
-      </div>
+      </Card>
     );
   }
 
   return (
     <>
-      <div className={styles.card}>
-        <div className={styles.header}>
-          <div>
-            <h2 className={styles.cardTitle}>User Profile</h2>
-            <p className={styles.subtitle}>
-              Help the AI understand your context
-            </p>
-          </div>
+      <Card
+        title="User Profile"
+        subtitle="Help the AI understand your context"
+        action={
           <button
             onClick={handleSave}
             className={styles.saveButton}
@@ -97,7 +93,8 @@ export default function UserProfile() {
           >
             {saving ? "Saving..." : "Save Profile"}
           </button>
-        </div>
+        }
+      >
 
         <div className={styles.field}>
           <label htmlFor="userName" className={styles.label}>
@@ -134,7 +131,7 @@ export default function UserProfile() {
             rows={6}
           />
         </div>
-      </div>
+      </Card>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </>

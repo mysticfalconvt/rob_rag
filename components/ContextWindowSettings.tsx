@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Card from "./Card";
 import Toast from "@/components/Toast";
 import styles from "./ContextWindowSettings.module.css";
 
@@ -84,23 +85,18 @@ export default function ContextWindowSettings() {
 
   if (loading) {
     return (
-      <div className={styles.card}>
-        <h2 className={styles.cardTitle}>Context Window Management</h2>
+      <Card title="Context Window Management">
         <div className={styles.loading}>Loading settings...</div>
-      </div>
+      </Card>
     );
   }
 
   return (
     <>
-      <div className={styles.card}>
-        <div className={styles.header}>
-          <div>
-            <h2 className={styles.cardTitle}>Context Window Management</h2>
-            <p className={styles.subtitle}>
-              Control how conversation history is handled
-            </p>
-          </div>
+      <Card
+        title="Context Window Management"
+        subtitle="Control how conversation history is handled"
+        action={
           <button
             onClick={handleSave}
             className={styles.saveButton}
@@ -108,7 +104,8 @@ export default function ContextWindowSettings() {
           >
             {saving ? "Saving..." : "Save Settings"}
           </button>
-        </div>
+        }
+      >
 
         <div className={styles.field}>
           <label htmlFor="contextStrategy" className={styles.label}>
@@ -235,7 +232,7 @@ export default function ContextWindowSettings() {
             </ul>
           </div>
         </div>
-      </div>
+      </Card>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
     </>

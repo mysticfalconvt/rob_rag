@@ -41,7 +41,7 @@ export default function FileFilterBar({
         <span className={styles.filterLabel}>Show:</span>
         <div className={styles.filterToggles}>
           <button
-            className={`${styles.filterToggle} ${showUploaded ? styles.active : ""}`}
+            className={`${styles.filterToggle} ${showUploaded ? styles.active : ""} ${uploadedCount === 0 ? styles.empty : ""}`}
             onClick={onToggleUploaded}
           >
             <i className="fas fa-upload"></i>
@@ -49,7 +49,7 @@ export default function FileFilterBar({
             <span className={styles.count}>({uploadedCount})</span>
           </button>
           <button
-            className={`${styles.filterToggle} ${showSynced ? styles.active : ""}`}
+            className={`${styles.filterToggle} ${showSynced ? styles.active : ""} ${syncedCount === 0 ? styles.empty : ""}`}
             onClick={onToggleSynced}
           >
             <i className="fas fa-sync"></i>
@@ -57,7 +57,7 @@ export default function FileFilterBar({
             <span className={styles.count}>({syncedCount})</span>
           </button>
           <button
-            className={`${styles.filterToggle} ${showPaperless ? styles.active : ""}`}
+            className={`${styles.filterToggle} ${showPaperless ? styles.active : ""} ${paperlessCount === 0 ? styles.empty : ""}`}
             onClick={onTogglePaperless}
           >
             <i className="fas fa-file-archive"></i>
@@ -65,7 +65,7 @@ export default function FileFilterBar({
             <span className={styles.count}>({paperlessCount})</span>
           </button>
           <button
-            className={`${styles.filterToggle} ${showGoodreads ? styles.active : ""}`}
+            className={`${styles.filterToggle} ${showGoodreads ? styles.active : ""} ${goodreadsCount === 0 ? styles.empty : ""}`}
             onClick={onToggleGoodreads}
           >
             <i className="fas fa-book"></i>

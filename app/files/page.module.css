@@ -105,6 +105,22 @@
   color: #374151;
 }
 
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.sortable:hover {
+  background-color: #f3f4f6;
+}
+
+.sortable i {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
 .table tr:last-child td {
   border-bottom: none;
 }
@@ -189,6 +205,10 @@
     background-color: #262626;
     color: #ededed;
     border-bottom-color: #333;
+  }
+
+  .sortable:hover {
+    background-color: #333;
   }
 
   .table td {

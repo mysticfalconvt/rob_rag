@@ -140,21 +140,22 @@ export default function PromptConfiguration({
             </button>
           </div>
         </div>
-        <p className={styles.description}>
-          Use <code>{"{{context}}"}</code> to insert document context.
-        </p>
-        <textarea
-          id="ragSystemPrompt"
-          value={prompts.ragSystemPrompt}
-          onChange={(e) =>
-            setPrompts((prev) => ({
-              ...prev,
-              ragSystemPrompt: e.target.value,
-            }))
-          }
-          className={styles.textarea}
-          rows={8}
-        />
+        <div className={styles.content}>
+          <p className={styles.description}>
+            Use <code>{"{{context}}"}</code> to insert document context.
+          </p>
+          <textarea
+            id="ragSystemPrompt"
+            value={prompts.ragSystemPrompt}
+            onChange={(e) =>
+              setPrompts((prev) => ({
+                ...prev,
+                ragSystemPrompt: e.target.value,
+              }))
+            }
+            className={styles.textarea}
+          />
+        </div>
       </div>
 
       {/* No Sources System Prompt Card */}
@@ -181,21 +182,22 @@ export default function PromptConfiguration({
             </button>
           </div>
         </div>
-        <p className={styles.description}>
-          Used when no document context is needed.
-        </p>
-        <textarea
-          id="noSourcesSystemPrompt"
-          value={prompts.noSourcesSystemPrompt}
-          onChange={(e) =>
-            setPrompts((prev) => ({
-              ...prev,
-              noSourcesSystemPrompt: e.target.value,
-            }))
-          }
-          className={styles.textarea}
-          rows={4}
-        />
+        <div className={styles.content}>
+          <p className={styles.description}>
+            Used when no document context is needed.
+          </p>
+          <textarea
+            id="noSourcesSystemPrompt"
+            value={prompts.noSourcesSystemPrompt}
+            onChange={(e) =>
+              setPrompts((prev) => ({
+                ...prev,
+                noSourcesSystemPrompt: e.target.value,
+              }))
+            }
+            className={styles.textarea}
+          />
+        </div>
       </div>
 
       {/* Title Generation Prompt Card */}
@@ -224,22 +226,23 @@ export default function PromptConfiguration({
             </button>
           </div>
         </div>
-        <p className={styles.description}>
-          Use <code>{"{{userMessage}}"}</code> and{" "}
-          <code>{"{{assistantMessage}}"}</code> placeholders.
-        </p>
-        <textarea
-          id="titleGenerationPrompt"
-          value={prompts.titleGenerationPrompt}
-          onChange={(e) =>
-            setPrompts((prev) => ({
-              ...prev,
-              titleGenerationPrompt: e.target.value,
-            }))
-          }
-          className={styles.textarea}
-          rows={6}
-        />
+        <div className={styles.content}>
+          <p className={styles.description}>
+            Use <code>{"{{userMessage}}"}</code> and{" "}
+            <code>{"{{assistantMessage}}"}</code> placeholders.
+          </p>
+          <textarea
+            id="titleGenerationPrompt"
+            value={prompts.titleGenerationPrompt}
+            onChange={(e) =>
+              setPrompts((prev) => ({
+                ...prev,
+                titleGenerationPrompt: e.target.value,
+              }))
+            }
+            className={styles.textarea}
+          />
+        </div>
       </div>
 
       {/* Toast notification */}

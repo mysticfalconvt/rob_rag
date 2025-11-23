@@ -1,0 +1,116 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+}
+
+.card h2 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.section {
+  margin-bottom: 1.5rem;
+}
+
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.section h3 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.scanButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.scanButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.scanButton:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.scanButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.scanButton i {
+  font-size: 1rem;
+}
+
+.scanButton i.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+.dangerButton {
+  background: #dc2626;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
+
+  .card h2 {
+    color: #ededed;
+  }
+
+  .section h3 {
+    color: #9ca3af;
+  }
+
+  .scanButton {
+    background: #2563eb;
+  }
+
+  .scanButton:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+
+  .dangerButton {
+    background: #b91c1c;
+  }
+
+  .dangerButton:hover:not(:disabled) {
+    background: #991b1b;
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Card from "./Card";
 import styles from "./GoodreadsIntegration.module.css";
 
 interface User {
@@ -85,8 +86,7 @@ export default function GoodreadsIntegration({
   };
 
   return (
-    <div className={styles.card}>
-      <h2>Goodreads Library Integration</h2>
+    <Card title="Goodreads Library Integration">
 
       <div className={styles.formGroup}>
         <button
@@ -197,6 +197,6 @@ export default function GoodreadsIntegration({
           </div>
         ))
       )}
-    </div>
+    </Card>
   );
 }

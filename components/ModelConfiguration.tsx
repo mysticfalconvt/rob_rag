@@ -1,5 +1,6 @@
 "use client";
 
+import Card from "./Card";
 import styles from "./ModelConfiguration.module.css";
 
 interface Settings {
@@ -34,18 +35,19 @@ export default function ModelConfiguration({
   onSave,
 }: ModelConfigurationProps) {
   return (
-    <div className={styles.card}>
-      <div className={styles.cardHeader}>
-        <h2>Model Configuration</h2>
-        {settings?.isDefault && (
+    <Card
+      title="Model Configuration"
+      action={
+        settings?.isDefault && (
           <span
             className={styles.defaultBadge}
             title="Using environment variables"
           >
             Default
           </span>
-        )}
-      </div>
+        )
+      }
+    >
 
       <div className={styles.formGroup}>
         <label htmlFor="embeddingModel">
@@ -104,6 +106,6 @@ export default function ModelConfiguration({
       >
         {isSaving ? "Saving..." : "Save Settings"}
       </button>
-    </div>
+    </Card>
   );
 }

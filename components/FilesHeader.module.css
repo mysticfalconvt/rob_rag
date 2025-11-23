@@ -12,15 +12,59 @@
   font-size: 1.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  .header {
-    border-bottom-color: #333;
-  }
-}
 
 .headerActions {
   display: flex;
   gap: 0.75rem;
+  align-items: center;
+}
+
+.searchContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  min-width: 300px;
+}
+
+.searchContainer i.fa-search {
+  color: #999;
+  font-size: 0.875rem;
+}
+
+.searchInput {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.875rem;
+  flex: 1;
+  color: #ededed;
+}
+
+.searchInput::placeholder {
+  color: #666;
+}
+
+.clearButton {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background: #444;
+  color: #ddd;
 }
 
 .uploadButton,

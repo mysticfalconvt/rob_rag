@@ -387,9 +387,9 @@ export default function ConfigPage() {
           onSyncRSS={handleSyncRSS}
         />
 
-        <ContextWindowSettings />
-
         <PromptConfiguration />
+
+        <ContextWindowSettings />
       </div>
     </div>
   );

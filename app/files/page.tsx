@@ -36,6 +36,11 @@ export default function FilesPage() {
   const [showPaperless, setShowPaperless] = useState(true);
   const [showGoodreads, setShowGoodreads] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortColumn, setSortColumn] = useState<
+    "source" | "fileName" | "chunkCount" | "status" | "lastIndexed"
+  >("lastIndexed");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const itemsPerPage = 20;
 
   const fetchFiles = async () => {
@@ -58,46 +63,18 @@ export default function FilesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [showUploaded, showSynced, showPaperless, showGoodreads]);
+  }, [showUploaded, showSynced, showPaperless, showGoodreads, searchQuery]);
 
-  const handleScan = async () => {
-    setIsScanning(true);
-    try {
-      const res = await fetch("/api/scan", { method: "POST" });
-      if (res.ok) {
-        await fetchFiles();
-      }
-    } catch (error) {
-      console.error("Error scanning:", error);
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  const handleForceReindex = async () => {
-    const confirmed = confirm(
-      "⚠️ Force Reindex All Files\n\n" +
-        "This will clear the entire index and re-scan all documents from scratch.\n" +
-        "This may take several minutes depending on the number of files.\n\n" +
-        "Are you sure you want to continue?",
-    );
-
-    if (!confirmed) return;
-
-    setIsScanning(true);
-    try {
-      const res = await fetch("/api/reindex", { method: "POST" });
-      if (res.ok) {
-        await fetchFiles();
-        alert("✅ Re-indexing complete!");
-      } else {
-        alert("❌ Re-indexing failed. Check console for details.");
-      }
-    } catch (error) {
-      console.error("Error force re-indexing:", error);
-      alert("❌ Re-indexing failed. Check console for details.");
-    } finally {
-      setIsScanning(false);
+  const handleSort = (
+    column: "source" | "fileName" | "chunkCount" | "status" | "lastIndexed",
+  ) => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Default to ascending for new column
+      setSortColumn(column);
+      setSortDirection("asc");
     }
   };
 
@@ -178,40 +155,144 @@ export default function FilesPage() {
     }
   };
 
-  const filteredFiles = files.filter((file) => {
-    const isUploaded = file.source === "uploaded";
-    const isSynced =
-      file.source === "synced" || file.source === "local" || !file.source;
-    const isPaperless = file.source === "paperless";
-    const isGoodreads = file.source === "goodreads";
+  const filteredFiles = files
+    .filter((file) => {
+      const isUploaded = file.source === "uploaded";
+      const isSynced =
+        file.source === "synced" || file.source === "local" || !file.source;
+      const isPaperless = file.source === "paperless";
+      const isGoodreads = file.source === "goodreads";
 
-    if (isUploaded && !showUploaded) return false;
-    if (isSynced && !showSynced) return false;
-    if (isPaperless && !showPaperless) return false;
-    if (isGoodreads && !showGoodreads) return false;
+      if (isUploaded && !showUploaded) return false;
+      if (isSynced && !showSynced) return false;
+      if (isPaperless && !showPaperless) return false;
+      if (isGoodreads && !showGoodreads) return false;
 
-    return true;
-  });
+      // Apply search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesPath = file.filePath.toLowerCase().includes(query);
+        const matchesTitle =
+          file.paperlessTitle?.toLowerCase().includes(query) ||
+          file.goodreadsTitle?.toLowerCase().includes(query);
+        const matchesAuthor = file.goodreadsAuthor
+          ?.toLowerCase()
+          .includes(query);
+        const matchesTags = file.paperlessTags?.toLowerCase().includes(query);
+        const matchesCorrespondent = file.paperlessCorrespondent
+          ?.toLowerCase()
+          .includes(query);
+        const matchesUser = file.userName?.toLowerCase().includes(query);
+
+        if (
+          !matchesPath &&
+          !matchesTitle &&
+          !matchesAuthor &&
+          !matchesTags &&
+          !matchesCorrespondent &&
+          !matchesUser
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    })
+    .sort((a, b) => {
+      let aValue: string | number;
+      let bValue: string | number;
+
+      switch (sortColumn) {
+        case "source":
+          aValue = a.source || "";
+          bValue = b.source || "";
+          break;
+        case "fileName":
+          // Extract filename from path for sorting
+          const getFileName = (file: IndexedFile) => {
+            if (file.paperlessTitle) return file.paperlessTitle.toLowerCase();
+            if (file.goodreadsTitle) return file.goodreadsTitle.toLowerCase();
+            // Extract filename from path
+            const pathParts = file.filePath.split("/");
+            return pathParts[pathParts.length - 1].toLowerCase();
+          };
+          aValue = getFileName(a);
+          bValue = getFileName(b);
+          break;
+        case "chunkCount":
+          aValue = a.chunkCount;
+          bValue = b.chunkCount;
+          break;
+        case "status":
+          aValue = a.status;
+          bValue = b.status;
+          break;
+        case "lastIndexed":
+          aValue = new Date(a.lastIndexed).getTime();
+          bValue = new Date(b.lastIndexed).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
 
   const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
 
-  const uploadedCount = files.filter((f) => f.source === "uploaded").length;
-  const syncedCount = files.filter(
-    (f) => f.source === "synced" || f.source === "local" || !f.source,
+  // Helper function to check if a file matches the search query
+  const matchesSearch = (file: IndexedFile) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    const matchesPath = file.filePath.toLowerCase().includes(query);
+    const matchesTitle =
+      file.paperlessTitle?.toLowerCase().includes(query) ||
+      file.goodreadsTitle?.toLowerCase().includes(query);
+    const matchesAuthor = file.goodreadsAuthor?.toLowerCase().includes(query);
+    const matchesTags = file.paperlessTags?.toLowerCase().includes(query);
+    const matchesCorrespondent = file.paperlessCorrespondent
+      ?.toLowerCase()
+      .includes(query);
+    const matchesUser = file.userName?.toLowerCase().includes(query);
+
+    return (
+      matchesPath ||
+      matchesTitle ||
+      matchesAuthor ||
+      matchesTags ||
+      matchesCorrespondent ||
+      matchesUser
+    );
+  };
+
+  // Calculate counts based on current search
+  const uploadedCount = files.filter(
+    (f) => f.source === "uploaded" && matchesSearch(f),
   ).length;
-  const paperlessCount = files.filter((f) => f.source === "paperless").length;
-  const goodreadsCount = files.filter((f) => f.source === "goodreads").length;
+  const syncedCount = files.filter(
+    (f) =>
+      (f.source === "synced" || f.source === "local" || !f.source) &&
+      matchesSearch(f),
+  ).length;
+  const paperlessCount = files.filter(
+    (f) => f.source === "paperless" && matchesSearch(f),
+  ).length;
+  const goodreadsCount = files.filter(
+    (f) => f.source === "goodreads" && matchesSearch(f),
+  ).length;
 
   return (
     <div className={styles.container}>
       <FilesHeader
         isScanning={isScanning}
         onUpload={handleUpload}
-        onScan={handleScan}
-        onForceReindex={handleForceReindex}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       <FileFilterBar
@@ -235,11 +316,61 @@ export default function FilesPage() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Source</th>
-              <th>File Path</th>
-              <th>Chunks</th>
-              <th>Status</th>
-              <th>Last Indexed</th>
+              <th
+                onClick={() => handleSort("source")}
+                className={styles.sortable}
+              >
+                Source
+                {sortColumn === "source" && (
+                  <i
+                    className={`fas fa-${sortDirection === "asc" ? "arrow-up" : "arrow-down"}`}
+                  />
+                )}
+              </th>
+              <th
+                onClick={() => handleSort("fileName")}
+                className={styles.sortable}
+              >
+                File Name
+                {sortColumn === "fileName" && (
+                  <i
+                    className={`fas fa-${sortDirection === "asc" ? "arrow-up" : "arrow-down"}`}
+                  />
+                )}
+              </th>
+              <th
+                onClick={() => handleSort("chunkCount")}
+                className={styles.sortable}
+              >
+                Chunks
+                {sortColumn === "chunkCount" && (
+                  <i
+                    className={`fas fa-${sortDirection === "asc" ? "arrow-up" : "arrow-down"}`}
+                  />
+                )}
+              </th>
+              <th
+                onClick={() => handleSort("status")}
+                className={styles.sortable}
+              >
+                Status
+                {sortColumn === "status" && (
+                  <i
+                    className={`fas fa-${sortDirection === "asc" ? "arrow-up" : "arrow-down"}`}
+                  />
+                )}
+              </th>
+              <th
+                onClick={() => handleSort("lastIndexed")}
+                className={styles.sortable}
+              >
+                Last Indexed
+                {sortColumn === "lastIndexed" && (
+                  <i
+                    className={`fas fa-${sortDirection === "asc" ? "arrow-up" : "arrow-down"}`}
+                  />
+                )}
+              </th>
               <th>Actions</th>
             </tr>
           </thead>

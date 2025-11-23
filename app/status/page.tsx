@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import StatusConnections from "@/components/StatusConnections";
 import StatisticsCard from "@/components/StatisticsCard";
 import ReindexCard from "@/components/ReindexCard";
+import ScanCard from "@/components/ScanCard";
 import styles from "./page.module.css";
 
 interface GoodreadsUserStatus {
@@ -38,6 +39,7 @@ export default function StatusPage() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReindexing, setIsReindexing] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -90,6 +92,79 @@ export default function StatusPage() {
     }
   };
 
+  const handleScanSource = async (source: string, label: string) => {
+    setIsScanning(source);
+    try {
+      const res = await fetch("/api/scan/source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✅ ${data.message}`);
+        await fetchStatus();
+      } else {
+        const error = await res.json();
+        alert(`❌ Scan failed: ${error.details || error.error}`);
+      }
+    } catch (error) {
+      console.error("Error scanning:", error);
+      alert("❌ Failed to scan");
+    } finally {
+      setIsScanning(null);
+    }
+  };
+
+  const handleScanAll = async () => {
+    setIsScanning("all");
+    try {
+      const res = await fetch("/api/scan", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        alert(
+          `✅ Scan complete! Local: ${data.localIndexed}/${data.localDeleted}, Paperless: ${data.paperlessIndexed}/${data.paperlessDeleted}`,
+        );
+        await fetchStatus();
+      } else {
+        alert("❌ Scan failed");
+      }
+    } catch (error) {
+      console.error("Error scanning:", error);
+      alert("❌ Failed to scan");
+    } finally {
+      setIsScanning(null);
+    }
+  };
+
+  const handleForceReindexAll = async () => {
+    const confirmed = confirm(
+      "⚠️ Force Reindex All Files\n\n" +
+        "This will clear the entire index and re-scan all documents from scratch.\n" +
+        "This may take several minutes depending on the number of files.\n\n" +
+        "Are you sure you want to continue?",
+    );
+
+    if (!confirmed) return;
+
+    setIsScanning("reindex");
+    try {
+      const res = await fetch("/api/reindex", { method: "POST" });
+      if (res.ok) {
+        await fetchStatus();
+        alert("✅ Re-indexing complete!");
+      } else {
+        alert("❌ Re-indexing failed. Check console for details.");
+      }
+    } catch (error) {
+      console.error("Error force re-indexing:", error);
+      alert("❌ Re-indexing failed. Check console for details.");
+    } finally {
+      setIsScanning(null);
+    }
+  };
+
   if (isLoading) return <div className={styles.loading}>Loading status...</div>;
   if (!status)
     return <div className={styles.error}>Failed to load status.</div>;
@@ -118,6 +193,17 @@ export default function StatusPage() {
           goodreadsBooks={status.goodreadsBooks}
           goodreadsUsers={status.goodreadsUserCount}
           averageChunksPerFile={status.averageChunksPerFile}
+        />
+
+        <ScanCard
+          uploadedFiles={status.uploadedFiles}
+          syncedFiles={status.syncedFiles}
+          paperlessDocuments={status.paperlessDocuments}
+          goodreadsBooks={status.goodreadsBooks}
+          isScanning={isScanning}
+          onScanSource={handleScanSource}
+          onScanAll={handleScanAll}
+          onForceReindexAll={handleForceReindexAll}
         />
 
         <ReindexCard
