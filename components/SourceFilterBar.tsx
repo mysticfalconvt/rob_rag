@@ -2,26 +2,32 @@
 
 import styles from "./SourceFilterBar.module.css";
 
+interface GoodreadsUser {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
 interface SourceFilterBarProps {
   useUploaded: boolean;
   useSynced: boolean;
   usePaperless: boolean;
-  useGoodreads: boolean;
+  goodreadsUsers: GoodreadsUser[];
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
   onTogglePaperless: () => void;
-  onToggleGoodreads: () => void;
+  onToggleGoodreadsUser: (userId: string) => void;
 }
 
 export default function SourceFilterBar({
   useUploaded,
   useSynced,
   usePaperless,
-  useGoodreads,
+  goodreadsUsers,
   onToggleUploaded,
   onToggleSynced,
   onTogglePaperless,
-  onToggleGoodreads,
+  onToggleGoodreadsUser,
 }: SourceFilterBarProps) {
   return (
     <div className={styles.filterBar}>
@@ -60,17 +66,20 @@ export default function SourceFilterBar({
             className={`fas ${usePaperless ? "fa-check-circle" : "fa-circle"}`}
           ></i>
         </button>
-        <button
-          type="button"
-          className={`${styles.filterToggle} ${useGoodreads ? styles.active : ""}`}
-          onClick={onToggleGoodreads}
-        >
-          <i className="fas fa-book"></i>
-          Goodreads
-          <i
-            className={`fas ${useGoodreads ? "fa-check-circle" : "fa-circle"}`}
-          ></i>
-        </button>
+        {goodreadsUsers.map((user) => (
+          <button
+            key={user.id}
+            type="button"
+            className={`${styles.filterToggle} ${user.enabled ? styles.active : ""}`}
+            onClick={() => onToggleGoodreadsUser(user.id)}
+          >
+            <i className="fas fa-book"></i>
+            {user.name}
+            <i
+              className={`fas ${user.enabled ? "fa-check-circle" : "fa-circle"}`}
+            ></i>
+          </button>
+        ))}
       </div>
     </div>
   );

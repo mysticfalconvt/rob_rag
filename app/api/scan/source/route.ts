@@ -41,18 +41,79 @@ export async function POST(request: NextRequest) {
 
       case "goodreads": {
         // Scan and index all Goodreads books
+        // First, sync RSS feeds for all users with configured feeds
+        let totalSynced = 0;
         let goodreadsCount = 0;
-        const { indexGoodreadsBooks } = await import("@/lib/goodreads");
-        const users = await prisma.user.findMany();
+        const { indexGoodreadsBooks, parseGoodreadsRSS, importBooksForUser } =
+          await import("@/lib/goodreads");
 
+        const users = await prisma.user.findMany({
+          include: {
+            goodreadsSources: true,
+            _count: {
+              select: { goodreadsBooks: true },
+            },
+          },
+        });
+
+        console.log(`[Goodreads Scan] Found ${users.length} users to process`);
+
+        // Step 1: Sync RSS feeds for users that have them configured
         for (const user of users) {
+          if (user.goodreadsSources.length > 0) {
+            const source = user.goodreadsSources[0];
+            try {
+              console.log(`[Goodreads Scan] Syncing RSS feed for ${user.name}`);
+              const response = await fetch(source.rssFeedUrl);
+              if (response.ok) {
+                const rssContent = await response.text();
+                const books = await parseGoodreadsRSS(rssContent);
+                const syncResult = await importBooksForUser(user.id, books);
+                totalSynced += syncResult.created + syncResult.updated;
+                console.log(
+                  `[Goodreads Scan] Synced ${books.length} books for ${user.name} (${syncResult.created} new, ${syncResult.updated} updated)`,
+                );
+
+                // Update last synced time
+                await prisma.goodreadsSource.update({
+                  where: { id: source.id },
+                  data: { lastSyncedAt: new Date() },
+                });
+              } else {
+                console.warn(
+                  `[Goodreads Scan] Failed to fetch RSS feed for ${user.name}: ${response.status}`,
+                );
+              }
+            } catch (error) {
+              console.error(
+                `[Goodreads Scan] Error syncing RSS for ${user.name}:`,
+                error,
+              );
+            }
+          }
+        }
+
+        // Step 2: Re-fetch users with updated book counts
+        const updatedUsers = await prisma.user.findMany({
+          include: {
+            _count: {
+              select: { goodreadsBooks: true },
+            },
+          },
+        });
+
+        // Step 3: Index all books
+        for (const user of updatedUsers) {
+          console.log(
+            `[Goodreads Scan] Indexing ${user._count.goodreadsBooks} books for ${user.name}`,
+          );
           const count = await indexGoodreadsBooks(user.id);
           goodreadsCount += count;
           console.log(`✅ Indexed ${count} books for ${user.name}`);
         }
 
-        result = { indexed: goodreadsCount, deleted: 0 };
-        message = `Scanned Goodreads: ${goodreadsCount} books indexed`;
+        result = { indexed: goodreadsCount, deleted: 0, synced: totalSynced };
+        message = `Scanned Goodreads: Synced ${totalSynced} books, indexed ${goodreadsCount} books from ${users.length} users`;
         break;
       }
 

@@ -3,13 +3,19 @@
 import { useRef, useEffect } from "react";
 import styles from "./SettingsDialog.module.css";
 
+interface GoodreadsUser {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
 interface SettingsDialogProps {
   isOpen: boolean;
   sourceCount: number;
   useUploaded: boolean;
   useSynced: boolean;
   usePaperless: boolean;
-  useGoodreads: boolean;
+  goodreadsUsers: GoodreadsUser[];
   conversationId: string | null;
   isSaving: boolean;
   onClose: () => void;
@@ -17,7 +23,7 @@ interface SettingsDialogProps {
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
   onTogglePaperless: () => void;
-  onToggleGoodreads: () => void;
+  onToggleGoodreadsUser: (userId: string) => void;
   onSaveConversation: () => void;
   onDeleteConversation: () => void;
 }
@@ -28,7 +34,7 @@ export default function SettingsDialog({
   useUploaded,
   useSynced,
   usePaperless,
-  useGoodreads,
+  goodreadsUsers,
   conversationId,
   isSaving,
   onClose,
@@ -36,7 +42,7 @@ export default function SettingsDialog({
   onToggleUploaded,
   onToggleSynced,
   onTogglePaperless,
-  onToggleGoodreads,
+  onToggleGoodreadsUser,
   onSaveConversation,
   onDeleteConversation,
 }: SettingsDialogProps) {
@@ -126,17 +132,20 @@ export default function SettingsDialog({
                   className={`fas ${usePaperless ? "fa-check-circle" : "fa-circle"}`}
                 ></i>
               </button>
-              <button
-                type="button"
-                className={`${styles.filterToggle} ${useGoodreads ? styles.active : ""}`}
-                onClick={onToggleGoodreads}
-              >
-                <i className="fas fa-book"></i>
-                <span>Goodreads</span>
-                <i
-                  className={`fas ${useGoodreads ? "fa-check-circle" : "fa-circle"}`}
-                ></i>
-              </button>
+              {goodreadsUsers.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  className={`${styles.filterToggle} ${user.enabled ? styles.active : ""}`}
+                  onClick={() => onToggleGoodreadsUser(user.id)}
+                >
+                  <i className="fas fa-book"></i>
+                  <span>{user.name}</span>
+                  <i
+                    className={`fas ${user.enabled ? "fa-check-circle" : "fa-circle"}`}
+                  ></i>
+                </button>
+              ))}
             </div>
           </div>
 

@@ -233,9 +233,13 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
     throw new Error("User not found");
   }
 
+  console.log(
+    `[indexGoodreadsBooks] User ${user.name} has ${user.goodreadsBooks.length} books`,
+  );
+
   // Delete old Goodreads points for this user
   await ensureCollection();
-  await qdrantClient.delete(COLLECTION_NAME, {
+  const deleteResult = await qdrantClient.delete(COLLECTION_NAME, {
     filter: {
       must: [
         {
@@ -249,6 +253,10 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
       ],
     },
   });
+  console.log(
+    `[indexGoodreadsBooks] Deleted old vectors for user ${user.name}:`,
+    deleteResult,
+  );
 
   // Generate chunks and embeddings
   const points = [];
@@ -294,6 +302,9 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
 
   // Upsert to Qdrant
   if (points.length > 0) {
+    console.log(
+      `[indexGoodreadsBooks] Upserting ${points.length} points for user ${user.name}`,
+    );
     const response = await fetch(
       `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`,
       {
@@ -309,6 +320,11 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
         `Qdrant upsert failed: ${response.status} ${response.statusText} - ${errText}`,
       );
     }
+    console.log(
+      `[indexGoodreadsBooks] Successfully upserted ${points.length} points for user ${user.name}`,
+    );
+  } else {
+    console.log(`[indexGoodreadsBooks] No books to index for user ${user.name}`);
   }
 
   return points.length;

@@ -4,6 +4,12 @@ import { useRef, useEffect } from "react";
 import styles from "./ChatInput.module.css";
 import SettingsDialog from "./SettingsDialog";
 
+interface GoodreadsUser {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
 interface ChatInputProps {
   value: string;
   isLoading: boolean;
@@ -13,7 +19,7 @@ interface ChatInputProps {
   useUploaded: boolean;
   useSynced: boolean;
   usePaperless: boolean;
-  useGoodreads: boolean;
+  goodreadsUsers: GoodreadsUser[];
   conversationId: string | null;
   isSaving: boolean;
   onChange: (value: string) => void;
@@ -24,7 +30,7 @@ interface ChatInputProps {
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
   onTogglePaperless: () => void;
-  onToggleGoodreads: () => void;
+  onToggleGoodreadsUser: (userId: string) => void;
   onSaveConversation: () => void;
   onDeleteConversation: () => void;
 }
@@ -38,7 +44,7 @@ export default function ChatInput({
   useUploaded,
   useSynced,
   usePaperless,
-  useGoodreads,
+  goodreadsUsers,
   conversationId,
   isSaving,
   onChange,
@@ -49,7 +55,7 @@ export default function ChatInput({
   onToggleUploaded,
   onToggleSynced,
   onTogglePaperless,
-  onToggleGoodreads,
+  onToggleGoodreadsUser,
   onSaveConversation,
   onDeleteConversation,
 }: ChatInputProps) {
@@ -133,7 +139,7 @@ export default function ChatInput({
         useUploaded={useUploaded}
         useSynced={useSynced}
         usePaperless={usePaperless}
-        useGoodreads={useGoodreads}
+        goodreadsUsers={goodreadsUsers}
         conversationId={conversationId}
         isSaving={isSaving}
         onClose={onToggleSettings}
@@ -141,7 +147,7 @@ export default function ChatInput({
         onToggleUploaded={onToggleUploaded}
         onToggleSynced={onToggleSynced}
         onTogglePaperless={onTogglePaperless}
-        onToggleGoodreads={onToggleGoodreads}
+        onToggleGoodreadsUser={onToggleGoodreadsUser}
         onSaveConversation={onSaveConversation}
         onDeleteConversation={onDeleteConversation}
       />

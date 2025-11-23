@@ -39,22 +39,46 @@ export async function search(
         // Multiple sources: use "should" (OR logic)
         if (sourceFilter.length > 0) {
           filter = {
-            should: sourceFilter.map((source) => ({
-              key: "source",
-              match: { value: source },
-            })),
+            should: sourceFilter.map((source) => {
+              // Handle "goodreads:userId" format
+              if (source.startsWith("goodreads:")) {
+                const userId = source.split(":")[1];
+                return {
+                  must: [
+                    { key: "source", match: { value: "goodreads" } },
+                    { key: "userId", match: { value: userId } },
+                  ],
+                };
+              }
+              // Regular source filter
+              return {
+                key: "source",
+                match: { value: source },
+              };
+            }),
           };
         }
       } else {
         // Single source: use "must"
-        filter = {
-          must: [
-            {
-              key: "source",
-              match: { value: sourceFilter },
-            },
-          ],
-        };
+        // Handle "goodreads:userId" format
+        if (sourceFilter.startsWith("goodreads:")) {
+          const userId = sourceFilter.split(":")[1];
+          filter = {
+            must: [
+              { key: "source", match: { value: "goodreads" } },
+              { key: "userId", match: { value: userId } },
+            ],
+          };
+        } else {
+          filter = {
+            must: [
+              {
+                key: "source",
+                match: { value: sourceFilter },
+              },
+            ],
+          };
+        }
       }
     }
 

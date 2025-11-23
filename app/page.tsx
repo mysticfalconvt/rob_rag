@@ -25,7 +25,9 @@ function ChatPageContent() {
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);
-  const [useGoodreads, setUseGoodreads] = useState(true);
+  const [goodreadsUsers, setGoodreadsUsers] = useState<
+    Array<{ id: string; name: string; enabled: boolean }>
+  >([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [toast, setToast] = useState<{
@@ -41,6 +43,24 @@ function ChatPageContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Fetch Goodreads users
+    const fetchGoodreadsUsers = async () => {
+      try {
+        const res = await fetch("/api/goodreads/users");
+        if (res.ok) {
+          const users = await res.json();
+          setGoodreadsUsers(
+            users.map((u: any) => ({ id: u.id, name: u.name, enabled: true })),
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching Goodreads users:", error);
+      }
+    };
+    fetchGoodreadsUsers();
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -63,9 +83,19 @@ function ChatPageContent() {
     if (useUploaded) activeSources.push("uploaded");
     if (useSynced) activeSources.push("synced");
     if (usePaperless) activeSources.push("paperless");
-    if (useGoodreads) activeSources.push("goodreads");
 
-    if (activeSources.length === 4) return "all";
+    // Add enabled Goodreads users with format "goodreads:userId"
+    const enabledGoodreadsUsers = goodreadsUsers.filter((u) => u.enabled);
+    enabledGoodreadsUsers.forEach((u) => {
+      activeSources.push(`goodreads:${u.id}`);
+    });
+
+    const totalPossibleSources = 3 + goodreadsUsers.length; // uploaded, synced, paperless + all goodreads users
+    if (
+      activeSources.length === totalPossibleSources &&
+      totalPossibleSources > 0
+    )
+      return "all";
     if (activeSources.length === 0) return "none";
     if (activeSources.length === 1) {
       return activeSources[0] as
@@ -103,6 +133,12 @@ function ChatPageContent() {
       message: result.message,
       type: result.success ? "success" : "error",
     });
+  };
+
+  const handleToggleGoodreadsUser = (userId: string) => {
+    setGoodreadsUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, enabled: !u.enabled } : u)),
+    );
   };
 
   return (
@@ -161,7 +197,7 @@ function ChatPageContent() {
           useUploaded={useUploaded}
           useSynced={useSynced}
           usePaperless={usePaperless}
-          useGoodreads={useGoodreads}
+          goodreadsUsers={goodreadsUsers}
           conversationId={currentConversationId}
           isSaving={isSaving}
           onChange={setInput}
@@ -172,7 +208,7 @@ function ChatPageContent() {
           onToggleUploaded={() => setUseUploaded(!useUploaded)}
           onToggleSynced={() => setUseSynced(!useSynced)}
           onTogglePaperless={() => setUsePaperless(!usePaperless)}
-          onToggleGoodreads={() => setUseGoodreads(!useGoodreads)}
+          onToggleGoodreadsUser={handleToggleGoodreadsUser}
           onSaveConversation={handleSaveConversation}
           onDeleteConversation={handleDeleteConversation}
         />
