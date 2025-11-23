@@ -32,6 +32,7 @@ model IndexedFile {
 model Conversation {
   id        String    @id @default(uuid())
   title     String
+  topics    String?   // JSON array of conversation topics
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
@@ -60,6 +61,22 @@ model Settings {
   paperlessExternalUrl String? // Optional external URL for browser links
   paperlessApiToken    String?
   paperlessEnabled     Boolean @default(false)
+
+  // Customizable Prompts
+  ragSystemPrompt          String?
+  noSourcesSystemPrompt    String?
+  titleGenerationPrompt    String?
+
+  // User Profile (for chat context)
+  userName        String?
+  userBio         String? // Background, interests, role, etc.
+  userPreferences String? // JSON object for other preferences
+
+  // Context Window Management
+  maxContextTokens      Int     @default(8000) // Maximum tokens to use for context
+  contextStrategy       String  @default("smart") // "sliding" | "token" | "smart"
+  slidingWindowSize     Int     @default(10) // Number of recent messages to keep
+  enableContextSummary  Boolean @default(true) // Whether to summarize old messages
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -18,29 +18,45 @@ export async function search(
     | "synced"
     | "paperless"
     | "goodreads"
-    | "none",
+    | "none"
+    | string[], // Support array of sources
 ): Promise<SearchResult[]> {
   try {
     const queryEmbedding = await generateEmbedding(query);
 
     // Ensure the collection exists (creates it if missing)
     await ensureCollection();
-    console.log("[Qdrant] Performing search via direct HTTP POST");
+    console.log(
+      "[Qdrant] Performing search via direct HTTP POST with limit:",
+      limit,
+    );
 
     // Build filter based on source
-    const filter: any =
-      sourceFilter && sourceFilter !== "all"
-        ? {
-            must: [
-              {
-                key: "source",
-                match: {
-                  value: sourceFilter,
-                },
-              },
-            ],
-          }
-        : undefined;
+    let filter: any = undefined;
+
+    if (sourceFilter && sourceFilter !== "all" && sourceFilter !== "none") {
+      if (Array.isArray(sourceFilter)) {
+        // Multiple sources: use "should" (OR logic)
+        if (sourceFilter.length > 0) {
+          filter = {
+            should: sourceFilter.map((source) => ({
+              key: "source",
+              match: { value: source },
+            })),
+          };
+        }
+      } else {
+        // Single source: use "must"
+        filter = {
+          must: [
+            {
+              key: "source",
+              match: { value: sourceFilter },
+            },
+          ],
+        };
+      }
+    }
 
     const response = await fetch(
       `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`,

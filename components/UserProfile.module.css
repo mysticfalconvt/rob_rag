@@ -1,0 +1,154 @@
+.card {
+  background: white;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.cardTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0.25rem 0 0 0;
+  font-weight: 400;
+}
+
+.saveButton {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e5e5;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.saveButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.field:last-of-type {
+  margin-bottom: 0;
+}
+
+.label {
+  font-weight: 500;
+  color: #111827;
+  font-size: 0.875rem;
+}
+
+.description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #fff;
+  color: #111827;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.textarea {
+  font-family: inherit;
+  resize: vertical;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.loading {
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #1f2937;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .cardTitle {
+    color: #f9fafb;
+  }
+
+  .subtitle {
+    color: #9ca3af;
+  }
+
+  .saveButton {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+  }
+
+  .saveButton:hover:not(:disabled) {
+    background: #2563eb;
+  }
+
+  .label {
+    color: #f9fafb;
+  }
+
+  .description {
+    color: #9ca3af;
+  }
+
+  .input,
+  .textarea {
+    background: #111827;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .input:focus,
+  .textarea:focus {
+    border-color: #3b82f6;
+  }
+
+  .loading {
+    color: #9ca3af;
+  }
+}

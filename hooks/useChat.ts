@@ -57,7 +57,15 @@ export function useChat(conversationId: string | null) {
 
   const sendMessage = async (
     input: string,
-    sourceFilter: "all" | "uploaded" | "synced" | "paperless" | "goodreads" | "none"
+    sourceFilter:
+      | "all"
+      | "uploaded"
+      | "synced"
+      | "paperless"
+      | "goodreads"
+      | "none"
+      | string[],
+    sourceCount: number = 5,
   ) => {
     if (!input.trim() || isLoading) return;
 
@@ -73,6 +81,7 @@ export function useChat(conversationId: string | null) {
           messages: [...messages, userMessage],
           conversationId: currentConversationId,
           sourceFilter,
+          sourceCount,
         }),
       });
 

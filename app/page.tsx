@@ -21,10 +21,12 @@ function ChatPageContent() {
     useConversationActions(currentConversationId);
 
   const [input, setInput] = useState("");
+  const [sourceCount, setSourceCount] = useState(5);
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);
   const [useGoodreads, setUseGoodreads] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -49,7 +51,14 @@ function ChatPageContent() {
     }
   }, [toast]);
 
-  const getSourceFilter = () => {
+  const getSourceFilter = ():
+    | "all"
+    | "none"
+    | string[]
+    | "uploaded"
+    | "synced"
+    | "paperless"
+    | "goodreads" => {
     const activeSources = [];
     if (useUploaded) activeSources.push("uploaded");
     if (useSynced) activeSources.push("synced");
@@ -57,14 +66,16 @@ function ChatPageContent() {
     if (useGoodreads) activeSources.push("goodreads");
 
     if (activeSources.length === 4) return "all";
-    if (activeSources.length === 1)
+    if (activeSources.length === 0) return "none";
+    if (activeSources.length === 1) {
       return activeSources[0] as
         | "uploaded"
         | "synced"
         | "paperless"
         | "goodreads";
-    if (activeSources.length === 0) return "none";
-    return "all"; // Multiple sources selected
+    }
+    // Multiple sources selected: return array for OR filtering
+    return activeSources;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,12 +83,12 @@ function ChatPageContent() {
     if (!input.trim() || isLoading) return;
 
     const sourceFilter = getSourceFilter();
-    await sendMessage(input, sourceFilter);
+    await sendMessage(input, sourceFilter, sourceCount);
     setInput("");
   };
 
   const handleSaveConversation = async () => {
-    setShowMenu(false);
+    setShowSettings(false);
     const result = await saveConversation();
     setToast({
       message: result.message,
@@ -86,7 +97,7 @@ function ChatPageContent() {
   };
 
   const handleDeleteConversation = async () => {
-    setShowMenu(false);
+    setShowSettings(false);
     const result = await deleteConversation();
     setToast({
       message: result.message,
@@ -97,12 +108,12 @@ function ChatPageContent() {
   return (
     <div className={styles.container}>
       <ChatHeader
-        conversationId={currentConversationId}
-        showMenu={showMenu}
-        isSaving={isSaving}
-        onToggleMenu={() => setShowMenu(!showMenu)}
-        onSaveConversation={handleSaveConversation}
-        onDeleteConversation={handleDeleteConversation}
+        conversationId={null}
+        showMenu={false}
+        isSaving={false}
+        onToggleMenu={() => { }}
+        onSaveConversation={() => { }}
+        onDeleteConversation={() => { }}
       />
 
       <div className={styles.messages}>
@@ -131,7 +142,7 @@ function ChatPageContent() {
       </div>
 
       <div className={styles.inputContainer}>
-        <SourceFilterBar
+        {/* <SourceFilterBar
           useUploaded={useUploaded}
           useSynced={useSynced}
           usePaperless={usePaperless}
@@ -140,12 +151,30 @@ function ChatPageContent() {
           onToggleSynced={() => setUseSynced(!useSynced)}
           onTogglePaperless={() => setUsePaperless(!usePaperless)}
           onToggleGoodreads={() => setUseGoodreads(!useGoodreads)}
-        />
+        /> */}
         <ChatInput
           value={input}
           isLoading={isLoading}
+          sourceCount={sourceCount}
+          showSettings={showSettings}
+          showMenu={showMenu}
+          useUploaded={useUploaded}
+          useSynced={useSynced}
+          usePaperless={usePaperless}
+          useGoodreads={useGoodreads}
+          conversationId={currentConversationId}
+          isSaving={isSaving}
           onChange={setInput}
           onSubmit={handleSubmit}
+          onSourceCountChange={setSourceCount}
+          onToggleSettings={() => setShowSettings(!showSettings)}
+          onToggleMenu={() => setShowMenu(!showMenu)}
+          onToggleUploaded={() => setUseUploaded(!useUploaded)}
+          onToggleSynced={() => setUseSynced(!useSynced)}
+          onTogglePaperless={() => setUsePaperless(!usePaperless)}
+          onToggleGoodreads={() => setUseGoodreads(!useGoodreads)}
+          onSaveConversation={handleSaveConversation}
+          onDeleteConversation={handleDeleteConversation}
         />
       </div>
 

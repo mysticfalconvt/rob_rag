@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import ModelConfiguration from "@/components/ModelConfiguration";
 import PaperlessConfiguration from "@/components/PaperlessConfiguration";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
+import PromptConfiguration from "@/components/PromptConfiguration";
+import UserProfile from "@/components/UserProfile";
+import ContextWindowSettings from "@/components/ContextWindowSettings";
 import styles from "./page.module.css";
 
 interface Settings {
@@ -342,6 +345,8 @@ export default function ConfigPage() {
       <h1 className={styles.title}>Configuration</h1>
 
       <div className={styles.grid}>
+        <UserProfile />
+
         <ModelConfiguration
           settings={settings}
           embeddingModels={embeddingModels}
@@ -379,6 +384,10 @@ export default function ConfigPage() {
           onSaveRSSFeed={handleSaveRSSFeed}
           onSyncRSS={handleSyncRSS}
         />
+
+        <ContextWindowSettings />
+
+        <PromptConfiguration />
       </div>
     </div>
   );

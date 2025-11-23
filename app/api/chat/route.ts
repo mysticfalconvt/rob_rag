@@ -9,12 +9,39 @@ import { chatModel } from "@/lib/ai";
 import { readFileContent } from "@/lib/files";
 import prisma from "@/lib/prisma";
 import { search } from "@/lib/retrieval";
+import { getPrompts, interpolatePrompt } from "@/lib/prompts";
+import {
+  getUserProfile,
+  buildSearchQueryWithUserContext,
+  buildUserContext,
+  rephraseQuestionIfNeeded,
+  updateConversationTopics,
+} from "@/lib/contextBuilder";
+import { manageContext } from "@/lib/contextWindow";
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, conversationId, sourceFilter } = await req.json();
+    const { messages, conversationId, sourceFilter, sourceCount = 5 } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const query = lastMessage.content;
+
+    // Fetch prompts, user profile, and context settings from database
+    const [prompts, userProfile, contextSettings] = await Promise.all([
+      getPrompts(),
+      getUserProfile(),
+      prisma.settings.findUnique({
+        where: { id: "singleton" },
+        select: {
+          maxContextTokens: true,
+          contextStrategy: true,
+          slidingWindowSize: true,
+          enableContextSummary: true,
+        },
+      }),
+    ]);
+
+    // Check if this is the first message
+    const isFirstMessage = messages.length === 1;
 
     // Create or get conversation
     let convId = conversationId;
@@ -39,15 +66,44 @@ export async function POST(req: NextRequest) {
     // 1. Retrieve context (skip if sourceFilter is 'none')
     let searchResults: any[] = [];
     let context = "";
+    let searchQuery = query;
 
     if (sourceFilter !== "none") {
+      // Enhance search query based on context
+      if (isFirstMessage) {
+        // First message: Add user context
+        searchQuery = buildSearchQueryWithUserContext(
+          query,
+          userProfile.userName,
+          userProfile.userBio,
+        );
+        console.log("[Context] First message - adding user context to search");
+      } else {
+        // Follow-up message: Rephrase if needed
+        const { rephrased, wasRephrased } = await rephraseQuestionIfNeeded(
+          query,
+          messages.slice(0, -1),
+        );
+        if (wasRephrased) {
+          searchQuery = rephrased;
+          console.log("[Context] Rephrased question for better search");
+        }
+      }
+
+      // Clamp sourceCount between 1 and 20
+      const clampedSourceCount = Math.max(1, Math.min(20, sourceCount));
+      const filterDisplay = Array.isArray(sourceFilter)
+        ? sourceFilter.join(", ")
+        : sourceFilter || "all";
       console.log(
         "Searching for:",
-        query,
+        searchQuery,
         "with filter:",
-        sourceFilter || "all",
+        filterDisplay,
+        "count:",
+        clampedSourceCount,
       );
-      searchResults = await search(query, 5, sourceFilter);
+      searchResults = await search(searchQuery, clampedSourceCount, sourceFilter);
       console.log("Found", searchResults.length, "results");
       // console.log('Search result scores:', searchResults.map(r => ({ file: r.metadata.fileName, score: r.score })));
 
@@ -116,31 +172,70 @@ export async function POST(req: NextRequest) {
       console.log("No sources mode - chatting without document context");
     }
 
-    // 2. Build system prompt
-    const systemPrompt =
-      sourceFilter === "none"
-        ? `You are a helpful assistant. Answer the user's questions to the best of your ability.`
-        : `You are a helpful assistant. Use the following context to answer the user's question.
-If the answer is not in the context, say so, but you can still try to answer from general knowledge if appropriate, while noting it's not in the docs.
-Always cite your sources if you use the context.
+    // 2. Build system prompt using customizable prompts
+    let systemPrompt: string;
+    const userContextString = buildUserContext(
+      userProfile.userName,
+      userProfile.userBio,
+    );
 
-Context:
-${context}`;
+    if (sourceFilter === "none") {
+      systemPrompt = prompts.noSourcesSystemPrompt;
+      if (userContextString) {
+        systemPrompt += `\n\n${userContextString}`;
+      }
+    } else {
+      systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, { context });
+      if (userContextString) {
+        systemPrompt += `\n\n${userContextString}`;
+      }
+    }
 
-    // 3. Prepare messages for LangChain
-    const langchainMessages = [
-      new SystemMessage(systemPrompt),
-      ...messages
-        .slice(0, -1)
-        .map((m: any) =>
-          m.role === "user"
-            ? new HumanMessage(m.content)
-            : new AIMessage(m.content),
-        ),
-      new HumanMessage(query),
-    ];
+    // 3. Apply context window management to prevent token overflow
+    const maxTokens = contextSettings?.maxContextTokens ?? 8000;
+    const strategy = (contextSettings?.contextStrategy ??
+      "smart") as "sliding" | "token" | "smart";
+    const windowSize = contextSettings?.slidingWindowSize ?? 10;
 
-    // 4. Stream response
+    const {
+      messages: managedMessages,
+      summary,
+      truncated,
+    } = await manageContext(
+      messages.slice(0, -1), // Exclude current message (we'll add it separately)
+      systemPrompt,
+      maxTokens,
+      strategy,
+      windowSize,
+    );
+
+    if (truncated) {
+      console.log("[Context] Applied context management due to length");
+    }
+
+    // 4. Prepare messages for LangChain
+    const langchainMessages = [new SystemMessage(systemPrompt)];
+
+    // Add summary if we have one
+    if (summary) {
+      langchainMessages.push(
+        new SystemMessage(`Previous conversation summary:\n${summary}`),
+      );
+    }
+
+    // Add managed conversation history
+    langchainMessages.push(
+      ...managedMessages.map((m: any) =>
+        m.role === "user"
+          ? new HumanMessage(m.content)
+          : new AIMessage(m.content),
+      ),
+    );
+
+    // Add current query
+    langchainMessages.push(new HumanMessage(query));
+
+    // 5. Stream response
     console.log("Calling LM Studio...");
     const parser = new StringOutputParser();
     const stream = await chatModel.pipe(parser).stream(langchainMessages);
@@ -202,11 +297,13 @@ ${context}`;
             // Generate title if this is the first message
             if (messages.length === 1) {
               try {
-                const titlePrompt = `Generate a short, concise title (maximum 10 words) for this conversation based on the following exchange:
-User: ${query}
-Assistant: ${fullResponse}
-
-Title:`;
+                const titlePrompt = interpolatePrompt(
+                  prompts.titleGenerationPrompt,
+                  {
+                    userMessage: query,
+                    assistantMessage: fullResponse,
+                  },
+                );
                 const titleResponse = await chatModel.invoke([
                   new HumanMessage(titlePrompt),
                 ]);
@@ -225,6 +322,11 @@ Title:`;
                 console.error("Failed to generate title:", error);
               }
             }
+
+            // Update conversation topics (async, don't wait)
+            updateConversationTopics(convId, fullResponse).catch((err) =>
+              console.error("Failed to update topics:", err),
+            );
 
             // Send sources and conversation ID
             const finalData = {
