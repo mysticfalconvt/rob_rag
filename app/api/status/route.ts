@@ -65,13 +65,30 @@ export async function GET() {
     let goodreadsStatus: "connected" | "not_configured" = "not_configured";
     let goodreadsUserCount = 0;
     let goodreadsBookCount = 0;
+    let goodreadsUsersData = [];
 
     try {
-      goodreadsUserCount = await prisma.user.count();
+      const users = await prisma.user.findMany({
+        include: {
+          goodreadsSources: true,
+          _count: {
+            select: { goodreadsBooks: true },
+          },
+        },
+      });
+
+      goodreadsUserCount = users.length;
       goodreadsBookCount = await prisma.goodreadsBook.count();
 
       if (goodreadsUserCount > 0) {
         goodreadsStatus = "connected";
+        goodreadsUsersData = users.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          bookCount: user._count.goodreadsBooks,
+          lastSyncedAt: user.goodreadsSources[0]?.lastSyncedAt,
+        }));
       }
     } catch (e) {
       console.error("Goodreads check failed:", e);
@@ -83,16 +100,31 @@ export async function GET() {
       _sum: { chunkCount: true },
     });
 
+    // Get stats by source
+    const uploadedFiles = await prisma.indexedFile.count({
+      where: { source: "uploaded" },
+    });
+    const syncedFiles = await prisma.indexedFile.count({
+      where: { source: "synced" },
+    });
+
+    const averageChunksPerFile =
+      fileCount > 0 ? (chunkStats._sum.chunkCount || 0) / fileCount : 0;
+
     return NextResponse.json({
       qdrant: qdrantStatus,
       lmStudio: lmStudioStatus,
       paperless: paperlessStatus,
       goodreads: goodreadsStatus,
+      goodreadsUsers: goodreadsUsersData,
       totalFiles: fileCount,
       totalChunks: chunkStats._sum.chunkCount || 0,
+      uploadedFiles,
+      syncedFiles,
       paperlessDocuments: paperlessDocCount,
-      goodreadsUsers: goodreadsUserCount,
+      goodreadsUserCount,
       goodreadsBooks: goodreadsBookCount,
+      averageChunksPerFile,
       config: {
         embeddingModel: config.EMBEDDING_MODEL_NAME,
         chatModel: config.CHAT_MODEL_NAME,

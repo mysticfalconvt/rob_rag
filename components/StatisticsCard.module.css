@@ -1,0 +1,126 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+}
+
+.card h2 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+.label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.divider {
+  height: 1px;
+  background: #e5e5e5;
+  margin: 1.5rem 0;
+}
+
+.subtitle {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.sourceStats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sourceStat {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.sourceStat i {
+  color: #3b82f6;
+  width: 20px;
+  text-align: center;
+}
+
+.sourceLabel {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.sourceValue {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
+
+  .card h2 {
+    color: #ededed;
+  }
+
+  .stat {
+    background: #262626;
+  }
+
+  .label {
+    color: #9ca3af;
+  }
+
+  .divider {
+    background: #333;
+  }
+
+  .subtitle {
+    color: #9ca3af;
+  }
+
+  .sourceStat {
+    background: #262626;
+  }
+
+  .sourceLabel {
+    color: #d1d5db;
+  }
+
+  .sourceValue {
+    color: #ededed;
+  }
+}

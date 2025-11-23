@@ -1,0 +1,79 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+}
+
+.card h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.reindexButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reindexButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.reindexButton:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.reindexButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reindexButton i {
+  font-size: 1rem;
+}
+
+.reindexButton i.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
+
+  .card h2 {
+    color: #ededed;
+  }
+
+  .reindexButton {
+    background: #2563eb;
+  }
+
+  .reindexButton:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+}

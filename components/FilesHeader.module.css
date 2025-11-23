@@ -1,0 +1,77 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: transparent;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    border-bottom-color: #333;
+  }
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.uploadButton,
+.scanButton,
+.forceReindexButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.uploadButton {
+  background: var(--success-color, #4caf50);
+  color: white;
+}
+
+.uploadButton:hover {
+  background: var(--success-hover, #45a049);
+  transform: translateY(-1px);
+}
+
+.scanButton {
+  background: var(--primary-color, #2196f3);
+  color: white;
+}
+
+.scanButton:hover:not(:disabled) {
+  background: var(--primary-hover, #1976d2);
+  transform: translateY(-1px);
+}
+
+.forceReindexButton {
+  background: var(--warning-color, #ff9800);
+  color: white;
+}
+
+.forceReindexButton:hover:not(:disabled) {
+  background: var(--warning-hover, #f57c00);
+  transform: translateY(-1px);
+}
+
+.uploadButton:disabled,
+.scanButton:disabled,
+.forceReindexButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}

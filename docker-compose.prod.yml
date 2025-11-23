@@ -6,36 +6,71 @@ services:
     container_name: rob_rag_app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "4345:3000"
     environment:
       - DATABASE_URL=file:/app/prisma/dev.db
       - DOCUMENTS_FOLDER_PATH=/app/documents
-      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_URL=http://qdrant-prod:6333
       - LM_STUDIO_API_URL=${LM_STUDIO_API_URL}
       - LM_STUDIO_API_KEY=${LM_STUDIO_API_KEY}
       - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-nomic-embed-text}
       - CHAT_MODEL_NAME=${CHAT_MODEL_NAME:-llama-3.2-1b-instruct}
       - APP_NAME=${APP_NAME:-RobRAG}
     volumes:
-      - ./prisma:/app/prisma:z
-      - ./documents:/app/documents:z
+      - /mnt/user/appdata/rob_rag/app/prisma:/app/prisma:z
+      - /mnt/user/appdata/rob_rag/app/documents:/app/documents:z
+      - /mnt/user/MiscStorage/sync/Sync/Obsidian/Robs Info:/app/documents/Sync Files/obsidian:z
     depends_on:
-      - qdrant
+      - qdrant-prod
     networks:
-      - rob_rag_network
+      - rag-network
 
-  qdrant:
+  qdrant-prod:
     image: qdrant/qdrant:latest
+    container_name: qdrant-rag-prod
     restart: unless-stopped
-    container_name: rob_rag_qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    # No ports exposed - only accessible via internal network
     volumes:
-      - ./qdrant_storage:/qdrant/storage:z
+      # IMPORTANT: Using Docker volume (not FUSE/user share) to prevent corruption!
+      # Qdrant's memory-mapped storage requires real filesystem, not FUSE
+      - qdrant-prod-storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
+      - QDRANT__STORAGE__WAL__WAL_CAPACITY_MB=256
+      - QDRANT__STORAGE__OPTIMIZERS__MAX_SEGMENT_SIZE_KB=200000
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=2
+    stop_grace_period: 30s
     networks:
-      - rob_rag_network
+      - rag-network
+
+  qdrant-dev:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-rag-dev
+    restart: unless-stopped
+    ports:
+      - "4344:6333" # REST API for local dev access
+      - "6334:6334" # gRPC API (optional)
+    volumes:
+      # IMPORTANT: Using Docker volume (not FUSE/user share) to prevent corruption!
+      # Qdrant's memory-mapped storage requires real filesystem, not FUSE
+      - qdrant-dev-storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
+      - QDRANT__STORAGE__WAL__WAL_CAPACITY_MB=256
+      - QDRANT__STORAGE__OPTIMIZERS__MAX_SEGMENT_SIZE_KB=200000
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=2
+    stop_grace_period: 30s
+    networks:
+      - rag-network
 
 networks:
-  rob_rag_network:
+  rag-network:
     driver: bridge
+
+volumes:
+  qdrant-prod-storage:
+    driver: local
+  qdrant-dev-storage:
+    driver: local

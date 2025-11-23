@@ -1,0 +1,176 @@
+.paperlessRow {
+  background: #fff8e1;
+}
+
+.goodreadsRow {
+  background: #e8f5e9;
+}
+
+@media (prefers-color-scheme: dark) {
+  .paperlessRow {
+    background: #3d2f1f;
+  }
+
+  .goodreadsRow {
+    background: #1f3d2f;
+  }
+}
+
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.sourceBadge.paperless {
+  background: var(--paperless-badge-bg, #fff3cd);
+  color: var(--paperless-badge-color, #856404);
+}
+
+.sourceBadge.goodreads {
+  background: var(--goodreads-badge-bg, #d4edda);
+  color: var(--goodreads-badge-color, #155724);
+}
+
+.sourceBadge.uploaded {
+  background: var(--uploaded-badge-bg, #d1ecf1);
+  color: var(--uploaded-badge-color, #0c5460);
+}
+
+.sourceBadge.synced {
+  background: var(--synced-badge-bg, #e2e3e5);
+  color: var(--synced-badge-color, #383d41);
+}
+
+.pathCell {
+  max-width: 400px;
+}
+
+.fileLink {
+  color: var(--link-color, #2196f3);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.fileLink:hover {
+  text-decoration: underline;
+}
+
+.fullPath {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #666);
+  margin-top: 0.25rem;
+}
+
+.bookAuthor,
+.userName,
+.correspondent {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #666);
+  margin-top: 0.25rem;
+}
+
+.bookRating {
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.tags {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.tag {
+  padding: 0.125rem 0.5rem;
+  background: var(--tag-bg, #f0f0f0);
+  border-radius: 10px;
+  font-size: 0.7rem;
+  color: var(--tag-color, #555);
+}
+
+.missingBadge,
+.updateBadge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+.missingBadge {
+  background: var(--error-bg, #f44336);
+  color: white;
+}
+
+.updateBadge {
+  background: var(--warning-bg, #ff9800);
+  color: white;
+}
+
+.statusContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.status {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status.indexed {
+  background: var(--success-light, #d4edda);
+  color: var(--success-dark, #155724);
+}
+
+.status.failed {
+  background: var(--error-light, #f8d7da);
+  color: var(--error-dark, #721c24);
+}
+
+.actionsCell {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.reindexButton,
+.deleteButton {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reindexButton:hover:not(:disabled) {
+  background: var(--primary-light, #e3f2fd);
+  border-color: var(--primary-color, #2196f3);
+  color: var(--primary-color, #2196f3);
+}
+
+.reindexButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.deleteButton:hover {
+  background: var(--error-light, #ffebee);
+  border-color: var(--error-color, #f44336);
+  color: var(--error-color, #f44336);
+}

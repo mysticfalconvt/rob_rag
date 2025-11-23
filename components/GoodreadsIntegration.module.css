@@ -1,0 +1,149 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+}
+
+.card h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.formGroup {
+  margin-bottom: 1.5rem;
+}
+
+.formGroup label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  background: #fff;
+  color: #1f2937;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.addButton,
+.saveButton,
+.syncButton {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.addButton {
+  background: #6b7280;
+  color: white;
+}
+
+.addButton:hover {
+  background: #4b5563;
+}
+
+.saveButton {
+  background: #3b82f6;
+  color: white;
+  width: 100%;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.saveButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.syncButton {
+  background: #10b981;
+  color: white;
+}
+
+.syncButton:hover:not(:disabled) {
+  background: #059669;
+}
+
+.syncButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.userCard {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  border: 1px solid #e5e5e5;
+}
+
+.userCard h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  color: #1f2937;
+}
+
+.userCard p {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
+
+  .card h2 {
+    color: #ededed;
+  }
+
+  .formGroup label {
+    color: #ededed;
+  }
+
+  .input {
+    background: #262626;
+    border-color: #333;
+    color: #ededed;
+  }
+
+  .input:focus {
+    border-color: #3b82f6;
+  }
+
+  .userCard {
+    background: #262626;
+    border-color: #333;
+  }
+
+  .userCard h3 {
+    color: #ededed;
+  }
+
+  .userCard p {
+    color: #9ca3af;
+  }
+}

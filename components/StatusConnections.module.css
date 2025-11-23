@@ -1,0 +1,147 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+}
+
+.card h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.badge.connected {
+  background: #d4edda;
+  color: #155724;
+}
+
+.badge.disconnected,
+.badge.not_configured,
+.badge.disabled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.goodreadsSection {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.goodreadsSection:last-child {
+  border-bottom: none;
+}
+
+.goodreadsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.goodreadsUsers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-left: 1rem;
+}
+
+.userItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.userName {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.userEmail {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.userStats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+.bookCount {
+  font-weight: 500;
+}
+
+.lastSync {
+  font-style: italic;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
+
+  .card h2 {
+    color: #ededed;
+  }
+
+  .item {
+    border-bottom-color: #333;
+    color: #ededed;
+  }
+
+  .goodreadsSection {
+    border-bottom-color: #333;
+  }
+
+  .userItem {
+    background: #262626;
+  }
+
+  .userName {
+    color: #ededed;
+  }
+
+  .userEmail {
+    color: #9ca3af;
+  }
+
+  .userStats {
+    color: #9ca3af;
+  }
+}

@@ -1,0 +1,78 @@
+.header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  .header {
+    border-bottom-color: #333;
+  }
+}
+
+.titleSection {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.icon {
+  font-size: 1.5rem;
+  color: var(--text-secondary, #666);
+}
+
+.titleSection h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--text-primary, #333);
+  flex: 1;
+}
+
+.sourceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.sourceBadge.paperless {
+  background: var(--paperless-badge-bg, #fff3cd);
+  color: var(--paperless-badge-color, #856404);
+}
+
+.sourceBadge.goodreads {
+  background: var(--goodreads-badge-bg, #d4edda);
+  color: var(--goodreads-badge-color, #155724);
+}
+
+.sourceBadge.uploaded {
+  background: var(--uploaded-badge-bg, #d1ecf1);
+  color: var(--uploaded-badge-color, #0c5460);
+}
+
+.sourceBadge.synced {
+  background: var(--synced-badge-bg, #e2e3e5);
+  color: var(--synced-badge-color, #383d41);
+}
+
+.paperlessLink {
+  margin-top: 0.5rem;
+}
+
+.viewInPaperless {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--link-color, #2196f3);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.viewInPaperless:hover {
+  text-decoration: underline;
+}

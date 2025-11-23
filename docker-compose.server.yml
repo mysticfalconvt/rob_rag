@@ -33,9 +33,9 @@ services:
       - "4344:6333" # REST API (mapped to your custom port)
       - "6334:6334" # gRPC API (optional, used for some client libraries)
     volumes:
-      # Use /mnt/disk* or /mnt/cache for direct disk access (not user share)
-      # Change this to match your Unraid disk/cache location
-      - /mnt/cache/appdata/rob_rag/qdrant:/qdrant/storage:z
+      # IMPORTANT: Must use Docker volume (not FUSE/user share) to prevent corruption!
+      # Qdrant's memory-mapped storage requires real filesystem, not FUSE
+      - qdrant-storage:/qdrant/storage
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
       - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
@@ -55,3 +55,7 @@ services:
 networks:
   rag-network:
     driver: bridge
+
+volumes:
+  qdrant-storage:
+    driver: local

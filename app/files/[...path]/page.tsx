@@ -1,9 +1,13 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import FileViewerHeader from "@/components/FileViewerHeader";
+import FileMetadata from "@/components/FileMetadata";
+import { useFileHighlight } from "@/hooks/useFileHighlight";
 import styles from "./page.module.css";
 
 interface FileData {
@@ -38,7 +42,13 @@ function FileViewerPageContent() {
   const [fileData, setFileData] = useState<FileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [highlightedContent, setHighlightedContent] = useState<string>("");
+
+  const chunkText = searchParams.get("chunk");
+  const highlightedContent = useFileHighlight(
+    fileData?.content || "",
+    fileData?.fileType || "",
+    chunkText
+  );
 
   useEffect(() => {
     const fetchFile = async () => {
@@ -64,69 +74,18 @@ function FileViewerPageContent() {
     fetchFile();
   }, [params.path]);
 
-  // Prepare content with markers for highlighting
+  // Replace markers with actual mark tags after rendering (for markdown)
   useEffect(() => {
-    if (!fileData) return;
-
-    const chunkText = searchParams.get("chunk");
-    if (!chunkText) {
-      setHighlightedContent("");
-      return;
-    }
-
-    // For plain text files, inject HTML directly
-    if (fileData.fileType !== "md" && fileData.fileType !== "markdown") {
-      const content = fileData.content;
-      const chunkIndex = content.indexOf(chunkText);
-
-      if (chunkIndex !== -1) {
-        const before = content.substring(0, chunkIndex);
-        const chunk = content.substring(
-          chunkIndex,
-          chunkIndex + chunkText.length,
-        );
-        const after = content.substring(chunkIndex + chunkText.length);
-
-        setHighlightedContent(
-          `${before}<mark id="highlighted-chunk">${chunk}</mark>${after}`,
-        );
-      } else {
-        setHighlightedContent(fileData.content);
-      }
-    } else {
-      // For markdown, inject unique markers that will survive markdown rendering
-      const content = fileData.content;
-      const chunkIndex = content.indexOf(chunkText);
-
-      if (chunkIndex !== -1) {
-        const before = content.substring(0, chunkIndex);
-        const chunk = content.substring(
-          chunkIndex,
-          chunkIndex + chunkText.length,
-        );
-        const after = content.substring(chunkIndex + chunkText.length);
-
-        // Use unique markers that ReactMarkdown will render as text
-        const markedContent = `${before}⟪HIGHLIGHT_START⟫${chunk}⟪HIGHLIGHT_END⟫${after}`;
-        setHighlightedContent(markedContent);
-      } else {
-        setHighlightedContent("");
-      }
-    }
-  }, [fileData, searchParams]);
-
-  // Replace markers with actual mark tags after rendering
-  useEffect(() => {
-    const chunkText = searchParams.get("chunk");
     if (!chunkText || !contentRef.current || !fileData) return;
 
-    if (fileData.fileType === "md" || fileData.fileType === "markdown") {
-      // Wait for ReactMarkdown to render
+    const isMarkdown =
+      fileData.fileType === "md" || fileData.fileType === "markdown";
+
+    if (isMarkdown) {
       const timer = setTimeout(() => {
         const contentElement = contentRef.current;
         if (!contentElement) return;
 
-        // Find and replace the markers with actual mark tags
         const innerHTML = contentElement.innerHTML;
 
         if (
@@ -139,7 +98,6 @@ function FileViewerPageContent() {
 
           contentElement.innerHTML = newHTML;
 
-          // Scroll to highlight
           setTimeout(() => {
             const mark = document.getElementById("highlighted-chunk");
             if (mark) {
@@ -164,7 +122,7 @@ function FileViewerPageContent() {
 
       return () => clearTimeout(timer);
     }
-  }, [fileData, searchParams]);
+  }, [fileData, chunkText]);
 
   if (isLoading) {
     return (
@@ -188,190 +146,29 @@ function FileViewerPageContent() {
     );
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  const isMarkdown =
+    fileData.fileType === "md" ||
+    fileData.fileType === "markdown" ||
+    fileData.fileType === "goodreads";
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
-  };
-
-  const isPaperless = fileData.source === "paperless";
-  const isGoodreads = fileData.source === "goodreads";
-  const isUploaded = fileData.source === "uploaded";
-  const _isSynced =
-    fileData.source === "synced" ||
-    fileData.source === "local" ||
-    !fileData.source;
-  console.log(fileData);
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <div className={styles.titleSection}>
-          <i
-            className={`fas ${isGoodreads ? "fa-book" : isPaperless ? "fa-file-archive" : isUploaded ? "fa-upload" : "fa-sync"} ${styles.icon}`}
-          ></i>
-          <h1>{fileData.fileName}</h1>
-          <span
-            className={`${styles.sourceBadge} ${
-              isGoodreads
-                ? styles.goodreads
-                : isPaperless
-                  ? styles.paperless
-                  : isUploaded
-                    ? styles.uploaded
-                    : styles.synced
-            }`}
-          >
-            {isGoodreads ? (
-              <>
-                <i className="fas fa-book"></i> Goodreads Book
-              </>
-            ) : isPaperless ? (
-              <>
-                <i className="fas fa-file-archive"></i> Paperless-ngx
-              </>
-            ) : isUploaded ? (
-              <>
-                <i className="fas fa-upload"></i> Uploaded File
-              </>
-            ) : (
-              <>
-                <i className="fas fa-sync"></i> Synced File
-              </>
-            )}
-          </span>
-        </div>
+      <FileViewerHeader
+        fileName={fileData.fileName}
+        source={fileData.source || ""}
+        paperlessUrl={fileData.paperlessUrl}
+      />
 
-        {isPaperless && fileData.paperlessUrl && (
-          <div className={styles.paperlessLink}>
-            <a
-              href={fileData.paperlessUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.viewInPaperless}
-            >
-              <i className="fas fa-external-link-alt"></i> View in Paperless-ngx
-            </a>
-          </div>
-        )}
-
-        <div className={styles.metadata}>
-          {isGoodreads && fileData.metadata.author && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Author:</span>
-              <span className={styles.metadataValue}>
-                {fileData.metadata.author}
-              </span>
-            </div>
-          )}
-          {isGoodreads && fileData.metadata.rating && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>My Rating:</span>
-              <span className={styles.metadataValue}>
-                {"⭐".repeat(fileData.metadata.rating)}
-              </span>
-            </div>
-          )}
-          {isGoodreads && fileData.metadata.dateRead && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Date Read:</span>
-              <span className={styles.metadataValue}>
-                {formatDate(fileData.metadata.dateRead)}
-              </span>
-            </div>
-          )}
-          {isGoodreads &&
-            fileData.metadata.shelves &&
-            fileData.metadata.shelves.length > 0 && (
-              <div className={styles.metadataItem}>
-                <span className={styles.metadataLabel}>Shelves:</span>
-                <span className={styles.metadataValue}>
-                  {fileData.metadata.shelves.map((shelf, idx) => (
-                    <span key={idx} className={styles.tag}>
-                      {shelf}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )}
-          {isGoodreads && fileData.metadata.userName && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Library:</span>
-              <span className={styles.metadataValue}>
-                {fileData.metadata.userName}
-              </span>
-            </div>
-          )}
-          {isPaperless &&
-            fileData.paperlessTags &&
-            fileData.paperlessTags.length > 0 && (
-              <div className={styles.metadataItem}>
-                <span className={styles.metadataLabel}>Tags:</span>
-                <span className={styles.metadataValue}>
-                  {fileData.paperlessTags.map((tag, idx) => (
-                    <span key={idx} className={styles.tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )}
-          {isPaperless && fileData.paperlessCorrespondent && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Correspondent:</span>
-              <span className={styles.metadataValue}>
-                {fileData.paperlessCorrespondent}
-              </span>
-            </div>
-          )}
-          {!isGoodreads && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Type:</span>
-              <span className={styles.metadataValue}>
-                {isPaperless
-                  ? "Paperless Document"
-                  : fileData.fileType.toUpperCase()}
-              </span>
-            </div>
-          )}
-          {!isGoodreads && fileData.metadata.size && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Size:</span>
-              <span className={styles.metadataValue}>
-                {formatFileSize(fileData.metadata.size)}
-              </span>
-            </div>
-          )}
-          <div className={styles.metadataItem}>
-            <span className={styles.metadataLabel}>Chunks:</span>
-            <span className={styles.metadataValue}>
-              {fileData.metadata.chunkCount}
-            </span>
-          </div>
-          {!isGoodreads && fileData.metadata.lastModified && (
-            <div className={styles.metadataItem}>
-              <span className={styles.metadataLabel}>Last Modified:</span>
-              <span className={styles.metadataValue}>
-                {formatDate(fileData.metadata.lastModified)}
-              </span>
-            </div>
-          )}
-          <div className={styles.metadataItem}>
-            <span className={styles.metadataLabel}>Last Indexed:</span>
-            <span className={styles.metadataValue}>
-              {formatDate(fileData.metadata.lastIndexed)}
-            </span>
-          </div>
-        </div>
-      </div>
+      <FileMetadata
+        source={fileData.source || ""}
+        fileType={fileData.fileType}
+        metadata={fileData.metadata}
+        paperlessTags={fileData.paperlessTags}
+        paperlessCorrespondent={fileData.paperlessCorrespondent}
+      />
 
       <div className={styles.content} ref={contentRef}>
-        {fileData.fileType === "md" ||
-        fileData.fileType === "markdown" ||
-        fileData.fileType === "goodreads" ? (
+        {isMarkdown ? (
           <div className={styles.markdown}>
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {highlightedContent || fileData.content}

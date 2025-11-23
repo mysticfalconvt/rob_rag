@@ -39,12 +39,16 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
                 href={`/files/${encodeURIComponent(source.filePath)}?chunk=${encodeURIComponent(source.chunk)}`}
                 className={styles.sourceLink}
               >
-                {source.source === "paperless"
-                  ? "🗂️"
-                  : source.source === "uploaded"
-                    ? "📤"
-                    : "🔄"}
-                {source.fileName}
+                <span className={styles.icon}>
+                  {source.source === "paperless"
+                    ? "🗂️"
+                    : source.source === "uploaded"
+                      ? "📤"
+                      : source.source === "goodreads"
+                        ? "📚"
+                        : "🔄"}
+                </span>
+                <span className={styles.fileName}>{source.fileName}</span>
                 <span className={styles.score}>
                   {(source.score * 100).toFixed(0)}%
                 </span>
@@ -53,7 +57,10 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
               {hoveredIndex === index && (
                 <div className={styles.tooltip}>
                   <div className={styles.tooltipHeader}>
-                    Relevant Chunk (Score: {(source.score * 100).toFixed(1)}%)
+                    <span className={styles.tooltipFileName}>{source.fileName}</span>
+                    <span className={styles.tooltipScore}>
+                      Score: {(source.score * 100).toFixed(1)}%
+                    </span>
                   </div>
                   <div className={styles.tooltipContent}>
                     {source.chunk.length > 300

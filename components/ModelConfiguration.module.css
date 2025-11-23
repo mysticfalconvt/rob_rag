@@ -1,0 +1,118 @@
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.cardHeader h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1f2937;
+}
+
+.defaultBadge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.formGroup {
+  margin-bottom: 1.5rem;
+}
+
+.formGroup label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.warningIcon {
+  cursor: help;
+}
+
+.select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.select:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.saveButton {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.saveButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: #171717;
+    border-color: #333;
+  }
+
+  .cardHeader h2 {
+    color: #ededed;
+  }
+
+  .formGroup label {
+    color: #ededed;
+  }
+
+  .select {
+    background: #262626;
+    border-color: #333;
+    color: #ededed;
+  }
+
+  .select:disabled {
+    background: #1a1a1a;
+  }
+
+  .select:focus {
+    border-color: #3b82f6;
+  }
+}

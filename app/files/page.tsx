@@ -1,7 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import FilesHeader from "@/components/FilesHeader";
+import FileFilterBar from "@/components/FileFilterBar";
+import FileTableRow from "@/components/FileTableRow";
+import Pagination from "@/components/Pagination";
 import styles from "./page.module.css";
 
 interface IndexedFile {
@@ -28,13 +31,12 @@ export default function FilesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
 
-  // Filtering and pagination state
   const [showUploaded, setShowUploaded] = useState(true);
   const [showSynced, setShowSynced] = useState(true);
   const [showPaperless, setShowPaperless] = useState(true);
   const [showGoodreads, setShowGoodreads] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
+  const itemsPerPage = 20;
 
   const fetchFiles = async () => {
     try {
@@ -52,8 +54,11 @@ export default function FilesPage() {
 
   useEffect(() => {
     fetchFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [showUploaded, showSynced, showPaperless, showGoodreads]);
 
   const handleScan = async () => {
     setIsScanning(true);
@@ -74,7 +79,7 @@ export default function FilesPage() {
       "⚠️ Force Reindex All Files\n\n" +
         "This will clear the entire index and re-scan all documents from scratch.\n" +
         "This may take several minutes depending on the number of files.\n\n" +
-        "Are you sure you want to continue?",
+        "Are you sure you want to continue?"
     );
 
     if (!confirmed) return;
@@ -136,7 +141,6 @@ export default function FilesPage() {
       console.error("Error uploading file:", error);
     } finally {
       setIsScanning(false);
-      // Reset input
       e.target.value = "";
     }
   };
@@ -164,7 +168,7 @@ export default function FilesPage() {
         `/api/files?path=${encodeURIComponent(filePath)}`,
         {
           method: "DELETE",
-        },
+        }
       );
       if (res.ok) {
         await fetchFiles();
@@ -174,7 +178,6 @@ export default function FilesPage() {
     }
   };
 
-  // Filter files based on source toggles
   const filteredFiles = files.filter((file) => {
     const isUploaded = file.source === "uploaded";
     const isSynced =
@@ -190,113 +193,43 @@ export default function FilesPage() {
     return true;
   });
 
-  // Pagination logic
   const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, []);
+  const uploadedCount = files.filter((f) => f.source === "uploaded").length;
+  const syncedCount = files.filter(
+    (f) => f.source === "synced" || f.source === "local" || !f.source
+  ).length;
+  const paperlessCount = files.filter((f) => f.source === "paperless").length;
+  const goodreadsCount = files.filter((f) => f.source === "goodreads").length;
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1>Indexed Files</h1>
-        <div className={styles.headerActions}>
-          <label className={styles.uploadButton}>
-            <input
-              type="file"
-              onChange={handleUpload}
-              disabled={isScanning}
-              style={{ display: "none" }}
-            />
-            <i className="fas fa-upload"></i>
-            Upload File
-          </label>
-          <button
-            onClick={handleScan}
-            disabled={isScanning}
-            className={styles.scanButton}
-          >
-            <i className={`fas fa-sync ${isScanning ? "fa-spin" : ""}`}></i>
-            {isScanning ? "Scanning..." : "Scan Now"}
-          </button>
-          <button
-            onClick={handleForceReindex}
-            disabled={isScanning}
-            className={styles.forceReindexButton}
-            title="Clear index and re-scan all files"
-          >
-            <i className={`fas fa-redo ${isScanning ? "fa-spin" : ""}`}></i>
-            Force Reindex All
-          </button>
-        </div>
-      </div>
+      <FilesHeader
+        isScanning={isScanning}
+        onUpload={handleUpload}
+        onScan={handleScan}
+        onForceReindex={handleForceReindex}
+      />
 
-      <div className={styles.filterBar}>
-        <div className={styles.filterSection}>
-          <span className={styles.filterLabel}>Show:</span>
-          <div className={styles.filterToggles}>
-            <button
-              className={`${styles.filterToggle} ${showUploaded ? styles.active : ""}`}
-              onClick={() => setShowUploaded(!showUploaded)}
-            >
-              <i className="fas fa-upload"></i>
-              Uploaded
-              <span className={styles.count}>
-                ({files.filter((f) => f.source === "uploaded").length})
-              </span>
-            </button>
-            <button
-              className={`${styles.filterToggle} ${showSynced ? styles.active : ""}`}
-              onClick={() => setShowSynced(!showSynced)}
-            >
-              <i className="fas fa-sync"></i>
-              Synced
-              <span className={styles.count}>
-                (
-                {
-                  files.filter(
-                    (f) =>
-                      f.source === "synced" ||
-                      f.source === "local" ||
-                      !f.source,
-                  ).length
-                }
-                )
-              </span>
-            </button>
-            <button
-              className={`${styles.filterToggle} ${showPaperless ? styles.active : ""}`}
-              onClick={() => setShowPaperless(!showPaperless)}
-            >
-              <i className="fas fa-file-archive"></i>
-              Paperless
-              <span className={styles.count}>
-                ({files.filter((f) => f.source === "paperless").length})
-              </span>
-            </button>
-            <button
-              className={`${styles.filterToggle} ${showGoodreads ? styles.active : ""}`}
-              onClick={() => setShowGoodreads(!showGoodreads)}
-            >
-              <i className="fas fa-book"></i>
-              Goodreads
-              <span className={styles.count}>
-                ({files.filter((f) => f.source === "goodreads").length})
-              </span>
-            </button>
-          </div>
-        </div>
-        <div className={styles.statsSection}>
-          <span className={styles.statsText}>
-            Showing {paginatedFiles.length} of {filteredFiles.length} files
-          </span>
-        </div>
-      </div>
+      <FileFilterBar
+        showUploaded={showUploaded}
+        showSynced={showSynced}
+        showPaperless={showPaperless}
+        showGoodreads={showGoodreads}
+        uploadedCount={uploadedCount}
+        syncedCount={syncedCount}
+        paperlessCount={paperlessCount}
+        goodreadsCount={goodreadsCount}
+        filteredCount={paginatedFiles.length}
+        totalCount={filteredFiles.length}
+        onToggleUploaded={() => setShowUploaded(!showUploaded)}
+        onToggleSynced={() => setShowSynced(!showSynced)}
+        onTogglePaperless={() => setShowPaperless(!showPaperless)}
+        onToggleGoodreads={() => setShowGoodreads(!showGoodreads)}
+      />
 
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
@@ -326,296 +259,25 @@ export default function FilesPage() {
                 </td>
               </tr>
             ) : (
-              paginatedFiles.map((file) => {
-                const isPaperless = file.source === "paperless";
-                const isGoodreads = file.source === "goodreads";
-                const displayName = isPaperless
-                  ? file.paperlessTitle || `Document ${file.paperlessId}`
-                  : isGoodreads
-                    ? file.goodreadsTitle || "Unknown Book"
-                    : file.filePath.split("/").pop();
-
-                let tags: string[] = [];
-                if (isPaperless && file.paperlessTags) {
-                  try {
-                    tags = JSON.parse(file.paperlessTags);
-                  } catch (e) {
-                    console.error("Error parsing tags:", e);
-                  }
-                }
-
-                return (
-                  <tr
-                    key={file.id}
-                    className={
-                      isPaperless
-                        ? styles.paperlessRow
-                        : isGoodreads
-                          ? styles.goodreadsRow
-                          : ""
-                    }
-                  >
-                    <td>
-                      <span
-                        className={`${styles.sourceBadge} ${
-                          isPaperless
-                            ? styles.paperless
-                            : isGoodreads
-                              ? styles.goodreads
-                              : file.source === "uploaded"
-                                ? styles.uploaded
-                                : styles.synced
-                        }`}
-                      >
-                        {isPaperless
-                          ? "🗂️ Paperless"
-                          : isGoodreads
-                            ? "📚 Goodreads"
-                            : file.source === "uploaded"
-                              ? "📤 Uploaded"
-                              : "🔄 Synced"}
-                      </span>
-                    </td>
-                    <td className={styles.pathCell}>
-                      {isGoodreads ? (
-                        <div>
-                          <Link
-                            href={`/files/${encodeURIComponent(file.filePath)}`}
-                            className={styles.fileLink}
-                          >
-                            {displayName}
-                          </Link>
-                          {file.goodreadsAuthor && (
-                            <div className={styles.bookAuthor}>
-                              by {file.goodreadsAuthor}
-                            </div>
-                          )}
-                          {file.goodreadsRating && (
-                            <div className={styles.bookRating}>
-                              {"⭐".repeat(file.goodreadsRating)}
-                            </div>
-                          )}
-                          {file.userName && (
-                            <div className={styles.userName}>
-                              {file.userName}'s library
-                            </div>
-                          )}
-                        </div>
-                      ) : isPaperless ? (
-                        <div>
-                          <Link
-                            href={`/files/${encodeURIComponent(file.filePath)}`}
-                            className={styles.fileLink}
-                          >
-                            {displayName}
-                          </Link>
-                          {tags.length > 0 && (
-                            <div className={styles.tags}>
-                              {tags.map((tag, idx) => (
-                                <span key={idx} className={styles.tag}>
-                                  {tag}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {file.paperlessCorrespondent && (
-                            <div className={styles.correspondent}>
-                              From: {file.paperlessCorrespondent}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <>
-                          <Link
-                            href={`/files${file.filePath}`}
-                            className={styles.fileLink}
-                          >
-                            {displayName}
-                          </Link>
-                          <span className={styles.fullPath}>
-                            {file.filePath}
-                          </span>
-                          {file.fileMissing && (
-                            <span
-                              className={styles.missingBadge}
-                              title="File not found on disk"
-                            >
-                              Missing
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </td>
-                    <td>{file.chunkCount}</td>
-                    <td>
-                      <div className={styles.statusContainer}>
-                        <span
-                          className={`${styles.status} ${styles[file.status]}`}
-                        >
-                          {file.status}
-                        </span>
-                        {file.needsReindexing &&
-                          !file.fileMissing &&
-                          !isPaperless && (
-                            <span
-                              className={styles.updateBadge}
-                              title="File has changed since last index"
-                            >
-                              Needs Update
-                            </span>
-                          )}
-                      </div>
-                    </td>
-                    <td>{new Date(file.lastIndexed).toLocaleString()}</td>
-                    <td>
-                      <div className={styles.actionsCell}>
-                        {file.needsReindexing &&
-                          !file.fileMissing &&
-                          !isPaperless &&
-                          !isGoodreads && (
-                            <button
-                              onClick={() => handleReindex(file.filePath)}
-                              className={styles.reindexButton}
-                              title="Re-index File"
-                              disabled={isScanning}
-                            >
-                              <i
-                                className={`fas fa-sync ${isScanning ? "fa-spin" : ""}`}
-                              ></i>
-                            </button>
-                          )}
-                        {!isGoodreads && (
-                          <button
-                            onClick={() => handleDelete(file.filePath)}
-                            className={styles.deleteButton}
-                            title={
-                              isPaperless ? "Remove from index" : "Delete file"
-                            }
-                          >
-                            <i className="fas fa-trash"></i>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+              paginatedFiles.map((file) => (
+                <FileTableRow
+                  key={file.id}
+                  file={file}
+                  isScanning={isScanning}
+                  onReindex={handleReindex}
+                  onDelete={handleDelete}
+                />
+              ))
             )}
           </tbody>
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className={styles.pagination}>
-          <button
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-            className={styles.paginationButton}
-            title="First page"
-          >
-            <i className="fas fa-angle-double-left"></i>
-          </button>
-
-          <button
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            className={styles.paginationButton}
-          >
-            <i className="fas fa-chevron-left"></i>
-          </button>
-
-          <div className={styles.paginationNumbers}>
-            {(() => {
-              const pages = [];
-              const showPages = 5; // Number of page buttons to show
-              let startPage = Math.max(
-                1,
-                currentPage - Math.floor(showPages / 2),
-              );
-              const endPage = Math.min(totalPages, startPage + showPages - 1);
-
-              // Adjust start if we're near the end
-              if (endPage - startPage < showPages - 1) {
-                startPage = Math.max(1, endPage - showPages + 1);
-              }
-
-              // Always show first page
-              if (startPage > 1) {
-                pages.push(
-                  <button
-                    key={1}
-                    onClick={() => setCurrentPage(1)}
-                    className={styles.paginationNumber}
-                  >
-                    1
-                  </button>,
-                );
-                if (startPage > 2) {
-                  pages.push(
-                    <span key="ellipsis1" className={styles.ellipsis}>
-                      ...
-                    </span>,
-                  );
-                }
-              }
-
-              // Show page numbers
-              for (let i = startPage; i <= endPage; i++) {
-                pages.push(
-                  <button
-                    key={i}
-                    onClick={() => setCurrentPage(i)}
-                    className={`${styles.paginationNumber} ${i === currentPage ? styles.active : ""}`}
-                  >
-                    {i}
-                  </button>,
-                );
-              }
-
-              // Always show last page
-              if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                  pages.push(
-                    <span key="ellipsis2" className={styles.ellipsis}>
-                      ...
-                    </span>,
-                  );
-                }
-                pages.push(
-                  <button
-                    key={totalPages}
-                    onClick={() => setCurrentPage(totalPages)}
-                    className={styles.paginationNumber}
-                  >
-                    {totalPages}
-                  </button>,
-                );
-              }
-
-              return pages;
-            })()}
-          </div>
-
-          <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-            }
-            disabled={currentPage === totalPages}
-            className={styles.paginationButton}
-          >
-            <i className="fas fa-chevron-right"></i>
-          </button>
-
-          <button
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages}
-            className={styles.paginationButton}
-            title="Last page"
-          >
-            <i className="fas fa-angle-double-right"></i>
-          </button>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
     </div>
   );
 }

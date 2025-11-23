@@ -144,6 +144,15 @@ function SidebarContent({ appName }: SidebarContentProps) {
             <i className="fas fa-server"></i>
             <span>Status</span>
           </Link>
+
+          <Link
+            href="/config"
+            className={`${styles.link} ${isActive("/config") ? styles.active : ""}`}
+            onClick={closeMobileMenu}
+          >
+            <i className="fas fa-cog"></i>
+            <span>Config</span>
+          </Link>
         </nav>
 
         <div className={styles.searchContainer}>
