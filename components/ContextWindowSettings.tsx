@@ -106,7 +106,6 @@ export default function ContextWindowSettings() {
           </button>
         }
       >
-
         <div className={styles.field}>
           <label htmlFor="contextStrategy" className={styles.label}>
             Context Strategy

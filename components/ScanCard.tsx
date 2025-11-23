@@ -116,9 +116,7 @@ export default function ScanCard({
             <i
               className={`fas fa-exclamation-triangle ${isScanning === "reindex" ? "fa-spin" : ""}`}
             ></i>
-            {isScanning === "reindex"
-              ? "Reindexing..."
-              : "Force Reindex All"}
+            {isScanning === "reindex" ? "Reindexing..." : "Force Reindex All"}
           </button>
         </div>
       </div>

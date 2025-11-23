@@ -95,7 +95,6 @@ export default function UserProfile() {
           </button>
         }
       >
-
         <div className={styles.field}>
           <label htmlFor="userName" className={styles.label}>
             Your Name

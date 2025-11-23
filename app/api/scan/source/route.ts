@@ -1,8 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  scanAllFiles,
-  scanPaperlessDocuments,
-} from "@/lib/indexer";
+import { scanAllFiles, scanPaperlessDocuments } from "@/lib/indexer";
 import prisma from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {

@@ -87,7 +87,6 @@ export default function GoodreadsIntegration({
 
   return (
     <Card title="Goodreads Library Integration">
-
       <div className={styles.formGroup}>
         <button
           onClick={() => setShowAddUser(!showAddUser)}

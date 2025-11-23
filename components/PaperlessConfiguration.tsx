@@ -36,7 +36,6 @@ export default function PaperlessConfiguration({
 }: PaperlessConfigurationProps) {
   return (
     <Card title="Paperless-ngx Configuration">
-
       <div className={styles.formGroup}>
         <label htmlFor="paperlessUrl">Paperless-ngx API URL</label>
         <input

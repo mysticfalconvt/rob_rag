@@ -48,7 +48,6 @@ export default function ModelConfiguration({
         )
       }
     >
-
       <div className={styles.formGroup}>
         <label htmlFor="embeddingModel">
           Embedding Model
