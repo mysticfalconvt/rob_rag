@@ -324,7 +324,9 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
       `[indexGoodreadsBooks] Successfully upserted ${points.length} points for user ${user.name}`,
     );
   } else {
-    console.log(`[indexGoodreadsBooks] No books to index for user ${user.name}`);
+    console.log(
+      `[indexGoodreadsBooks] No books to index for user ${user.name}`,
+    );
   }
 
   return points.length;

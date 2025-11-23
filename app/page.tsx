@@ -21,7 +21,7 @@ function ChatPageContent() {
     useConversationActions(currentConversationId);
 
   const [input, setInput] = useState("");
-  const [sourceCount, setSourceCount] = useState(5);
+  const [sourceCount, setSourceCount] = useState(10);
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);

@@ -158,7 +158,7 @@ export default function SettingsDialog({
               </div>
               <p className={styles.description}>
                 Controls how many document chunks are retrieved for each query.
-                Default is 5. Higher values may improve accuracy but increase
+                Default is 10. Higher values may improve accuracy but increase
                 latency.
               </p>
               <input
