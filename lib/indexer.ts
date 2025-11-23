@@ -43,15 +43,33 @@ export async function indexFile(filePath: string) {
     for (const chunk of chunks) {
       const embedding = await generateEmbedding(chunk.content);
 
+      // Validate and sanitize payload
+      const payload = {
+        content: chunk.content || "",
+        filePath: chunk.metadata.filePath,
+        fileName: chunk.metadata.fileName,
+        fileType: chunk.metadata.fileType,
+        parentFolder: chunk.metadata.parentFolder,
+        chunkIndex: chunk.metadata.chunkIndex,
+        totalChunks: chunk.metadata.totalChunks,
+        fileHash: chunk.metadata.fileHash,
+        source,
+      };
+
+      // Skip if content is empty or too large
+      if (!payload.content || payload.content.length === 0) {
+        console.warn(`Skipping empty chunk for ${filePath}`);
+        continue;
+      }
+      if (payload.content.length > 100000) {
+        console.warn(`Skipping oversized chunk for ${filePath}`);
+        continue;
+      }
+
       points.push({
         id: uuidv4(),
         vector: embedding,
-        payload: {
-          content: chunk.content,
-          // chunk.metadata already contains filePath, fileName, etc.
-          ...chunk.metadata,
-          source, // Override source to be more specific
-        },
+        payload,
       });
     }
 
@@ -283,13 +301,40 @@ export async function indexPaperlessDocument(
     for (const chunk of chunks) {
       const embedding = await generateEmbedding(chunk.content);
 
+      // Validate and sanitize payload
+      const payload = {
+        content: chunk.content || "",
+        filePath: chunk.metadata.filePath,
+        fileName: chunk.metadata.fileName,
+        fileType: chunk.metadata.fileType,
+        parentFolder: chunk.metadata.parentFolder,
+        chunkIndex: chunk.metadata.chunkIndex,
+        totalChunks: chunk.metadata.totalChunks,
+        fileHash: chunk.metadata.fileHash,
+        source: chunk.metadata.source,
+        paperlessId: chunk.metadata.paperlessId,
+        paperlessTags: Array.isArray(chunk.metadata.paperlessTags)
+          ? chunk.metadata.paperlessTags.join(",")
+          : "",
+        paperlessCorrespondent: chunk.metadata.paperlessCorrespondent || "",
+        paperlessCreated: chunk.metadata.paperlessCreated || "",
+        paperlessModified: chunk.metadata.paperlessModified || "",
+      };
+
+      // Skip if content is empty or too large
+      if (!payload.content || payload.content.length === 0) {
+        console.warn(`Skipping empty chunk for Paperless doc ${doc.id}`);
+        continue;
+      }
+      if (payload.content.length > 100000) {
+        console.warn(`Skipping oversized chunk for Paperless doc ${doc.id}`);
+        continue;
+      }
+
       points.push({
         id: uuidv4(),
         vector: embedding,
-        payload: {
-          content: chunk.content,
-          ...chunk.metadata,
-        },
+        payload,
       });
     }
 

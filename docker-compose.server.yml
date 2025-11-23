@@ -33,9 +33,16 @@ services:
       - "4344:6333" # REST API (mapped to your custom port)
       - "6334:6334" # gRPC API (optional, used for some client libraries)
     volumes:
-      - /mnt/user/appdata/rob_rag/qdrant:/qdrant/storage:z
+      # Use /mnt/disk* or /mnt/cache for direct disk access (not user share)
+      # Change this to match your Unraid disk/cache location
+      - /mnt/cache/appdata/rob_rag/qdrant:/qdrant/storage:z
     environment:
       - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__STORAGE__STORAGE_PATH=/qdrant/storage
+      - QDRANT__STORAGE__WAL__WAL_CAPACITY_MB=256
+      - QDRANT__STORAGE__OPTIMIZERS__MAX_SEGMENT_SIZE_KB=200000
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=2
+    stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/"]
       interval: 10s
