@@ -312,10 +312,8 @@ export async function indexPaperlessDocument(
         totalChunks: chunk.metadata.totalChunks,
         fileHash: chunk.metadata.fileHash,
         source: chunk.metadata.source,
-        paperlessId: chunk.metadata.paperlessId,
-        paperlessTags: Array.isArray(chunk.metadata.paperlessTags)
-          ? chunk.metadata.paperlessTags.join(",")
-          : "",
+        paperlessId: chunk.metadata.paperlessId || 0,
+        paperlessTags: chunk.metadata.paperlessTags || "",
         paperlessCorrespondent: chunk.metadata.paperlessCorrespondent || "",
         paperlessCreated: chunk.metadata.paperlessCreated || "",
         paperlessModified: chunk.metadata.paperlessModified || "",
