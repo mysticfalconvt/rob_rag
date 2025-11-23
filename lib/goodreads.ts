@@ -283,11 +283,11 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
         bookId: book.goodreadsBookId,
         bookTitle: book.title,
         bookAuthor: book.author,
-        userRating: book.userRating,
-        dateRead: book.dateRead?.toISOString(), // Most recent read
-        readDates: readDates, // All read dates
+        userRating: book.userRating || 0,
+        dateRead: book.dateRead?.toISOString() || "", // Most recent read
+        readDates: readDates.join("|"), // Convert array to delimited string
         readCount: book.readCount,
-        shelves: shelves,
+        shelves: shelves.join("|"), // Convert array to delimited string
       },
     });
   }
