@@ -353,7 +353,7 @@ export default function ConfigPage() {
         <UserProfile />
 
         {/* Admin-only sections */}
-        {isAdmin ? (
+        {isAdmin && (
           <>
             <ModelConfiguration
               settings={settings}
@@ -387,27 +387,18 @@ export default function ConfigPage() {
             <PromptConfiguration />
 
             <ContextWindowSettings />
-          </>
-        ) : (
-          <div className={styles.adminOnly}>
-            <i className="fas fa-lock"></i>
-            <h3>Admin-Only Settings</h3>
-            <p>
-              Model configuration, Paperless integration, prompts, and context
-              settings are only accessible to administrators.
-            </p>
-          </div>
-        )}
 
-        {/* Goodreads - Available to all users */}
-        <GoodreadsIntegration
-          users={users}
-          isLoadingUsers={isLoadingUsers}
-          onAddUser={handleAddUser}
-          onUploadCSV={handleUploadCSV}
-          onSaveRSSFeed={handleSaveRSSFeed}
-          onSyncRSS={handleSyncRSS}
-        />
+            {/* Goodreads - Admin only */}
+            <GoodreadsIntegration
+              users={users}
+              isLoadingUsers={isLoadingUsers}
+              onAddUser={handleAddUser}
+              onUploadCSV={handleUploadCSV}
+              onSaveRSSFeed={handleSaveRSSFeed}
+              onSyncRSS={handleSyncRSS}
+            />
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import StatusConnections from "@/components/StatusConnections";
 import StatisticsCard from "@/components/StatisticsCard";
 import ReindexCard from "@/components/ReindexCard";
@@ -36,6 +37,7 @@ interface SystemStatus {
 }
 
 export default function StatusPage() {
+  const { isAdmin } = useAuth();
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isReindexing, setIsReindexing] = useState<string | null>(null);
@@ -195,23 +197,27 @@ export default function StatusPage() {
           averageChunksPerFile={status.averageChunksPerFile}
         />
 
-        <ScanCard
-          uploadedFiles={status.uploadedFiles}
-          syncedFiles={status.syncedFiles}
-          paperlessDocuments={status.paperlessDocuments}
-          goodreadsBooks={status.goodreadsBooks}
-          isScanning={isScanning}
-          onScanSource={handleScanSource}
-          onScanAll={handleScanAll}
-          onForceReindexAll={handleForceReindexAll}
-        />
+        {isAdmin && (
+          <>
+            <ScanCard
+              uploadedFiles={status.uploadedFiles}
+              syncedFiles={status.syncedFiles}
+              paperlessDocuments={status.paperlessDocuments}
+              goodreadsBooks={status.goodreadsBooks}
+              isScanning={isScanning}
+              onScanSource={handleScanSource}
+              onScanAll={handleScanAll}
+              onForceReindexAll={handleForceReindexAll}
+            />
 
-        <ReindexCard
-          paperlessDocuments={status.paperlessDocuments}
-          goodreadsBooks={status.goodreadsBooks}
-          isReindexing={isReindexing}
-          onReindexSource={handleReindexSource}
-        />
+            <ReindexCard
+              paperlessDocuments={status.paperlessDocuments}
+              goodreadsBooks={status.goodreadsBooks}
+              isReindexing={isReindexing}
+              onReindexSource={handleReindexSource}
+            />
+          </>
+        )}
       </div>
     </div>
   );
