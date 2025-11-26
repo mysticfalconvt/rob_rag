@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { requireAuth, requireAdmin } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    await requireAuth(req);
     const settings = await prisma.settings.findUnique({
       where: { id: "singleton" },
       select: {
@@ -20,6 +22,9 @@ export async function GET() {
       enableContextSummary: settings?.enableContextSummary ?? true,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error fetching context settings:", error);
     return NextResponse.json(
       { error: "Failed to fetch context settings" },
@@ -30,6 +35,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdmin(req);
     const body = await req.json();
     const {
       maxContextTokens,
@@ -108,6 +114,17 @@ export async function POST(req: NextRequest) {
       enableContextSummary: updatedSettings.enableContextSummary,
     });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "Unauthorized") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error.message.includes("Forbidden")) {
+        return NextResponse.json(
+          { error: "Forbidden: Admin access required" },
+          { status: 403 },
+        );
+      }
+    }
     console.error("Error updating context settings:", error);
     return NextResponse.json(
       { error: "Failed to update context settings" },

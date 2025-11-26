@@ -1,5 +1,5 @@
 import prisma from "./prisma";
-import { chatModel } from "./ai";
+import { getChatModel } from "./ai";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 interface Message {
@@ -9,11 +9,17 @@ interface Message {
 
 /**
  * Get user profile for contextualization
+ * Note: This function is deprecated and should be called with userId parameter
+ * from the authenticated session. Returns null profile data for now.
  */
-export async function getUserProfile() {
+export async function getUserProfile(userId?: string) {
   try {
-    const settings = await prisma.settings.findUnique({
-      where: { id: "singleton" },
+    if (!userId) {
+      return { userName: null, userBio: null };
+    }
+
+    const user = await prisma.authUser.findUnique({
+      where: { id: userId },
       select: {
         userName: true,
         userBio: true,
@@ -21,8 +27,8 @@ export async function getUserProfile() {
     });
 
     return {
-      userName: settings?.userName || null,
-      userBio: settings?.userBio || null,
+      userName: user?.userName || null,
+      userBio: user?.userBio || null,
     };
   } catch (error) {
     console.error("Error fetching user profile:", error);
@@ -109,6 +115,7 @@ Current Question: ${currentQuery}
 
 Rephrased Question:`;
 
+    const chatModel = await getChatModel(); // Use current settings
     const response = await chatModel.invoke([new HumanMessage(rephrasePrompt)]);
 
     const rephrasedText =
@@ -165,6 +172,7 @@ New message: ${newMessage}
 
 Topics (as JSON array):`;
 
+        const chatModel = await getChatModel(); // Use current settings
         const response = await chatModel.invoke([
           new HumanMessage(topicPrompt),
         ]);

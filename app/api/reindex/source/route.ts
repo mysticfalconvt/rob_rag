@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { COLLECTION_NAME, qdrantClient } from "@/lib/qdrant";
 import { indexFile, scanPaperlessDocuments } from "@/lib/indexer";
+import { requireAdmin } from "@/lib/session";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Only admins can reindex
+    await requireAdmin(req);
     const { source } = await req.json();
 
     if (
@@ -25,7 +28,7 @@ export async function POST(req: Request) {
     if (source === "goodreads") {
       // Reindex Goodreads books
       const { indexGoodreadsBooks } = await import("@/lib/goodreads");
-      const users = await prisma.user.findMany();
+      const users = await prisma.goodreadsUser.findMany();
 
       let totalBooks = 0;
       for (const user of users) {
@@ -75,6 +78,17 @@ export async function POST(req: Request) {
       });
     }
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "Unauthorized") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error.message.includes("Forbidden")) {
+        return NextResponse.json(
+          { error: "Forbidden: Admin access required" },
+          { status: 403 },
+        );
+      }
+    }
     console.error("Error during source reindex:", error);
     return NextResponse.json(
       {

@@ -1,9 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import prisma from "@/lib/prisma";
+import { requireAuth, requireAdmin } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Require authentication to view settings
+    await requireAuth(req);
+
     // Try to get settings from database
     const settings = await prisma.settings.findUnique({
       where: { id: "singleton" },
@@ -34,6 +38,9 @@ export async function GET() {
       paperlessConfigured: !!settings.paperlessApiToken,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error fetching settings:", error);
     return NextResponse.json(
       { error: "Failed to fetch settings" },
@@ -42,8 +49,10 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // Only admins can modify global settings
+    await requireAdmin(req);
     const {
       embeddingModel,
       chatModel,
@@ -124,6 +133,17 @@ export async function POST(req: Request) {
       paperlessConfigured: !!settings.paperlessApiToken,
     });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "Unauthorized") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error.message.includes("Forbidden")) {
+        return NextResponse.json(
+          { error: "Forbidden: Admin access required" },
+          { status: 403 },
+        );
+      }
+    }
     console.error("Error updating settings:", error);
     return NextResponse.json(
       { error: "Failed to update settings" },

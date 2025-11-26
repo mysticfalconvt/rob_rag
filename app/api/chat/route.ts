@@ -5,22 +5,25 @@ import {
 } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { type NextRequest, NextResponse } from "next/server";
-import { chatModel } from "@/lib/ai";
+import { getChatModel } from "@/lib/ai";
 import { readFileContent } from "@/lib/files";
 import prisma from "@/lib/prisma";
 import { search } from "@/lib/retrieval";
 import { getPrompts, interpolatePrompt } from "@/lib/prompts";
 import {
-  getUserProfile,
   buildSearchQueryWithUserContext,
   buildUserContext,
   rephraseQuestionIfNeeded,
   updateConversationTopics,
 } from "@/lib/contextBuilder";
 import { manageContext } from "@/lib/contextWindow";
+import { requireAuth } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
+    // Require authentication
+    const session = await requireAuth(req);
+
     const {
       messages,
       conversationId,
@@ -30,10 +33,27 @@ export async function POST(req: NextRequest) {
     const lastMessage = messages[messages.length - 1];
     const query = lastMessage.content;
 
-    // Fetch prompts, user profile, and context settings from database
-    const [prompts, userProfile, contextSettings] = await Promise.all([
+    // Get user profile from authenticated user
+    const user = await prisma.authUser.findUnique({
+      where: { id: session.user.id },
+      select: {
+        userName: true,
+        userBio: true,
+        userPreferences: true,
+      },
+    });
+
+    const userProfile = {
+      userName: user?.userName || null,
+      userBio: user?.userBio || null,
+      userPreferences: user?.userPreferences
+        ? JSON.parse(user.userPreferences)
+        : null,
+    };
+
+    // Fetch prompts and context settings from database
+    const [prompts, contextSettings] = await Promise.all([
       getPrompts(),
-      getUserProfile(),
       prisma.settings.findUnique({
         where: { id: "singleton" },
         select: {
@@ -51,12 +71,28 @@ export async function POST(req: NextRequest) {
     // Create or get conversation
     let convId = conversationId;
     if (!convId) {
-      // Create new conversation with title from first message
+      // Create new conversation with title from first message, associated with user
       const title = query.substring(0, 50) + (query.length > 50 ? "..." : "");
       const conversation = await prisma.conversation.create({
-        data: { title },
+        data: {
+          title,
+          userId: session.user.id,
+        },
       });
       convId = conversation.id;
+    } else {
+      // Verify user owns this conversation
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: convId },
+        select: { userId: true },
+      });
+
+      if (!conversation || conversation.userId !== session.user.id) {
+        return NextResponse.json(
+          { error: "Conversation not found or access denied" },
+          { status: 403 },
+        );
+      }
     }
 
     // Save user message
@@ -250,6 +286,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Stream response
     console.log("Calling LM Studio...");
+    const chatModel = await getChatModel(); // Get model instance with current settings
     const parser = new StringOutputParser();
     const stream = await chatModel.pipe(parser).stream(langchainMessages);
 
@@ -317,7 +354,8 @@ export async function POST(req: NextRequest) {
                     assistantMessage: fullResponse,
                   },
                 );
-                const titleResponse = await chatModel.invoke([
+                const titleModel = await getChatModel(); // Use current settings
+                const titleResponse = await titleModel.invoke([
                   new HumanMessage(titlePrompt),
                 ]);
                 const newTitle =
@@ -398,6 +436,11 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     console.error("Chat API error:", error);
     console.error("Error details:", {
       message: error instanceof Error ? error.message : "Unknown error",

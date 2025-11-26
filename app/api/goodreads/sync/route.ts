@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { parseGoodreadsRSS, importBooksForUser } from "@/lib/goodreads";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    await requireAuth(req);
     const { userId } = await req.json();
 
     if (!userId) {
@@ -59,6 +61,9 @@ export async function POST(req: Request) {
       lastSyncedAt: new Date(),
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error syncing RSS feed:", error);
     return NextResponse.json(
       { error: "Internal Server Error", details: (error as Error).message },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import ModelConfiguration from "@/components/ModelConfiguration";
 import PaperlessConfiguration from "@/components/PaperlessConfiguration";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
@@ -35,6 +36,7 @@ interface User {
 }
 
 export default function ConfigPage() {
+  const { isAdmin } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [embeddingModels, setEmbeddingModels] = useState<string[]>([]);
   const [chatModels, setChatModels] = useState<string[]>([]);
@@ -347,37 +349,57 @@ export default function ConfigPage() {
       <h1 className={styles.title}>Configuration</h1>
 
       <div className={styles.grid}>
+        {/* User Profile - Available to all users */}
         <UserProfile />
 
-        <ModelConfiguration
-          settings={settings}
-          embeddingModels={embeddingModels}
-          chatModels={chatModels}
-          selectedEmbeddingModel={selectedEmbeddingModel}
-          selectedChatModel={selectedChatModel}
-          isSaving={isSaving}
-          hasChanges={hasChanges}
-          onEmbeddingModelChange={setSelectedEmbeddingModel}
-          onChatModelChange={setSelectedChatModel}
-          onSave={handleSaveSettings}
-        />
+        {/* Admin-only sections */}
+        {isAdmin ? (
+          <>
+            <ModelConfiguration
+              settings={settings}
+              embeddingModels={embeddingModels}
+              chatModels={chatModels}
+              selectedEmbeddingModel={selectedEmbeddingModel}
+              selectedChatModel={selectedChatModel}
+              isSaving={isSaving}
+              hasChanges={hasChanges}
+              onEmbeddingModelChange={setSelectedEmbeddingModel}
+              onChatModelChange={setSelectedChatModel}
+              onSave={handleSaveSettings}
+            />
 
-        <PaperlessConfiguration
-          paperlessUrl={paperlessUrl}
-          paperlessExternalUrl={paperlessExternalUrl}
-          paperlessApiToken={paperlessApiToken}
-          paperlessEnabled={paperlessEnabled}
-          paperlessConfigured={settings?.paperlessConfigured || false}
-          isTesting={isTesting}
-          isSaving={isSaving}
-          onUrlChange={setPaperlessUrl}
-          onExternalUrlChange={setPaperlessExternalUrl}
-          onTokenChange={setPaperlessApiToken}
-          onEnabledChange={setPaperlessEnabled}
-          onTest={handleTestPaperlessConnection}
-          onSave={handleSavePaperlessSettings}
-        />
+            <PaperlessConfiguration
+              paperlessUrl={paperlessUrl}
+              paperlessExternalUrl={paperlessExternalUrl}
+              paperlessApiToken={paperlessApiToken}
+              paperlessEnabled={paperlessEnabled}
+              paperlessConfigured={settings?.paperlessConfigured || false}
+              isTesting={isTesting}
+              isSaving={isSaving}
+              onUrlChange={setPaperlessUrl}
+              onExternalUrlChange={setPaperlessExternalUrl}
+              onTokenChange={setPaperlessApiToken}
+              onEnabledChange={setPaperlessEnabled}
+              onTest={handleTestPaperlessConnection}
+              onSave={handleSavePaperlessSettings}
+            />
 
+            <PromptConfiguration />
+
+            <ContextWindowSettings />
+          </>
+        ) : (
+          <div className={styles.adminOnly}>
+            <i className="fas fa-lock"></i>
+            <h3>Admin-Only Settings</h3>
+            <p>
+              Model configuration, Paperless integration, prompts, and context
+              settings are only accessible to administrators.
+            </p>
+          </div>
+        )}
+
+        {/* Goodreads - Available to all users */}
         <GoodreadsIntegration
           users={users}
           isLoadingUsers={isLoadingUsers}
@@ -386,10 +408,6 @@ export default function ConfigPage() {
           onSaveRSSFeed={handleSaveRSSFeed}
           onSyncRSS={handleSyncRSS}
         />
-
-        <PromptConfiguration />
-
-        <ContextWindowSettings />
       </div>
     </div>
   );

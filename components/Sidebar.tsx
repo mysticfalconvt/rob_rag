@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./Sidebar.module.css";
 
 interface Conversation {
@@ -23,6 +24,7 @@ function SidebarContent({ appName }: SidebarContentProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   const isActive = (path: string) => pathname === path;
 
@@ -153,6 +155,27 @@ function SidebarContent({ appName }: SidebarContentProps) {
             <i className="fas fa-cog"></i>
             <span>Config</span>
           </Link>
+
+          {user?.role === "admin" && (
+            <>
+              <Link
+                href="/admin/dashboard"
+                className={`${styles.link} ${isActive("/admin/dashboard") ? styles.active : ""}`}
+                onClick={closeMobileMenu}
+              >
+                <i className="fas fa-chart-line"></i>
+                <span>Dashboard</span>
+              </Link>
+              <Link
+                href="/admin/users"
+                className={`${styles.link} ${isActive("/admin/users") ? styles.active : ""}`}
+                onClick={closeMobileMenu}
+              >
+                <i className="fas fa-users-cog"></i>
+                <span>Manage Users</span>
+              </Link>
+            </>
+          )}
         </nav>
 
         <div className={styles.searchContainer}>
@@ -204,6 +227,24 @@ function SidebarContent({ appName }: SidebarContentProps) {
         )}
 
         <div className={styles.footer}>
+          {user && (
+            <div className={styles.userSection}>
+              <div className={styles.userInfo}>
+                <i className="fas fa-user-circle"></i>
+                <div className={styles.userDetails}>
+                  <div className={styles.userName}>{user.name}</div>
+                  <div className={styles.userEmail}>{user.email}</div>
+                </div>
+              </div>
+              <button
+                className={styles.logoutButton}
+                onClick={logout}
+                title="Logout"
+              >
+                <i className="fas fa-sign-out-alt"></i>
+              </button>
+            </div>
+          )}
           <p>v0.1.0</p>
         </div>
       </aside>

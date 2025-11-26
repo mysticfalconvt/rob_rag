@@ -1,0 +1,723 @@
+.container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 2rem;
+  color: #333;
+}
+
+.createButton {
+  padding: 0.75rem 1.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.createButton:hover {
+  background: #0056b3;
+}
+
+.error {
+  padding: 1rem;
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 6px;
+  color: #c33;
+  margin-bottom: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 4rem 2rem;
+  color: #999;
+}
+
+.emptyState i {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.3;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.userList {
+  display: grid;
+  gap: 1rem;
+}
+
+.userCard {
+  padding: 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.userCard:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #d1d5db;
+}
+
+.userInfo {
+  width: 100%;
+}
+
+.userHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.userHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+}
+
+.userHeaderLeft h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.adminBadge {
+  padding: 0.25rem 0.75rem;
+  background: #28a745;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.inactiveBadge {
+  padding: 0.25rem 0.75rem;
+  background: #6c757d;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.userDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.userDetails p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.userDetails i {
+  color: #999;
+  width: 16px;
+  text-align: center;
+}
+
+.timestamp {
+  color: #999;
+  font-size: 0.85rem;
+}
+
+/* Sessions Section */
+.sessionsSection {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.sessionsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.toggleSessions {
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #374151;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.toggleSessions:hover {
+  background: #e5e7eb;
+}
+
+.endAllSessionsButton {
+  padding: 0.5rem 1rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.endAllSessionsButton:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
+
+.sessionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sessionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.sessionItem:hover {
+  background: #f3f4f6;
+}
+
+.sessionItemInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sessionDevice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.sessionDevice i {
+  color: #6b7280;
+}
+
+.sessionMeta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.sessionMeta span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.sessionMeta i {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.endSessionButton {
+  padding: 0.5rem 0.75rem;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1rem;
+}
+
+.endSessionButton:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+}
+
+/* Conversations Section */
+.conversationsSection {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.conversationsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.toggleConversations {
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #374151;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.toggleConversations:hover {
+  background: #e5e7eb;
+}
+
+.conversationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.conversationItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition: all 0.2s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.conversationItem:hover {
+  background: #f3f4f6;
+  border-color: #3b82f6;
+}
+
+.conversationItemInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.conversationTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.conversationTitle i {
+  color: #6b7280;
+}
+
+.conversationMeta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.conversationMeta span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.conversationMeta i {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.conversationItem > i {
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.userActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.actionButton {
+  padding: 0.5rem 1rem;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #495057;
+}
+
+.actionButton:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modalContent h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+.field {
+  margin-bottom: 1.5rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.field small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.modalActions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.cancelButton {
+  padding: 0.75rem 1.5rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cancelButton:hover {
+  background: #5a6268;
+}
+
+.submitButton {
+  padding: 0.75rem 1.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.submitButton:hover {
+  background: #0056b3;
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  .container {
+    color: #f9fafb;
+  }
+
+  .header h1 {
+    color: #f9fafb;
+  }
+
+  .userCard {
+    background: #1f2937;
+    border-color: #374151;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .userCard:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: #4b5563;
+  }
+
+  .userHeaderLeft h3 {
+    color: #f9fafb;
+  }
+
+  .userDetails {
+    color: #9ca3af;
+  }
+
+  .userDetails i {
+    color: #6b7280;
+  }
+
+  .timestamp {
+    color: #6b7280;
+  }
+
+  .actionButton {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
+
+  .actionButton:hover:not(:disabled) {
+    background: #4b5563;
+    border-color: #6b7280;
+  }
+
+  .deleteButton:hover:not(:disabled) {
+    background: #7f1d1d;
+    border-color: #7f1d1d;
+    color: #fca5a5;
+  }
+
+  .modalContent {
+    background: #1f2937;
+    color: #f9fafb;
+  }
+
+  .modalContent h2 {
+    color: #f9fafb;
+  }
+
+  .field label {
+    color: #f9fafb;
+  }
+
+  .field input,
+  .field select {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+
+  .field input:focus,
+  .field select:focus {
+    border-color: #3b82f6;
+    background: #374151;
+  }
+
+  .field small {
+    color: #9ca3af;
+  }
+
+  .emptyState {
+    color: #6b7280;
+  }
+
+  /* Sessions Section - Dark Mode */
+  .sessionsSection {
+    border-top-color: #374151;
+  }
+
+  .toggleSessions {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
+
+  .toggleSessions:hover {
+    background: #4b5563;
+  }
+
+  .endAllSessionsButton {
+    background: #7f1d1d;
+    border-color: #991b1b;
+    color: #fca5a5;
+  }
+
+  .endAllSessionsButton:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: white;
+  }
+
+  .sessionItem {
+    background: #374151;
+    border-color: #4b5563;
+  }
+
+  .sessionItem:hover {
+    background: #4b5563;
+  }
+
+  .sessionDevice {
+    color: #d1d5db;
+  }
+
+  .sessionDevice i {
+    color: #9ca3af;
+  }
+
+  .sessionMeta {
+    color: #9ca3af;
+  }
+
+  .sessionMeta i {
+    color: #6b7280;
+  }
+
+  .endSessionButton {
+    background: #7f1d1d;
+    border-color: #991b1b;
+    color: #fca5a5;
+  }
+
+  .endSessionButton:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: white;
+  }
+
+  /* Conversations Section - Dark Mode */
+  .conversationsSection {
+    border-top-color: #374151;
+  }
+
+  .toggleConversations {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
+
+  .toggleConversations:hover {
+    background: #4b5563;
+  }
+
+  .conversationItem {
+    background: #374151;
+    border-color: #4b5563;
+  }
+
+  .conversationItem:hover {
+    background: #4b5563;
+    border-color: #3b82f6;
+  }
+
+  .conversationTitle {
+    color: #d1d5db;
+  }
+
+  .conversationTitle i {
+    color: #9ca3af;
+  }
+
+  .conversationMeta {
+    color: #9ca3af;
+  }
+
+  .conversationMeta i {
+    color: #6b7280;
+  }
+
+  .conversationItem > i {
+    color: #6b7280;
+  }
+}

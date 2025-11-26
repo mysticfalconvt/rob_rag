@@ -222,7 +222,7 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
   );
 
   // Get user with books
-  const user = await prisma.user.findUnique({
+  const user = await prisma.goodreadsUser.findUnique({
     where: { id: userId },
     include: {
       goodreadsBooks: true,

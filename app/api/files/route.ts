@@ -2,9 +2,13 @@ import fs from "node:fs/promises";
 import { type NextRequest, NextResponse } from "next/server";
 import { deleteFileIndex, indexFile } from "@/lib/indexer";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/session";
+import { requireCsrf } from "@/lib/csrf";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Require authentication to view files
+    await requireAuth(req);
     const files = await prisma.indexedFile.findMany({
       orderBy: { lastIndexed: "desc" },
     });
@@ -59,6 +63,9 @@ export async function GET() {
 
     return NextResponse.json([...filesWithStatus, ...booksAsFiles]);
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error fetching files:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
@@ -69,6 +76,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireCsrf(req);
+    await requireAuth(req);
     const { filePath } = await req.json();
 
     if (!filePath) {
@@ -78,6 +87,17 @@ export async function POST(req: NextRequest) {
     await indexFile(filePath);
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "Unauthorized") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error.message.includes("CSRF")) {
+        return NextResponse.json(
+          { error: "CSRF validation failed" },
+          { status: 403 },
+        );
+      }
+    }
     console.error("Error re-indexing file:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
@@ -88,6 +108,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    await requireCsrf(req);
+    const session = await requireAuth(req);
     const { searchParams } = new URL(req.url);
     const filePath = searchParams.get("path");
 
@@ -98,8 +120,32 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Check if this is a Paperless-ngx document
+    // Check if this is a Paperless-ngx document or Goodreads book
     const isPaperless = filePath.startsWith("paperless://");
+    const isGoodreads = filePath.startsWith("goodreads://");
+
+    // Check ownership for user-uploaded files
+    const fileRecord = await prisma.indexedFile.findUnique({
+      where: { filePath },
+      select: { uploadedBy: true, source: true },
+    });
+
+    if (fileRecord) {
+      const isAdmin = session.user.role === "admin";
+      const isOwner = fileRecord.uploadedBy === session.user.id;
+      const isUserUpload = fileRecord.source === "uploaded";
+
+      // Permission check:
+      // - Admins can delete anything
+      // - Users can only delete their own uploads
+      // - Synced/Paperless/Goodreads files require admin
+      if (!isAdmin && (!isUserUpload || !isOwner)) {
+        return NextResponse.json(
+          { error: "Forbidden: You can only delete your own uploaded files" },
+          { status: 403 },
+        );
+      }
+    }
 
     // Delete from index
     await deleteFileIndex(filePath);
@@ -127,6 +173,17 @@ export async function DELETE(req: NextRequest) {
         : "File deleted successfully",
     });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "Unauthorized") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error.message.includes("CSRF")) {
+        return NextResponse.json(
+          { error: "CSRF validation failed" },
+          { status: 403 },
+        );
+      }
+    }
     console.error("Error deleting file:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

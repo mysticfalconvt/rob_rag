@@ -1,11 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { getPaperlessClient } from "@/lib/paperless";
 import prisma from "@/lib/prisma";
 import { qdrantClient } from "@/lib/qdrant";
+import { requireAuth } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Require authentication to view system status
+    await requireAuth(req);
     // 1. Check Qdrant
     let qdrantStatus = "disconnected";
     try {
@@ -74,7 +77,7 @@ export async function GET() {
     }> = [];
 
     try {
-      const users = await prisma.user.findMany({
+      const users = await prisma.goodreadsUser.findMany({
         include: {
           goodreadsSources: true,
           _count: {
@@ -137,6 +140,9 @@ export async function GET() {
       },
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error fetching status:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },

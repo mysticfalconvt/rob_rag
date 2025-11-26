@@ -7,6 +7,49 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Authentication models
+model AuthUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("user") // "admin" | "user"
+  isActive     Boolean  @default(true)
+
+  // User-specific profile settings (moved from Settings model)
+  userName        String? // Profile name for chat context (different from account name)
+  userBio         String? // Background, interests, role, etc.
+  userPreferences String? // JSON object for other preferences
+
+  // Relations
+  conversations Conversation[]
+  uploadedFiles IndexedFile[]
+  sessions      Session[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String?  // Admin who created this user
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  userId     String
+  user       AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastActive DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
 model IndexedFile {
   id           String   @id @default(uuid())
   filePath     String   @unique
@@ -19,6 +62,10 @@ model IndexedFile {
   // Source tracking
   source String @default("local") // "local" | "paperless"
 
+  // File ownership tracking (for deletion permissions)
+  uploadedBy String?   // Nullable for existing files and synced sources
+  uploader   AuthUser? @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
   // Paperless-ngx specific fields
   paperlessId            Int?
   paperlessTitle         String?
@@ -27,15 +74,23 @@ model IndexedFile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([uploadedBy])
+  @@index([source])
 }
 
 model Conversation {
   id        String    @id @default(uuid())
+  userId    String
+  user      AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   topics    String?   // JSON array of conversation topics
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model Message {
@@ -67,10 +122,7 @@ model Settings {
   noSourcesSystemPrompt    String?
   titleGenerationPrompt    String?
 
-  // User Profile (for chat context)
-  userName        String?
-  userBio         String? // Background, interests, role, etc.
-  userPreferences String? // JSON object for other preferences
+  // NOTE: User profile fields (userName, userBio, userPreferences) moved to AuthUser model
 
   // Context Window Management
   maxContextTokens      Int     @default(8000) // Maximum tokens to use for context
@@ -82,7 +134,8 @@ model Settings {
   updatedAt DateTime @updatedAt
 }
 
-model User {
+// Goodreads integration models (renamed from "User" to avoid confusion with AuthUser)
+model GoodreadsUser {
   id        String   @id @default(uuid())
   name      String
   email     String?  @unique
@@ -91,43 +144,47 @@ model User {
 
   goodreadsSources GoodreadsSource[]
   goodreadsBooks   GoodreadsBook[]
+
+  @@index([email])
 }
 
 model GoodreadsSource {
-  id           String    @id @default(uuid())
-  userId       String    @unique
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String        @id @default(uuid())
+  userId       String        @unique
+  user         GoodreadsUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   rssFeedUrl   String
   lastSyncedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId])
 }
 
 model GoodreadsBook {
-  id                 String    @id @default(uuid())
+  id                 String        @id @default(uuid())
   userId             String
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               GoodreadsUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   goodreadsBookId    String
   title              String
   author             String
   additionalAuthors  String?
   isbn               String?
   isbn13             String?
-  userRating         Int? // 0-5
+  userRating         Int?          // 0-5
   averageRating      Float?
-  dateRead           DateTime? // Most recent read date (for backward compatibility)
-  readDates          String? // JSON array of all read dates
+  dateRead           DateTime?     // Most recent read date (for backward compatibility)
+  readDates          String?       // JSON array of all read dates
   dateAdded          DateTime?
-  shelves            String? // JSON array of shelf names
+  shelves            String?       // JSON array of shelf names
   reviewText         String?
-  spoiler            Boolean   @default(false)
+  spoiler            Boolean       @default(false)
   privateNotes       String?
   pages              Int?
   yearPublished      Int?
-  readCount          Int       @default(1)
+  readCount          Int           @default(1)
   imageUrl           String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@unique([userId, goodreadsBookId])
   @@index([userId])

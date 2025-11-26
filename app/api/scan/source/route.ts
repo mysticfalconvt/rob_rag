@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scanAllFiles, scanPaperlessDocuments } from "@/lib/indexer";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/session";
 
 export async function POST(request: NextRequest) {
   try {
+    await requireAuth(request);
     const { source } = await request.json();
 
     if (!source) {
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
         const { indexGoodreadsBooks, parseGoodreadsRSS, importBooksForUser } =
           await import("@/lib/goodreads");
 
-        const users = await prisma.user.findMany({
+        const users = await prisma.goodreadsUser.findMany({
           include: {
             goodreadsSources: true,
             _count: {
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 2: Re-fetch users with updated book counts
-        const updatedUsers = await prisma.user.findMany({
+        const updatedUsers = await prisma.goodreadsUser.findMany({
           include: {
             _count: {
               select: { goodreadsBooks: true },
@@ -181,6 +183,9 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error scanning by source:", error);
     return NextResponse.json(
       {

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/session";
 import { parseGoodreadsCSV, importBooksForUser } from "@/lib/goodreads";
 import prisma from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuth(req);
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const userId = formData.get("userId") as string;
@@ -20,7 +22,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify user exists
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.goodreadsUser.findUnique({
+      where: { id: userId },
+    });
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -44,6 +48,9 @@ export async function POST(req: NextRequest) {
       total: books.length,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error uploading Goodreads CSV:", error);
     return NextResponse.json(
       { error: "Internal Server Error", details: (error as Error).message },

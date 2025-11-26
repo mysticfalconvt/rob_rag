@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const settings = await prisma.settings.findUnique({
-      where: { id: "singleton" },
+    const session = await requireAuth(req);
+
+    const user = await prisma.authUser.findUnique({
+      where: { id: session.user.id },
       select: {
         userName: true,
         userBio: true,
@@ -13,13 +16,16 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      userName: settings?.userName || null,
-      userBio: settings?.userBio || null,
-      userPreferences: settings?.userPreferences
-        ? JSON.parse(settings.userPreferences)
+      userName: user?.userName || null,
+      userBio: user?.userBio || null,
+      userPreferences: user?.userPreferences
+        ? JSON.parse(user.userPreferences)
         : null,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error fetching user profile:", error);
     return NextResponse.json(
       { error: "Failed to fetch user profile" },
@@ -30,29 +36,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireAuth(req);
     const body = await req.json();
     const { userName, userBio, userPreferences } = body;
 
-    // Get or create settings
-    let settings = await prisma.settings.findUnique({
-      where: { id: "singleton" },
-    });
-
-    if (!settings) {
-      // Create default settings if they don't exist
-      settings = await prisma.settings.create({
-        data: {
-          id: "singleton",
-          embeddingModel: "nomic-ai/nomic-embed-text-v1.5-GGUF",
-          chatModel: "meta-llama-3.1-8b-instruct",
-          embeddingModelDimension: 768,
-        },
-      });
-    }
-
-    // Update profile
-    const updatedSettings = await prisma.settings.update({
-      where: { id: "singleton" },
+    // Update user profile
+    const updatedUser = await prisma.authUser.update({
+      where: { id: session.user.id },
       data: {
         userName: userName !== undefined ? userName : undefined,
         userBio: userBio !== undefined ? userBio : undefined,
@@ -64,13 +54,16 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({
-      userName: updatedSettings.userName || null,
-      userBio: updatedSettings.userBio || null,
-      userPreferences: updatedSettings.userPreferences
-        ? JSON.parse(updatedSettings.userPreferences)
+      userName: updatedUser.userName || null,
+      userBio: updatedUser.userBio || null,
+      userPreferences: updatedUser.userPreferences
+        ? JSON.parse(updatedUser.userPreferences)
         : null,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error updating user profile:", error);
     return NextResponse.json(
       { error: "Failed to update user profile" },

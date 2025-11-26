@@ -30,3 +30,33 @@
   font-size: 1.125rem;
   color: var(--foreground);
 }
+
+.adminOnly {
+  grid-column: 1 / -1;
+  padding: 3rem 2rem;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 2px dashed #dee2e6;
+  border-radius: 12px;
+  text-align: center;
+  color: #6c757d;
+}
+
+.adminOnly i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  color: #adb5bd;
+}
+
+.adminOnly h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  color: #495057;
+}
+
+.adminOnly p {
+  margin: 0;
+  font-size: 1rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}

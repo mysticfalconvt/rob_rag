@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getPrompts, DEFAULT_PROMPTS } from "@/lib/prompts";
+import { requireAuth, requireAdmin } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    await requireAuth(req);
     const prompts = await getPrompts();
     return NextResponse.json(prompts);
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error fetching prompts:", error);
     return NextResponse.json(
       { error: "Failed to fetch prompts" },
@@ -17,6 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAdmin(req);
     const body = await req.json();
     const { ragSystemPrompt, noSourcesSystemPrompt, titleGenerationPrompt } =
       body;
@@ -78,6 +84,17 @@ export async function POST(req: NextRequest) {
         DEFAULT_PROMPTS.titleGenerationPrompt,
     });
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === "Unauthorized") {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      if (error.message.includes("Forbidden")) {
+        return NextResponse.json(
+          { error: "Forbidden: Admin access required" },
+          { status: 403 },
+        );
+      }
+    }
     console.error("Error updating prompts:", error);
     return NextResponse.json(
       { error: "Failed to update prompts" },

@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import {
   parseGoodreadsRSS,
@@ -10,8 +11,9 @@ import {
  * Sync all RSS feeds for all users
  * This endpoint can be called by a cron job or scheduled task
  */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    await requireAuth(req);
     console.log("Starting Goodreads RSS sync for all users...");
 
     // Get all sources that need syncing
@@ -100,6 +102,9 @@ export async function POST(req: Request) {
       results,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     console.error("Error syncing all RSS feeds:", error);
     return NextResponse.json(
       { error: "Internal Server Error", details: (error as Error).message },

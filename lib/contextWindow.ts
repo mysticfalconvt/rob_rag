@@ -1,4 +1,4 @@
-import { chatModel } from "./ai";
+import { getChatModel } from "./ai";
 import { HumanMessage } from "@langchain/core/messages";
 
 interface Message {
@@ -102,6 +102,7 @@ ${oldMessages
 
 Summary:`;
 
+    const chatModel = await getChatModel(); // Use current settings
     const response = await chatModel.invoke([new HumanMessage(summaryPrompt)]);
     const summary =
       typeof response.content === "string"

@@ -11,7 +11,7 @@ import type { PaperlessDocument, PaperlessDocumentMetadata } from "./paperless";
 import prisma from "./prisma";
 import { COLLECTION_NAME, ensureCollection, qdrantClient } from "./qdrant";
 
-export async function indexFile(filePath: string) {
+export async function indexFile(filePath: string, uploadedBy?: string) {
   try {
     console.log(`Indexing file: ${filePath}`);
 
@@ -133,6 +133,7 @@ export async function indexFile(filePath: string) {
         chunkCount: chunks.length,
         status: "indexed",
         source,
+        ...(uploadedBy && { uploadedBy }),
       },
       create: {
         filePath,
@@ -141,6 +142,7 @@ export async function indexFile(filePath: string) {
         chunkCount: chunks.length,
         status: "indexed",
         source,
+        ...(uploadedBy && { uploadedBy }),
       },
     });
 

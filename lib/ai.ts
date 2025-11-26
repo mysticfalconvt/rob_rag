@@ -1,7 +1,25 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { config } from "./config";
+import { config, getActiveConfig } from "./config";
 
-// Initialize the Chat Model (LLM)
+/**
+ * Get chat model instance with current configuration
+ * This checks database settings first, then falls back to env vars
+ */
+export async function getChatModel(): Promise<ChatOpenAI> {
+  const activeConfig = await getActiveConfig();
+
+  return new ChatOpenAI({
+    apiKey: config.LM_STUDIO_API_KEY || "lm-studio",
+    configuration: {
+      baseURL: config.LM_STUDIO_API_URL,
+    },
+    modelName: activeConfig.CHAT_MODEL_NAME,
+    temperature: 0.7,
+  });
+}
+
+// Legacy export for backwards compatibility (uses env vars only)
+// DEPRECATED: Use getChatModel() instead to respect database settings
 export const chatModel = new ChatOpenAI({
   apiKey: config.LM_STUDIO_API_KEY || "lm-studio",
   configuration: {
@@ -11,9 +29,15 @@ export const chatModel = new ChatOpenAI({
   temperature: 0.7,
 });
 
-// Direct HTTP embedding function (bypasses LangChain due to compatibility issues)
+/**
+ * Direct HTTP embedding function (bypasses LangChain due to compatibility issues)
+ * This respects database settings for the embedding model
+ */
 export async function generateEmbedding(text: string): Promise<number[]> {
   try {
+    // Get active config to respect database settings
+    const activeConfig = await getActiveConfig();
+
     // Remove newlines to improve embedding quality
     const cleanText = text.replace(/\n/g, " ");
     console.log(
@@ -27,7 +51,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: config.EMBEDDING_MODEL_NAME,
+        model: activeConfig.EMBEDDING_MODEL_NAME,
         input: cleanText,
       }),
     });

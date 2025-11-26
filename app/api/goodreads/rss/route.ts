@@ -14,7 +14,9 @@ export async function POST(req: Request) {
     }
 
     // Verify user exists
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.goodreadsUser.findUnique({
+      where: { id: userId },
+    });
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }

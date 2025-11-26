@@ -21,6 +21,7 @@ export const metadata: Metadata = {
 };
 
 import Sidebar from "@/components/Sidebar";
+import AuthGuard from "@/components/AuthGuard";
 
 import styles from "./layout.module.css";
 
@@ -32,10 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        <div className={styles.container}>
-          <Sidebar appName={config.APP_NAME} />
-          <main className={styles.main}>{children}</main>
-        </div>
+        <AuthGuard>{children}</AuthGuard>
       </body>
     </html>
   );
