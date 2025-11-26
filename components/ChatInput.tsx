@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useEffect } from "react";
 import styles from "./ChatInput.module.css";
 import SettingsDialog from "./SettingsDialog";
 
@@ -15,7 +14,6 @@ interface ChatInputProps {
   isLoading: boolean;
   sourceCount: number;
   showSettings: boolean;
-  showMenu: boolean;
   useUploaded: boolean;
   useSynced: boolean;
   usePaperless: boolean;
@@ -26,7 +24,6 @@ interface ChatInputProps {
   onSubmit: (e: React.FormEvent) => void;
   onSourceCountChange: (count: number) => void;
   onToggleSettings: () => void;
-  onToggleMenu: () => void;
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
   onTogglePaperless: () => void;
@@ -40,7 +37,6 @@ export default function ChatInput({
   isLoading,
   sourceCount,
   showSettings,
-  showMenu,
   useUploaded,
   useSynced,
   usePaperless,
@@ -51,7 +47,6 @@ export default function ChatInput({
   onSubmit,
   onSourceCountChange,
   onToggleSettings,
-  onToggleMenu,
   onToggleUploaded,
   onToggleSynced,
   onTogglePaperless,
@@ -59,25 +54,6 @@ export default function ChatInput({
   onSaveConversation,
   onDeleteConversation,
 }: ChatInputProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        if (showMenu) {
-          onToggleMenu();
-        }
-      }
-    };
-
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showMenu, onToggleMenu]);
   return (
     <>
       <form onSubmit={onSubmit} className={styles.inputForm}>
@@ -89,44 +65,14 @@ export default function ChatInput({
             placeholder="Type your message..."
             disabled={isLoading}
           />
-          <div className={styles.menuContainer} ref={menuRef}>
-            <button
-              type="button"
-              className={styles.menuButton}
-              onClick={onToggleMenu}
-              title="More options"
-            >
-              <i className="fas fa-ellipsis-v"></i>
-            </button>
-            {showMenu && (
-              <div className={styles.menuDropdown}>
-                <button
-                  type="button"
-                  className={styles.menuItem}
-                  onClick={() => {
-                    onToggleMenu();
-                    onToggleSettings();
-                  }}
-                >
-                  <i className="fas fa-cog"></i>
-                  <span>Chat Settings</span>
-                </button>
-                {conversationId && (
-                  <button
-                    type="button"
-                    className={`${styles.menuItem} ${styles.danger}`}
-                    onClick={() => {
-                      onToggleMenu();
-                      onDeleteConversation();
-                    }}
-                  >
-                    <i className="fas fa-trash"></i>
-                    <span>Delete Conversation</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <button
+            type="button"
+            className={styles.menuButton}
+            onClick={onToggleSettings}
+            title="Settings"
+          >
+            <i className="fas fa-cog"></i>
+          </button>
           <button type="submit" disabled={isLoading || !value.trim()}>
             <i className="fas fa-paper-plane"></i>
           </button>

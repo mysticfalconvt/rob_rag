@@ -7,6 +7,7 @@ interface ChatHeaderProps {
   conversationId: string | null;
   showMenu: boolean;
   isSaving: boolean;
+  appName: string;
   onToggleMenu: () => void;
   onSaveConversation: () => void;
   onDeleteConversation: () => void;
@@ -16,6 +17,7 @@ export default function ChatHeader({
   conversationId,
   showMenu,
   isSaving,
+  appName,
   onToggleMenu,
   onSaveConversation,
   onDeleteConversation,
@@ -43,7 +45,13 @@ export default function ChatHeader({
 
   return (
     <div className={styles.header}>
-      <h1>Chat with your Documents</h1>
+      <h1>
+        <span className={styles.desktopTitle}>Chat with your Documents</span>
+        <span className={styles.mobileTitle}>
+          <i className="fas fa-robot"></i>
+          <span>{appName}</span>
+        </span>
+      </h1>
       {conversationId && (
         <div className={styles.menuContainer} ref={menuRef}>
           <button

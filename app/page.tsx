@@ -9,6 +9,7 @@ import SourceFilterBar from "@/components/SourceFilterBar";
 import Toast from "@/components/Toast";
 import { useChat } from "@/hooks/useChat";
 import { useConversationActions } from "@/hooks/useConversationActions";
+import { config } from "@/lib/config";
 import styles from "./page.module.css";
 
 function ChatPageContent() {
@@ -29,7 +30,6 @@ function ChatPageContent() {
     Array<{ id: string; name: string; enabled: boolean }>
   >([]);
   const [showSettings, setShowSettings] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -147,9 +147,10 @@ function ChatPageContent() {
         conversationId={null}
         showMenu={false}
         isSaving={false}
-        onToggleMenu={() => {}}
-        onSaveConversation={() => {}}
-        onDeleteConversation={() => {}}
+        appName={config.APP_NAME}
+        onToggleMenu={() => { }}
+        onSaveConversation={() => { }}
+        onDeleteConversation={() => { }}
       />
 
       <div className={styles.messages}>
@@ -193,7 +194,6 @@ function ChatPageContent() {
           isLoading={isLoading}
           sourceCount={sourceCount}
           showSettings={showSettings}
-          showMenu={showMenu}
           useUploaded={useUploaded}
           useSynced={useSynced}
           usePaperless={usePaperless}
@@ -204,7 +204,6 @@ function ChatPageContent() {
           onSubmit={handleSubmit}
           onSourceCountChange={setSourceCount}
           onToggleSettings={() => setShowSettings(!showSettings)}
-          onToggleMenu={() => setShowMenu(!showMenu)}
           onToggleUploaded={() => setUseUploaded(!useUploaded)}
           onToggleSynced={() => setUseSynced(!useSynced)}
           onTogglePaperless={() => setUsePaperless(!usePaperless)}
