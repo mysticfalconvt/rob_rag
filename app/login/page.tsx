@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { refreshSession } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +27,8 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        // Login successful, redirect to home
+        // Login successful, refresh session then redirect to home
+        await refreshSession();
         router.push("/");
       } else {
         const data = await res.json();
