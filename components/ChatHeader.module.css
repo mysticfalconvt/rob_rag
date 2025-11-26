@@ -158,20 +158,69 @@
   }
 }
 
+.mobileHamburger {
+  display: none;
+}
+
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
   .header {
-    margin-bottom: 0.75rem;
-    padding: 0 0.5rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3.5rem;
+    background: var(--background);
+    border-bottom: 1px solid #e5e5e5;
+    margin-bottom: 0;
+    padding: 0 1rem;
+    z-index: 1000;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .mobileHamburger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+  }
+
+  .mobileHamburger:hover {
+    background-color: #2563eb;
+  }
+
+  .mobileHamburger:active {
+    transform: scale(0.95);
+    background-color: #1d4ed8;
   }
 
   .header h1 {
     font-size: 1.25rem;
-    padding-right: 3rem; /* Space for menu button if present */
+    margin: 0;
+    padding: 0;
+    flex: 1;
+    display: flex;
+    justify-content: center;
   }
 
   .header h1 .mobileTitle {
     display: flex;
+    font-size: 1.25rem;
+  }
+
+  .header h1 .mobileTitle i {
+    font-size: 1.25rem;
   }
 
   .header h1 .desktopTitle {
@@ -191,5 +240,26 @@
   .menuDropdown {
     min-width: 180px;
     right: 0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  @media (max-width: 768px) {
+    .header {
+      background: var(--background);
+      border-bottom-color: #333;
+    }
+
+    .mobileHamburger {
+      background-color: #3b82f6;
+    }
+
+    .mobileHamburger:hover {
+      background-color: #2563eb;
+    }
+
+    .mobileHamburger:active {
+      background-color: #1d4ed8;
+    }
   }
 }

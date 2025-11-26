@@ -1,6 +1,8 @@
 .container {
   display: flex;
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .main {
@@ -8,13 +10,18 @@
   margin-left: 250px;
   padding: 2rem;
   width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 768px) {
   .main {
     margin-left: 0;
-    padding: 1rem;
-    padding-top: 4.5rem;
-    /* Space for hamburger menu */
+    padding: 0;
+    padding-top: 3.5rem;
+    /* Space for unified mobile header */
+    height: 100vh;
+    overflow: hidden;
   }
 }

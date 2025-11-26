@@ -44,7 +44,17 @@ function SidebarContent({ appName }: SidebarContentProps) {
     fetchConversations();
     // Refresh conversations every 5 seconds when on chat page
     const interval = setInterval(fetchConversations, 5000);
-    return () => clearInterval(interval);
+
+    // Listen for custom event to open mobile menu
+    const handleOpenMenu = () => {
+      setIsMobileMenuOpen(true);
+    };
+    window.addEventListener('openMobileMenu' as any, handleOpenMenu);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('openMobileMenu' as any, handleOpenMenu);
+    };
   }, []);
 
   const handleDeleteConversation = async (id: string, e: React.MouseEvent) => {

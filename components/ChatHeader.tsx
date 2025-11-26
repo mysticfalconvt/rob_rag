@@ -43,8 +43,20 @@ export default function ChatHeader({
     };
   }, [showMenu, onToggleMenu]);
 
+  const handleMobileMenuClick = () => {
+    // Dispatch custom event to open sidebar menu
+    window.dispatchEvent(new CustomEvent('openMobileMenu'));
+  };
+
   return (
     <div className={styles.header}>
+      <button
+        className={styles.mobileHamburger}
+        onClick={handleMobileMenuClick}
+        aria-label="Open menu"
+      >
+        <i className="fas fa-bars"></i>
+      </button>
       <h1>
         <span className={styles.desktopTitle}>Chat with your Documents</span>
         <span className={styles.mobileTitle}>

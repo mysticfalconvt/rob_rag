@@ -217,25 +217,9 @@
 
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
-  /* Hamburger Menu Button */
+  /* Hamburger Menu Button - Now integrated into ChatHeader */
   .hamburger {
-    position: fixed;
-    top: 1rem;
-    left: 1rem;
-    z-index: 1001;
-    background-color: #3b82f6;
-    color: #fff;
-    border: none;
-    border-radius: 0.5rem;
-    width: 2.75rem;
-    height: 2.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    transition: all 0.2s;
-    font-size: 1.125rem;
+    display: none;
   }
 
   .hamburger:hover {

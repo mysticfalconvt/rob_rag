@@ -1,10 +1,11 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 4rem);
-  /* Adjust for padding */
+  height: 100%;
   max-width: 900px;
   margin: 0 auto;
+  width: 100%;
+  overflow: hidden;
 }
 
 .header {
@@ -189,6 +190,13 @@
     border-color: #333;
   }
 
+  @media (max-width: 768px) {
+    .messages {
+      background: transparent;
+      border: none;
+    }
+  }
+
   .content {
     background-color: #262626;
     color: #ededed;
@@ -213,8 +221,8 @@
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
   .container {
-    height: calc(100vh - 5rem);
-    /* Adjust for mobile header/padding */
+    height: 100%;
+    max-width: 100%;
   }
 
   .header h1 {
@@ -222,8 +230,14 @@
   }
 
   .messages {
-    padding: 0.75rem;
+    padding: 0.75rem 1rem;
     gap: 1rem;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: calc(3.5rem + 0.75rem);
+    background: transparent;
+    border-radius: 0;
+    border: none;
   }
 
   .message {
