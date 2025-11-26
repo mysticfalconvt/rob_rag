@@ -94,16 +94,77 @@ export function useChat(conversationId: string | null) {
       setMessages((prev) => [...prev, assistantMessage]);
 
       let buffer = "";
+      let foundSourcesMarker = false;
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // Stream ended - try to parse sources if we found the marker
+          if (foundSourcesMarker && buffer.includes("__SOURCES__:")) {
+            const [contentPart, sourcesPart] = buffer.split("__SOURCES__:");
+
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              const lastIndex = newMessages.length - 1;
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                content: contentPart.trim(),
+              };
+              return newMessages;
+            });
+
+            try {
+              console.log("[useChat] Parsing sources at stream end, raw data:", sourcesPart);
+              const sourcesData = JSON.parse(sourcesPart);
+              console.log("[useChat] Parsed sources:", sourcesData);
+              console.log("[useChat] Sources array length:", sourcesData.sources?.length);
+
+              setMessages((prev) => {
+                const newMessages = [...prev];
+                const lastIndex = newMessages.length - 1;
+                newMessages[lastIndex] = {
+                  ...newMessages[lastIndex],
+                  sources: sourcesData.sources,
+                };
+                console.log("[useChat] Updated message with sources:", newMessages[lastIndex]);
+                return newMessages;
+              });
+
+              if (sourcesData.conversationId && !currentConversationId) {
+                setCurrentConversationId(sourcesData.conversationId);
+                router.push(`/?conversation=${sourcesData.conversationId}`);
+              }
+            } catch (e) {
+              console.error("Failed to parse sources:", e);
+              console.error("Raw sources part:", sourcesPart);
+            }
+          }
+          break;
+        }
 
         const text = new TextDecoder().decode(value);
         buffer += text;
 
-        if (buffer.includes("__SOURCES__:")) {
-          const [contentPart, sourcesPart] = buffer.split("__SOURCES__:");
+        // Check if we found the sources marker
+        if (!foundSourcesMarker && buffer.includes("__SOURCES__:")) {
+          foundSourcesMarker = true;
+          // Don't break - continue reading to get complete JSON
+        }
 
+        // Only update content if we haven't found sources marker yet
+        if (!foundSourcesMarker) {
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: buffer,
+            };
+            return newMessages;
+          });
+        } else {
+          // Update content without sources part
+          const contentPart = buffer.split("__SOURCES__:")[0];
           setMessages((prev) => {
             const newMessages = [...prev];
             const lastIndex = newMessages.length - 1;
@@ -113,38 +174,7 @@ export function useChat(conversationId: string | null) {
             };
             return newMessages;
           });
-
-          try {
-            const sourcesData = JSON.parse(sourcesPart);
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const lastIndex = newMessages.length - 1;
-              newMessages[lastIndex] = {
-                ...newMessages[lastIndex],
-                sources: sourcesData.sources,
-              };
-              return newMessages;
-            });
-
-            if (sourcesData.conversationId && !currentConversationId) {
-              setCurrentConversationId(sourcesData.conversationId);
-              router.push(`/?conversation=${sourcesData.conversationId}`);
-            }
-          } catch (e) {
-            console.error("Failed to parse sources:", e);
-          }
-          break;
         }
-
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastIndex = newMessages.length - 1;
-          newMessages[lastIndex] = {
-            ...newMessages[lastIndex],
-            content: buffer,
-          };
-          return newMessages;
-        });
       }
     } catch (error) {
       console.error("Error:", error);
