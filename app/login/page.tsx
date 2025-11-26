@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
+import { useState } from "react";
 import { config } from "@/lib/config";
 import styles from "./page.module.css";
 
@@ -11,8 +9,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-  const { refreshSession } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,9 +23,8 @@ export default function LoginPage() {
       });
 
       if (res.ok) {
-        // Login successful, refresh session then redirect to home
-        await refreshSession();
-        router.push("/");
+        // Login successful, force full page reload to ensure session cookie is set
+        window.location.href = "/";
       } else {
         const data = await res.json();
         setError(data.error || "Login failed");

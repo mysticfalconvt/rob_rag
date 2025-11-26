@@ -23,6 +23,7 @@ const sessionOptions = {
     httpOnly: true,
     sameSite: "lax" as const,
     maxAge: 60 * 60 * 24 * 7, // 7 days
+    path: "/",
   },
 };
 
