@@ -9,6 +9,11 @@ import { getChatModel, getFastChatModel } from "@/lib/ai";
 import { readFileContent } from "@/lib/files";
 import prisma from "@/lib/prisma";
 import { search } from "@/lib/retrieval";
+import { smartSearch } from "@/lib/smartRetrieval";
+import {
+  shouldRetrieveMore,
+  retrieveAdditionalContext,
+} from "@/lib/iterativeRetrieval";
 import { getPrompts, interpolatePrompt } from "@/lib/prompts";
 import {
   buildSearchQueryWithUserContext,
@@ -109,6 +114,7 @@ export async function POST(req: NextRequest) {
     let searchResults: any[] = [];
     let context = "";
     let searchQuery = query;
+    let contextParts: string[] = []; // Declare outside for iterative retrieval access
 
     if (sourceFilter !== "none") {
       // Enhance search query based on context
@@ -132,25 +138,41 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Clamp sourceCount between 1 and 20
-      const clampedSourceCount = Math.max(1, Math.min(20, sourceCount));
-      const filterDisplay = Array.isArray(sourceFilter)
-        ? sourceFilter.join(", ")
-        : sourceFilter || "all";
-      console.log(
-        "Searching for:",
-        searchQuery,
-        "with filter:",
-        filterDisplay,
-        "count:",
-        clampedSourceCount,
-      );
-      searchResults = await search(
-        searchQuery,
-        clampedSourceCount,
-        sourceFilter,
-      );
-      console.log("Found", searchResults.length, "results");
+      // Use smart search if no specific filter is set, otherwise respect user's choice
+      const clampedSourceCount = Math.max(1, Math.min(35, sourceCount));
+
+      if (!sourceFilter || sourceFilter === "all") {
+        // Smart search: analyze query and use optimal sources/chunk count
+        console.log("[SmartRetrieval] Using smart search for query:", searchQuery);
+        const smartResult = await smartSearch(
+          searchQuery,
+          undefined, // No user filter
+          clampedSourceCount, // Max chunks
+        );
+        searchResults = smartResult.results;
+        console.log(
+          `[SmartRetrieval] Smart search used sources: ${smartResult.usedSources === "all" ? "all" : smartResult.usedSources.join(", ")}, returned ${searchResults.length} results`,
+        );
+      } else {
+        // Manual filter: respect user's source selection
+        const filterDisplay = Array.isArray(sourceFilter)
+          ? sourceFilter.join(", ")
+          : sourceFilter;
+        console.log(
+          "Searching for:",
+          searchQuery,
+          "with manual filter:",
+          filterDisplay,
+          "count:",
+          clampedSourceCount,
+        );
+        searchResults = await search(
+          searchQuery,
+          clampedSourceCount,
+          sourceFilter,
+        );
+        console.log("Found", searchResults.length, "results");
+      }
       // console.log('Search result scores:', searchResults.map(r => ({ file: r.metadata.fileName, score: r.score })));
 
       // Context Optimization: Group by file and check if we should load full content
@@ -163,7 +185,6 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      const contextParts: string[] = [];
       const processedFiles = new Set<string>();
 
       for (const result of searchResults) {
@@ -285,6 +306,89 @@ export async function POST(req: NextRequest) {
     // Add current query
     langchainMessages.push(new HumanMessage(query));
 
+    // 4.5 Check if we should retrieve more context (iterative retrieval)
+    let additionalSources: any[] = [];
+    const MAX_TOTAL_CHUNKS = 35; // Match smartRetrieval.ts maxChunks default
+    if (searchResults.length > 0 && searchResults.length < MAX_TOTAL_CHUNKS) {
+      // Only check if we have some results but not at max
+      console.log("[IterativeRetrieval] Checking if more context needed...");
+
+      // Quick check with first ~200 chars of a fast preview
+      const fastModel = await getFastChatModel();
+      const previewMessages = [...langchainMessages];
+      previewMessages.push(
+        new HumanMessage(
+          "Respond with ONLY 'NEED_MORE_CONTEXT' if you need additional document chunks to answer thoroughly, or 'SUFFICIENT' if you have enough information. Be conservative - only request more if truly necessary.",
+        ),
+      );
+
+      try {
+        const preview = await fastModel.invoke(previewMessages);
+        const previewText =
+          typeof preview.content === "string"
+            ? preview.content.trim().toUpperCase()
+            : "";
+
+        if (previewText.includes("NEED_MORE")) {
+          const analysis = await shouldRetrieveMore(
+            query,
+            previewText,
+            searchResults.length,
+            MAX_TOTAL_CHUNKS,
+          );
+
+          if (analysis.shouldRetrieve && analysis.suggestedCount) {
+            console.log(
+              `[IterativeRetrieval] Retrieving ${analysis.suggestedCount} more chunks: ${analysis.reason}`,
+            );
+
+            const moreResults = await retrieveAdditionalContext(
+              query,
+              searchResults,
+              sourceFilter === "all" || !sourceFilter ? "all" : sourceFilter,
+              analysis.suggestedCount,
+            );
+
+            if (moreResults.length > 0) {
+              // Add new chunks to context
+              for (const result of moreResults) {
+                const source = result.metadata.source || "synced";
+                contextParts.push(
+                  `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
+                );
+                additionalSources.push({
+                  fileName: result.metadata.fileName,
+                  filePath: result.metadata.filePath,
+                  chunk: result.content,
+                  score: result.score,
+                  source,
+                });
+              }
+
+              // Update context and system prompt
+              context = contextParts.join("\n\n");
+              systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, {
+                context,
+              });
+              if (userContextString) {
+                systemPrompt += `\n\n${userContextString}`;
+              }
+
+              // Update messages with new system prompt
+              langchainMessages[0] = new SystemMessage(systemPrompt);
+
+              console.log(
+                `[IterativeRetrieval] Added ${moreResults.length} chunks, total now: ${searchResults.length + moreResults.length}`,
+              );
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[IterativeRetrieval] Error in preview check:", error);
+        // Continue with normal flow
+      }
+    }
+
     // 5. Stream response
     console.log("Calling LM Studio...");
     const chatModel = await getChatModel(); // Get model instance with current settings
@@ -307,13 +411,16 @@ export async function POST(req: NextRequest) {
       sources: SourceData[];
     } = {
       type: "sources",
-      sources: searchResults.map((r) => ({
-        fileName: r.metadata.fileName,
-        filePath: r.metadata.filePath,
-        chunk: r.content,
-        score: r.score,
-        source: r.metadata.source || "synced",
-      })),
+      sources: [
+        ...searchResults.map((r) => ({
+          fileName: r.metadata.fileName,
+          filePath: r.metadata.filePath,
+          chunk: r.content,
+          score: r.score,
+          source: r.metadata.source || "synced",
+        })),
+        ...additionalSources, // Add any sources from iterative retrieval
+      ],
     };
 
     // Create assistant message record early so it's saved even if client disconnects
