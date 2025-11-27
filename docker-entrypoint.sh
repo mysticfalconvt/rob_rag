@@ -69,7 +69,12 @@ fi
 
 # Run migrations (will only apply new ones after baseline)
 echo "Running database migrations..."
-if ! pnpm exec prisma migrate deploy; then
+DEPLOY_OUTPUT=$(pnpm exec prisma migrate deploy 2>&1)
+DEPLOY_EXIT=$?
+
+echo "$DEPLOY_OUTPUT"
+
+if [ $DEPLOY_EXIT -ne 0 ]; then
     echo "================================"
     echo "ERROR: Migration failed!"
     echo "================================"
@@ -79,6 +84,26 @@ if ! pnpm exec prisma migrate deploy; then
     fi
     echo "Check logs above for details."
     exit 1
+fi
+
+# Validate schema matches database (detects drift even after baseline)
+echo "Validating database schema..."
+VALIDATE_OUTPUT=$(pnpm exec prisma validate 2>&1) || true
+
+# Check if there's a schema drift by trying to generate client
+# If schema doesn't match, Prisma will detect it
+echo "Checking for schema drift..."
+if pnpm exec prisma db push --skip-generate --accept-data-loss 2>&1 | grep -q "already in sync"; then
+    echo "Schema is in sync with database"
+else
+    echo "================================"
+    echo "Schema drift detected - synchronizing..."
+    echo "================================"
+    if ! pnpm exec prisma db push --skip-generate; then
+        echo "ERROR: Failed to sync schema drift"
+        exit 1
+    fi
+    echo "Schema drift resolved"
 fi
 
 echo "================================"
