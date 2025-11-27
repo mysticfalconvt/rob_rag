@@ -49,11 +49,11 @@ function SidebarContent({ appName }: SidebarContentProps) {
     const handleOpenMenu = () => {
       setIsMobileMenuOpen(true);
     };
-    window.addEventListener('openMobileMenu' as any, handleOpenMenu);
+    window.addEventListener("openMobileMenu" as any, handleOpenMenu);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('openMobileMenu' as any, handleOpenMenu);
+      window.removeEventListener("openMobileMenu" as any, handleOpenMenu);
     };
   }, []);
 

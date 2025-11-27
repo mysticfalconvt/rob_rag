@@ -105,10 +105,16 @@ export function useChat(conversationId: string | null) {
             });
 
             try {
-              console.log("[useChat] Parsing sources at stream end, raw data:", sourcesPart);
+              console.log(
+                "[useChat] Parsing sources at stream end, raw data:",
+                sourcesPart,
+              );
               const sourcesData = JSON.parse(sourcesPart);
               console.log("[useChat] Parsed sources:", sourcesData);
-              console.log("[useChat] Sources array length:", sourcesData.sources?.length);
+              console.log(
+                "[useChat] Sources array length:",
+                sourcesData.sources?.length,
+              );
 
               setMessages((prev) => {
                 const newMessages = [...prev];
@@ -117,7 +123,10 @@ export function useChat(conversationId: string | null) {
                   ...newMessages[lastIndex],
                   sources: sourcesData.sources,
                 };
-                console.log("[useChat] Updated message with sources:", newMessages[lastIndex]);
+                console.log(
+                  "[useChat] Updated message with sources:",
+                  newMessages[lastIndex],
+                );
                 return newMessages;
               });
 

@@ -143,7 +143,10 @@ export async function POST(req: NextRequest) {
 
       if (!sourceFilter || sourceFilter === "all") {
         // Smart search: analyze query and use optimal sources/chunk count
-        console.log("[SmartRetrieval] Using smart search for query:", searchQuery);
+        console.log(
+          "[SmartRetrieval] Using smart search for query:",
+          searchQuery,
+        );
         const smartResult = await smartSearch(
           searchQuery,
           undefined, // No user filter
@@ -518,7 +521,10 @@ export async function POST(req: NextRequest) {
                   data: { sources: JSON.stringify(analyzedSources) },
                 });
               } catch (error) {
-                console.error("[SourceAnalysis] Failed to analyze sources:", error);
+                console.error(
+                  "[SourceAnalysis] Failed to analyze sources:",
+                  error,
+                );
                 // Keep original sources if analysis fails
               }
             }

@@ -48,7 +48,9 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
               className={styles.toggleButton}
               onClick={() => setShowAllSources(!showAllSources)}
             >
-              {showAllSources ? "Show Referenced Only" : `Show All (${sources.length})`}
+              {showAllSources
+                ? "Show Referenced Only"
+                : `Show All (${sources.length})`}
             </button>
           )}
       </div>

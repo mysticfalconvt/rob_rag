@@ -45,7 +45,7 @@ export default function ChatHeader({
 
   const handleMobileMenuClick = () => {
     // Dispatch custom event to open sidebar menu
-    window.dispatchEvent(new CustomEvent('openMobileMenu'));
+    window.dispatchEvent(new CustomEvent("openMobileMenu"));
   };
 
   return (

@@ -61,10 +61,7 @@ export function createRetrievalTool(
         });
       }
 
-      const chunksToRetrieve = Math.min(
-        additionalChunks,
-        remainingAllowed,
-      );
+      const chunksToRetrieve = Math.min(additionalChunks, remainingAllowed);
 
       console.log(
         `[RetrievalTool] Retrieving ${chunksToRetrieve} more chunks (${alreadyCount} already retrieved, ${maxChunks} max)`,

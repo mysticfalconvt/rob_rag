@@ -91,7 +91,9 @@ export async function analyzeReferencedSources(
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
 
     // Calculate standard deviation
-    const variance = scores.reduce((sum, score) => sum + Math.pow(score - avgScore, 2), 0) / scores.length;
+    const variance =
+      scores.reduce((sum, score) => sum + Math.pow(score - avgScore, 2), 0) /
+      scores.length;
     const stdDev = Math.sqrt(variance);
 
     // Adaptive threshold: Use mean + 0.5 * stdDev, but at least 0.4
@@ -111,14 +113,31 @@ export async function analyzeReferencedSources(
     });
 
     // Ensure at least one source is marked if any exist
-    if (sourcesWithRelevance.length > 0 && !sourcesWithRelevance.some(s => s.isReferenced)) {
+    if (
+      sourcesWithRelevance.length > 0 &&
+      !sourcesWithRelevance.some((s) => s.isReferenced)
+    ) {
       sourcesWithRelevance[0].isReferenced = true;
     }
 
     // Log for debugging
     console.log("[SourceAnalysis] Analyzed", sources.length, "sources");
-    console.log("[SourceAnalysis] Score stats - Min:", minScore.toFixed(3), "Max:", maxScore.toFixed(3), "Avg:", avgScore.toFixed(3), "StdDev:", stdDev.toFixed(3));
-    console.log("[SourceAnalysis] Adaptive threshold:", adaptiveThreshold.toFixed(3), "Top N count:", topNPercent);
+    console.log(
+      "[SourceAnalysis] Score stats - Min:",
+      minScore.toFixed(3),
+      "Max:",
+      maxScore.toFixed(3),
+      "Avg:",
+      avgScore.toFixed(3),
+      "StdDev:",
+      stdDev.toFixed(3),
+    );
+    console.log(
+      "[SourceAnalysis] Adaptive threshold:",
+      adaptiveThreshold.toFixed(3),
+      "Top N count:",
+      topNPercent,
+    );
     console.log(
       "[SourceAnalysis] Referenced sources:",
       sourcesWithRelevance.filter((s) => s.isReferenced).length,

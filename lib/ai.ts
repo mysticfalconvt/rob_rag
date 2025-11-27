@@ -30,7 +30,8 @@ export async function getFastChatModel(): Promise<ChatOpenAI> {
     configuration: {
       baseURL: config.LM_STUDIO_API_URL,
     },
-    modelName: activeConfig.FAST_CHAT_MODEL_NAME || activeConfig.CHAT_MODEL_NAME,
+    modelName:
+      activeConfig.FAST_CHAT_MODEL_NAME || activeConfig.CHAT_MODEL_NAME,
     temperature: 0.7,
   });
 }

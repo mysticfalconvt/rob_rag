@@ -91,7 +91,13 @@ export function analyzeQuery(query: string): QueryAnalysis {
 
   if (wordCount <= 5) {
     complexity = "simple";
-  } else if (wordCount > 15 || lowerQuery.includes("?") || lowerQuery.includes("how") || lowerQuery.includes("why") || lowerQuery.includes("explain")) {
+  } else if (
+    wordCount > 15 ||
+    lowerQuery.includes("?") ||
+    lowerQuery.includes("how") ||
+    lowerQuery.includes("why") ||
+    lowerQuery.includes("explain")
+  ) {
     complexity = "complex";
   }
 
@@ -156,7 +162,11 @@ export async function smartSearch(
   chunkCount: number;
 }> {
   // If user has manually selected sources, respect that
-  if (userSourceFilter && userSourceFilter !== "all" && userSourceFilter !== "none") {
+  if (
+    userSourceFilter &&
+    userSourceFilter !== "all" &&
+    userSourceFilter !== "none"
+  ) {
     const analysis = analyzeQuery(query);
     const chunkCount = Math.min(analysis.suggestedChunkCount, maxChunks);
 
@@ -211,7 +221,8 @@ export async function smartSearch(
   }
 
   // Analyze probe results to determine best source type
-  const sourceScores: Record<string, { totalScore: number; count: number }> = {};
+  const sourceScores: Record<string, { totalScore: number; count: number }> =
+    {};
 
   probeResults.forEach((result) => {
     const source = result.metadata.source || "synced";
@@ -223,13 +234,11 @@ export async function smartSearch(
   });
 
   // Calculate average score per source
-  const sourceAverages = Object.entries(sourceScores).map(
-    ([source, data]) => ({
-      source,
-      avgScore: data.totalScore / data.count,
-      count: data.count,
-    }),
-  );
+  const sourceAverages = Object.entries(sourceScores).map(([source, data]) => ({
+    source,
+    avgScore: data.totalScore / data.count,
+    count: data.count,
+  }));
 
   sourceAverages.sort((a, b) => b.avgScore - a.avgScore);
 
@@ -258,16 +267,17 @@ export async function smartSearch(
     console.log(
       `[SmartRetrieval] Top source '${topSource.source}' significantly better, focusing search`,
     );
-  } else if (sourceAverages.length > 2 && topSource.avgScore > sourceAverages[2].avgScore * 1.2) {
+  } else if (
+    sourceAverages.length > 2 &&
+    topSource.avgScore > sourceAverages[2].avgScore * 1.2
+  ) {
     // Top 2 sources are better than the rest
     focusedSources = [topSource.source, secondSource.source];
     console.log(
       `[SmartRetrieval] Top 2 sources better, focusing on: ${focusedSources.join(", ")}`,
     );
   } else {
-    console.log(
-      "[SmartRetrieval] No clear winner, searching all sources",
-    );
+    console.log("[SmartRetrieval] No clear winner, searching all sources");
   }
 
   // Stage 2: Get more results from focused sources

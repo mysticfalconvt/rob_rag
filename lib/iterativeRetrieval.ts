@@ -12,7 +12,11 @@ export async function shouldRetrieveMore(
   partialResponse: string,
   currentChunkCount: number,
   maxChunks: number,
-): Promise<{ shouldRetrieve: boolean; reason?: string; suggestedCount?: number }> {
+): Promise<{
+  shouldRetrieve: boolean;
+  reason?: string;
+  suggestedCount?: number;
+}> {
   // Don't retrieve more if we're already at max
   if (currentChunkCount >= maxChunks) {
     return { shouldRetrieve: false };
