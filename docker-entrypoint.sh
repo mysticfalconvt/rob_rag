@@ -41,8 +41,17 @@ if echo "$MIGRATE_STATUS_OUTPUT" | grep -q "Following migrations have not yet be
         # Database exists with data but no migration history - need to baseline
         echo "================================"
         echo "Database exists without migration history"
-        echo "Baselining database with current schema..."
+        echo "Synchronizing schema with db push..."
         echo "================================"
+
+        # First, use db push to ensure schema matches (handles missing columns)
+        # This is safe here because we're fixing an existing db push database
+        if ! pnpm exec prisma db push --skip-generate; then
+            echo "ERROR: Failed to sync database schema"
+            exit 1
+        fi
+
+        echo "Schema synchronized. Now baselining migration history..."
 
         # Mark all migrations as applied without running them
         # This tells Prisma "these migrations were already applied before we started tracking"
@@ -54,7 +63,7 @@ if echo "$MIGRATE_STATUS_OUTPUT" | grep -q "Following migrations have not yet be
         pnpm exec prisma migrate resolve --applied 20251122160636_add_goodreads_tables
         pnpm exec prisma migrate resolve --applied 20251126185425_add_fast_chat_model
 
-        echo "Baseline complete. Now checking for any new migrations..."
+        echo "Baseline complete. Future deploys will use migrations only."
     fi
 fi
 
