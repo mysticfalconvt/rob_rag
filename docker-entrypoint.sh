@@ -32,9 +32,33 @@ fi
 
 # Show current migration status
 echo "Checking migration status..."
-pnpm exec prisma migrate status || true
+MIGRATE_STATUS_OUTPUT=$(pnpm exec prisma migrate status 2>&1) || true
+echo "$MIGRATE_STATUS_OUTPUT"
 
-# Run migrations
+# Check if we need to baseline (database exists but no migrations recorded)
+if echo "$MIGRATE_STATUS_OUTPUT" | grep -q "Following migrations have not yet been applied"; then
+    if [ -f /app/prisma/dev.db ]; then
+        # Database exists with data but no migration history - need to baseline
+        echo "================================"
+        echo "Database exists without migration history"
+        echo "Baselining database with current schema..."
+        echo "================================"
+
+        # Mark all migrations as applied without running them
+        # This tells Prisma "these migrations were already applied before we started tracking"
+        pnpm exec prisma migrate resolve --applied 20251121111240_init
+        pnpm exec prisma migrate resolve --applied 20251121130325_add_conversations
+        pnpm exec prisma migrate resolve --applied 20251121205308_add_settings_model
+        pnpm exec prisma migrate resolve --applied 20251121215538_add_paperless_ngx_support
+        pnpm exec prisma migrate resolve --applied 20251121222629_add_paperless_external_url
+        pnpm exec prisma migrate resolve --applied 20251122160636_add_goodreads_tables
+        pnpm exec prisma migrate resolve --applied 20251126185425_add_fast_chat_model
+
+        echo "Baseline complete. Now checking for any new migrations..."
+    fi
+fi
+
+# Run migrations (will only apply new ones after baseline)
 echo "Running database migrations..."
 if ! pnpm exec prisma migrate deploy; then
     echo "================================"
