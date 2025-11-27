@@ -127,6 +127,7 @@ export function shouldEnableIterativeRetrieval(modelName: string): boolean {
   const goodFunctionCallingModels = [
     "gpt-4",
     "gpt-3.5",
+    "gpt", // Catch other GPT models including gpt-oss
     "claude",
     "gemini",
     "mistral",

@@ -139,7 +139,9 @@ export class GoodreadsPlugin implements DataSourcePlugin {
     const filter = builder.build();
 
     // Query Qdrant with the built filter
-    const limit = params.limit || 20;
+    // Use very high default limit (500) to capture all items for accurate counting
+    // Treat 0 or undefined as unspecified (use default)
+    const limit = params.limit && params.limit > 0 ? params.limit : 500;
 
     try {
       const response = await fetch(
@@ -184,19 +186,19 @@ export class GoodreadsPlugin implements DataSourcePlugin {
       {
         name: "search_goodreads_by_rating",
         description:
-          "Search for books from Goodreads by rating. Use this when the user asks about books they rated highly or within a specific rating range.",
+          "Query the Goodreads database to get an ACCURATE count and list of books by rating. ALWAYS use this tool when the user asks 'how many' or wants to count books with a specific rating. This queries the database directly and returns ALL matching books (up to 100), not just the ones in the current context. Essential for counting queries.",
         parameters: [
           {
             name: "minRating",
             type: "number",
             required: false,
-            description: "Minimum rating (1-5 stars)",
+            description: "Minimum rating (1-5 stars). Use minRating=5 to find 5-star books.",
           },
           {
             name: "maxRating",
             type: "number",
             required: false,
-            description: "Maximum rating (1-5 stars)",
+            description: "Maximum rating (1-5 stars). Use maxRating=5 with minRating=5 to find exactly 5-star books.",
           },
           {
             name: "author",
@@ -208,14 +210,14 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "limit",
             type: "number",
             required: false,
-            description: "Maximum number of results (default: 20)",
+            description: "Maximum number of results to return (default: 500). Should capture all books in most cases.",
           },
         ],
       },
       {
         name: "search_goodreads_by_date_read",
         description:
-          "Search for books from Goodreads by the date they were read. Use this for queries about reading history, books read in a specific time period.",
+          "Search for books from Goodreads by the date they were read. Use this to count or find books read in a specific time period, or get reading history. Returns the total count and list of matching books.",
         parameters: [
           {
             name: "startDate",
@@ -233,14 +235,14 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "limit",
             type: "number",
             required: false,
-            description: "Maximum number of results (default: 20)",
+            description: "Maximum number of results to return (default: 500). Should capture all books in most cases.",
           },
         ],
       },
       {
         name: "search_goodreads_by_author",
         description:
-          "Search for books from Goodreads by author name. Use this when the user asks about books by a specific author.",
+          "Search for books from Goodreads by author name. Use this to count or find books by a specific author, optionally filtered by rating. Returns the total count and list of matching books.",
         parameters: [
           {
             name: "author",
@@ -258,7 +260,7 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "limit",
             type: "number",
             required: false,
-            description: "Maximum number of results (default: 20)",
+            description: "Maximum number of results to return (default: 500). Should capture all books in most cases.",
           },
         ],
       },

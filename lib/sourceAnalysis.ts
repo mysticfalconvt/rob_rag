@@ -120,36 +120,6 @@ export async function analyzeReferencedSources(
       sourcesWithRelevance[0].isReferenced = true;
     }
 
-    // Log for debugging
-    console.log("[SourceAnalysis] Analyzed", sources.length, "sources");
-    console.log(
-      "[SourceAnalysis] Score stats - Min:",
-      minScore.toFixed(3),
-      "Max:",
-      maxScore.toFixed(3),
-      "Avg:",
-      avgScore.toFixed(3),
-      "StdDev:",
-      stdDev.toFixed(3),
-    );
-    console.log(
-      "[SourceAnalysis] Adaptive threshold:",
-      adaptiveThreshold.toFixed(3),
-      "Top N count:",
-      topNPercent,
-    );
-    console.log(
-      "[SourceAnalysis] Referenced sources:",
-      sourcesWithRelevance.filter((s) => s.isReferenced).length,
-    );
-    console.log(
-      "[SourceAnalysis] Relevance scores:",
-      sourcesWithRelevance.map((s) => ({
-        file: s.fileName.substring(0, 30),
-        relevance: s.relevanceScore.toFixed(3),
-        referenced: s.isReferenced,
-      })),
-    );
 
     return sourcesWithRelevance;
   } catch (error) {

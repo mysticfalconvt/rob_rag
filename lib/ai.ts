@@ -58,10 +58,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
     // Remove newlines to improve embedding quality
     const cleanText = text.replace(/\n/g, " ");
-    console.log(
-      "[Embedding] Generating for text:",
-      `${cleanText.substring(0, 100)}...`,
-    );
 
     const response = await fetch(`${config.LM_STUDIO_API_URL}/embeddings`, {
       method: "POST",
@@ -82,17 +78,6 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
     const data = await response.json();
     const embedding = data.data[0].embedding;
-
-    console.log("[Embedding] Result length:", embedding.length);
-    console.log("[Embedding] First 5 values:", embedding.slice(0, 5));
-    console.log(
-      "[Embedding] Sum:",
-      embedding.reduce((a: number, b: number) => a + b, 0),
-    );
-    console.log(
-      "[Embedding] All zeros?",
-      embedding.every((v: number) => v === 0),
-    );
 
     return embedding;
   } catch (error) {

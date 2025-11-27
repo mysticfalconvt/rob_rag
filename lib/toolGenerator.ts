@@ -13,7 +13,6 @@ export function generateToolsFromPlugins(): DynamicStructuredTool[] {
     tools.push(...pluginTools);
   }
 
-  console.log(`[ToolGenerator] Generated ${tools.length} tools from plugins`);
   return tools;
 }
 
@@ -66,22 +65,43 @@ function generateToolsForPlugin(
       description: toolDef.description,
       schema,
       func: async (params) => {
-        console.log(`[Tool] Calling ${toolDef.name} with params:`, params);
-
         try {
           // Call the plugin's queryByMetadata method
           const results = await plugin.queryByMetadata(params);
 
           // Format results for LLM
           if (results.length === 0) {
-            return JSON.stringify({
-              success: true,
-              message: "No results found matching the criteria.",
-              count: 0,
-            });
+            return `No results found matching the criteria. Count: 0`;
           }
 
-          // Format the results into a readable context
+          // For large result sets (>20), return compact format with just count and titles
+          // For smaller sets, include full details
+          const COMPACT_THRESHOLD = 20;
+
+          if (results.length > COMPACT_THRESHOLD) {
+            // Compact format: just count and list of titles
+            const titleList = results
+              .slice(0, 50) // Only show first 50 titles to save tokens
+              .map((result, index) => {
+                const metadata = result.metadata;
+                let title = `${index + 1}. ${metadata.fileName || "Unknown"}`;
+
+                if (plugin.name === "goodreads" && metadata.bookAuthor) {
+                  title += ` by ${metadata.bookAuthor}`;
+                }
+
+                return title;
+              })
+              .join("\n");
+
+            const preview = results.length > 50
+              ? `\n\n(Showing first 50 of ${results.length} results)`
+              : '';
+
+            return `ACCURATE DATABASE COUNT: ${results.length} matching results.\n\nSample titles:${preview}\n${titleList}`;
+          }
+
+          // Detailed format for smaller result sets
           const formattedResults = results
             .map((result, index) => {
               const metadata = result.metadata;
@@ -130,23 +150,9 @@ function generateToolsForPlugin(
             })
             .join("\n\n");
 
-          return JSON.stringify({
-            success: true,
-            message: `Found ${results.length} results.`,
-            count: results.length,
-            results: formattedResults,
-            // Include raw results for potential further processing
-            _rawResults: results.map((r) => ({
-              fileName: r.metadata.fileName,
-              content: r.content,
-              metadata: r.metadata,
-            })),
-          });
+          // Return a simple, clear format emphasizing the count
+          return `Found ${results.length} matching results.\n\n${formattedResults}`;
         } catch (error) {
-          console.error(
-            `[Tool] Error executing ${toolDef.name}:`,
-            error,
-          );
           return JSON.stringify({
             success: false,
             error:
@@ -173,11 +179,6 @@ export async function generateToolsForConfiguredPlugins(): Promise<
     const pluginTools = generateToolsForPlugin(plugin);
     tools.push(...pluginTools);
   }
-
-  console.log(
-    `[ToolGenerator] Generated ${tools.length} tools from ${configuredPlugins.length} configured plugins:`,
-    configuredPlugins.map((p) => p.name),
-  );
 
   return tools;
 }

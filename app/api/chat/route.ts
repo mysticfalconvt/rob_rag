@@ -116,13 +116,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 1. Retrieve context (skip if sourceFilter is 'none')
+    // 1. Retrieve context (skip if sourceFilter is 'none' or if query is a counting/metadata query)
     let searchResults: any[] = [];
     let context = "";
     let searchQuery = query;
     let contextParts: string[] = []; // Declare outside for iterative retrieval access
 
-    if (sourceFilter !== "none") {
+    // Detect if this is a counting/metadata query that should skip RAG and use tools only
+    const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
+    const skipRagForTools = isCountingQuery && sourceFilter !== "none";
+
+
+    if (sourceFilter !== "none" && !skipRagForTools) {
       // Enhance search query based on context
       if (isFirstMessage) {
         // First message: Add user context
@@ -131,7 +136,6 @@ export async function POST(req: NextRequest) {
           userProfile.userName,
           userProfile.userBio,
         );
-        console.log("[Context] First message - adding user context to search");
       } else {
         // Follow-up message: Rephrase if needed
         const { rephrased, wasRephrased } = await rephraseQuestionIfNeeded(
@@ -140,7 +144,6 @@ export async function POST(req: NextRequest) {
         );
         if (wasRephrased) {
           searchQuery = rephrased;
-          console.log("[Context] Rephrased question for better search");
         }
       }
 
@@ -149,38 +152,19 @@ export async function POST(req: NextRequest) {
 
       if (!sourceFilter || sourceFilter === "all") {
         // Smart search: analyze query and use optimal sources/chunk count
-        console.log(
-          "[SmartRetrieval] Using smart search for query:",
-          searchQuery,
-        );
         const smartResult = await smartSearch(
           searchQuery,
           undefined, // No user filter
           clampedSourceCount, // Max chunks
         );
         searchResults = smartResult.results;
-        console.log(
-          `[SmartRetrieval] Smart search used sources: ${smartResult.usedSources === "all" ? "all" : smartResult.usedSources.join(", ")}, returned ${searchResults.length} results`,
-        );
       } else {
         // Manual filter: respect user's source selection
-        const filterDisplay = Array.isArray(sourceFilter)
-          ? sourceFilter.join(", ")
-          : sourceFilter;
-        console.log(
-          "Searching for:",
-          searchQuery,
-          "with manual filter:",
-          filterDisplay,
-          "count:",
-          clampedSourceCount,
-        );
         searchResults = await search(
           searchQuery,
           clampedSourceCount,
           sourceFilter,
         );
-        console.log("Found", searchResults.length, "results");
       }
       // console.log('Search result scores:', searchResults.map(r => ({ file: r.metadata.fileName, score: r.score })));
 
@@ -217,9 +201,6 @@ export async function POST(req: NextRequest) {
 
         if (!isVirtualSource && (isSmallFile || hasSignificantPortion)) {
           try {
-            console.log(
-              `Loading full content for ${result.metadata.fileName} (Chunks: ${totalChunks}, Found: ${fileResults.length})`,
-            );
             const { content: fullContent } = await readFileContent(filePath);
             contextParts.push(
               `Document: ${result.metadata.fileName}\n(Full Content)\n${fullContent}`,
@@ -245,7 +226,6 @@ export async function POST(req: NextRequest) {
 
       context = contextParts.join("\n\n");
     } else {
-      console.log("No sources mode - chatting without document context");
     }
 
     // 2. Build system prompt using customizable prompts
@@ -257,6 +237,14 @@ export async function POST(req: NextRequest) {
 
     if (sourceFilter === "none") {
       systemPrompt = prompts.noSourcesSystemPrompt;
+      if (userContextString) {
+        systemPrompt += `\n\n${userContextString}`;
+      }
+    } else if (skipRagForTools) {
+      // For counting queries, use a special prompt that emphasizes tool usage
+      systemPrompt = `You are a helpful assistant with access to database query tools. ` +
+        `The user has asked a counting or metadata query. You should use the appropriate tool to get accurate results from the database. ` +
+        `Do not make up or estimate numbers - only use the exact counts returned by the tools.`;
       if (userContextString) {
         systemPrompt += `\n\n${userContextString}`;
       }
@@ -278,7 +266,6 @@ export async function POST(req: NextRequest) {
     const {
       messages: managedMessages,
       summary,
-      truncated,
     } = await manageContext(
       messages.slice(0, -1), // Exclude current message (we'll add it separately)
       systemPrompt,
@@ -287,9 +274,6 @@ export async function POST(req: NextRequest) {
       windowSize,
     );
 
-    if (truncated) {
-      console.log("[Context] Applied context management due to length");
-    }
 
     // 4. Prepare messages for LangChain
     const langchainMessages: (SystemMessage | HumanMessage | AIMessage)[] = [
@@ -320,7 +304,6 @@ export async function POST(req: NextRequest) {
     const MAX_TOTAL_CHUNKS = 35; // Match smartRetrieval.ts maxChunks default
     if (searchResults.length > 0 && searchResults.length < MAX_TOTAL_CHUNKS) {
       // Only check if we have some results but not at max
-      console.log("[IterativeRetrieval] Checking if more context needed...");
 
       // Quick check with first ~200 chars of a fast preview
       const fastModel = await getFastChatModel();
@@ -347,10 +330,6 @@ export async function POST(req: NextRequest) {
           );
 
           if (analysis.shouldRetrieve && analysis.suggestedCount) {
-            console.log(
-              `[IterativeRetrieval] Retrieving ${analysis.suggestedCount} more chunks: ${analysis.reason}`,
-            );
-
             const moreResults = await retrieveAdditionalContext(
               query,
               searchResults,
@@ -385,21 +364,15 @@ export async function POST(req: NextRequest) {
 
               // Update messages with new system prompt
               langchainMessages[0] = new SystemMessage(systemPrompt);
-
-              console.log(
-                `[IterativeRetrieval] Added ${moreResults.length} chunks, total now: ${searchResults.length + moreResults.length}`,
-              );
             }
           }
         }
       } catch (error) {
-        console.error("[IterativeRetrieval] Error in preview check:", error);
-        // Continue with normal flow
+        // Continue with normal flow on error
       }
     }
 
     // 5. Set up tools and check for tool calls before streaming
-    console.log("Calling LM Studio...");
     const chatModel = await getChatModel(); // Get model instance with current settings
 
     // Check if model supports tool calling and generate tools
@@ -413,42 +386,37 @@ export async function POST(req: NextRequest) {
       try {
         tools = await generateToolsForConfiguredPlugins();
         if (tools.length > 0) {
-          console.log(`[ToolCalling] ${tools.length} tools available from plugins`);
+
+          // Add guidance about tool usage
+          const toolGuidanceMessage = new SystemMessage(
+            `You have access to tools that query databases directly for ACCURATE counts and metadata. ` +
+            `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
+            `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
+            `The context documents are just a semantic search sample (limited to ~20 items). ` +
+            `The tools query the FULL database and return the ACCURATE total count. ` +
+            `ALWAYS report the count from the tool result, not from the context.`
+          );
+          const messagesWithGuidance = [...langchainMessages, toolGuidanceMessage];
 
           // First, check if LLM wants to use any tools
           const modelWithTools = chatModel.bindTools(tools);
-          const toolCheckResponse = await modelWithTools.invoke(langchainMessages);
+          const toolCheckResponse = await modelWithTools.invoke(messagesWithGuidance);
 
           // Check if the response contains tool calls
           if (
             toolCheckResponse.tool_calls &&
             toolCheckResponse.tool_calls.length > 0
           ) {
-            console.log(
-              `[ToolCalling] Model requested ${toolCheckResponse.tool_calls.length} tool calls`,
-            );
-
             // Execute each tool call
             for (const toolCall of toolCheckResponse.tool_calls) {
               const tool = tools.find((t) => t.name === toolCall.name);
               if (tool) {
-                console.log(
-                  `[ToolCalling] Executing tool: ${toolCall.name}`,
-                  toolCall.args,
-                );
                 try {
                   const result = await tool.func(toolCall.args);
                   toolResults.push(
                     `Tool '${toolCall.name}' returned:\n${result}`,
                   );
-                  console.log(
-                    `[ToolCalling] Tool ${toolCall.name} executed successfully`,
-                  );
                 } catch (error) {
-                  console.error(
-                    `[ToolCalling] Error executing tool ${toolCall.name}:`,
-                    error,
-                  );
                   toolResults.push(
                     `Tool '${toolCall.name}' failed: ${error instanceof Error ? error.message : "Unknown error"}`,
                   );
@@ -459,36 +427,61 @@ export async function POST(req: NextRequest) {
             // Add tool results to the context for final response
             if (toolResults.length > 0) {
               const toolResultsText = toolResults.join("\n\n");
-              langchainMessages.push(
-                new SystemMessage(
-                  `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
-                ),
-              );
-              console.log(
-                `[ToolCalling] Added ${toolResults.length} tool results to context`,
-              );
+
+              // Check if tool returned 0 results - if so, fall back to RAG search
+              const toolReturnedZero = toolResultsText.includes("Count: 0") ||
+                                       toolResultsText.includes("count: 0") ||
+                                       toolResultsText.includes("0 matching results");
+
+              if (toolReturnedZero && skipRagForTools) {
+                // Perform RAG search now
+                if (!sourceFilter || sourceFilter === "all") {
+                  const smartResult = await smartSearch(query, undefined, 20);
+                  searchResults = smartResult.results;
+                } else {
+                  searchResults = await search(query, 20, sourceFilter);
+                }
+
+                // Build context from search results
+                for (const result of searchResults) {
+                  contextParts.push(
+                    `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
+                  );
+                }
+                context = contextParts.join("\n\n");
+
+                // Update system prompt to include the RAG context
+                systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, { context });
+                if (userContextString) {
+                  systemPrompt += `\n\n${userContextString}`;
+                }
+                langchainMessages[0] = new SystemMessage(systemPrompt);
+
+                // Add a note about the fallback
+                langchainMessages.push(
+                  new SystemMessage(
+                    `The metadata query returned no results. However, here is relevant context from semantic search that might help answer the question.`,
+                  ),
+                );
+              } else {
+                langchainMessages.push(
+                  new SystemMessage(
+                    `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
+                  ),
+                );
+              }
             }
-          } else {
-            console.log("[ToolCalling] Model did not request any tool calls");
           }
-        } else {
-          console.log("[ToolCalling] No tools available from plugins");
         }
       } catch (error) {
-        console.error(
-          "[ToolCalling] Error in tool calling flow, continuing without:",
-          error,
-        );
+        // Error in tool calling flow, continue without tools
       }
-    } else {
-      console.log(
-        `[ToolCalling] Model ${modelName} does not support tool calling, skipping`,
-      );
     }
 
-    // Now stream the final response
+    // Now stream the final response (use fresh model without tools to avoid tool-calling in response)
     const parser = new StringOutputParser();
-    const stream = await chatModel.pipe(parser).stream(langchainMessages);
+    const finalModel = await getChatModel(); // Fresh instance without tool binding
+    const stream = await finalModel.pipe(parser).stream(langchainMessages);
 
     // Prepare sources data
     interface SourceData {
@@ -599,9 +592,7 @@ export async function POST(req: NextRequest) {
             let analyzedSources = sourcesData.sources;
             if (fullResponse && sourcesData.sources.length > 0) {
               try {
-                console.log(
-                  "[SourceAnalysis] Analyzing referenced sources for response...",
-                );
+
                 analyzedSources = await analyzeReferencedSources(
                   fullResponse,
                   sourcesData.sources,

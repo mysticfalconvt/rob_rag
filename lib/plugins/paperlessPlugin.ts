@@ -92,14 +92,9 @@ export class PaperlessPlugin implements DataSourcePlugin {
       builder.equals("correspondent", params.correspondent);
     }
 
-    // Tags filter (would need special handling for array contains)
-    if (params.tags && Array.isArray(params.tags)) {
-      // For now, exact match on the tags field
-      // In the future, could implement "contains any" logic
-      params.tags.forEach((tag: string) => {
-        builder.should({ key: "tags", match: { value: tag } });
-      });
-    }
+    // Tags filter - we'll do case-insensitive contains matching after fetching results
+    // Don't add to Qdrant filter since tags are stored as pipe-separated strings
+    // and we want case-insensitive partial matching
 
     // Document date range
     if (params.documentStartDate && params.documentEndDate) {
@@ -130,7 +125,8 @@ export class PaperlessPlugin implements DataSourcePlugin {
     }
 
     const filter = builder.build();
-    const limit = params.limit || 20;
+    // Use default 500 for counting, treat 0 as unspecified
+    const limit = params.limit && params.limit > 0 ? params.limit : 500;
 
     try {
       const response = await fetch(
@@ -154,7 +150,7 @@ export class PaperlessPlugin implements DataSourcePlugin {
       const data = await response.json();
       const points = Array.isArray(data.result?.points) ? data.result.points : [];
 
-      return points.map((p: any) => ({
+      let results = points.map((p: any) => ({
         content: p.payload?.content as string,
         metadata: {
           filePath: p.payload?.filePath,
@@ -164,6 +160,29 @@ export class PaperlessPlugin implements DataSourcePlugin {
         },
         score: 1.0, // Metadata query doesn't have similarity score
       }));
+
+      // Post-filter for tags with case-insensitive contains matching
+      if (params.tags && Array.isArray(params.tags) && params.tags.length > 0) {
+        const searchTags = params.tags.map((t: string) => t.toLowerCase());
+        results = results.filter((result: any) => {
+          const docTags = result.metadata.tags;
+          if (!docTags) return false;
+
+          // Handle both string (pipe-separated) and array formats
+          const tagList: string[] = typeof docTags === 'string'
+            ? docTags.split('|').map((t: string) => t.trim().toLowerCase())
+            : Array.isArray(docTags)
+            ? docTags.map((t: any) => String(t).toLowerCase())
+            : [];
+
+          // Check if any search tag is contained in any document tag
+          return searchTags.some((searchTag: string) =>
+            tagList.some((docTag: string) => docTag.includes(searchTag))
+          );
+        });
+      }
+
+      return results;
     } catch (error) {
       console.error("[PaperlessPlugin] Error querying by metadata:", error);
       return [];
