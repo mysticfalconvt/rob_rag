@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import Sidebar from "./Sidebar";
+import MobileHeader from "./MobileHeader";
 import { config } from "@/lib/config";
 import styles from "../app/layout.module.css";
 
@@ -58,9 +59,23 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     return null; // Will redirect via useEffect
   }
 
+  // Get page title based on pathname
+  const getPageTitle = () => {
+    if (pathname === "/") return null; // Chat page uses ChatHeader
+    if (pathname === "/status") return "Status";
+    if (pathname === "/config") return "Config";
+    if (pathname === "/files") return "Files";
+    if (pathname === "/admin/users") return "Users";
+    if (pathname === "/admin/dashboard") return "Dashboard";
+    return undefined; // Default to RobRAG with icon
+  };
+
+  const pageTitle = getPageTitle();
+
   // Authenticated users get the sidebar + main content layout
   return (
     <div className={styles.container}>
+      {pageTitle !== null && <MobileHeader title={pageTitle} />}
       <Sidebar appName={config.APP_NAME} />
       <main className={styles.main}>{children}</main>
     </div>

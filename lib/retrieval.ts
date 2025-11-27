@@ -1,6 +1,7 @@
 import { generateEmbedding } from "./ai";
 import { config } from "./config";
 import { COLLECTION_NAME, ensureCollection } from "./qdrant";
+import { buildSourceFilter } from "./queryBuilder";
 // Using built‑in fetch (Node 18+ / Turbopack provides a global fetch)
 
 export interface SearchResult {
@@ -31,56 +32,8 @@ export async function search(
       limit,
     );
 
-    // Build filter based on source
-    let filter: any = undefined;
-
-    if (sourceFilter && sourceFilter !== "all" && sourceFilter !== "none") {
-      if (Array.isArray(sourceFilter)) {
-        // Multiple sources: use "should" (OR logic)
-        if (sourceFilter.length > 0) {
-          filter = {
-            should: sourceFilter.map((source) => {
-              // Handle "goodreads:userId" format
-              if (source.startsWith("goodreads:")) {
-                const userId = source.split(":")[1];
-                return {
-                  must: [
-                    { key: "source", match: { value: "goodreads" } },
-                    { key: "userId", match: { value: userId } },
-                  ],
-                };
-              }
-              // Regular source filter
-              return {
-                key: "source",
-                match: { value: source },
-              };
-            }),
-          };
-        }
-      } else {
-        // Single source: use "must"
-        // Handle "goodreads:userId" format
-        if (sourceFilter.startsWith("goodreads:")) {
-          const userId = sourceFilter.split(":")[1];
-          filter = {
-            must: [
-              { key: "source", match: { value: "goodreads" } },
-              { key: "userId", match: { value: userId } },
-            ],
-          };
-        } else {
-          filter = {
-            must: [
-              {
-                key: "source",
-                match: { value: sourceFilter },
-              },
-            ],
-          };
-        }
-      }
-    }
+    // Build filter based on source using query builder
+    const filter = buildSourceFilter(sourceFilter || "all");
 
     const response = await fetch(
       `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/search`,

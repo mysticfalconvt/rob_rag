@@ -371,6 +371,7 @@
 @media (max-width: 768px) {
   .container {
     padding: 1rem;
+    padding-top: calc(3.5rem + 1rem);
   }
 
   .header {

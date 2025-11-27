@@ -24,9 +24,15 @@ import {
 import { manageContext } from "@/lib/contextWindow";
 import { requireAuth } from "@/lib/session";
 import { analyzeReferencedSources } from "@/lib/sourceAnalysis";
+import { initializeApp } from "@/lib/init";
+import { generateToolsForConfiguredPlugins } from "@/lib/toolGenerator";
+import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 
 export async function POST(req: NextRequest) {
   try {
+    // Initialize plugins on first request
+    initializeApp();
+
     // Require authentication
     const session = await requireAuth(req);
 
@@ -392,9 +398,95 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Stream response
+    // 5. Set up tools and check for tool calls before streaming
     console.log("Calling LM Studio...");
     const chatModel = await getChatModel(); // Get model instance with current settings
+
+    // Check if model supports tool calling and generate tools
+    const modelName = (chatModel as any).modelName || (chatModel as any).model || "";
+    const supportsTools = shouldEnableIterativeRetrieval(modelName);
+
+    let tools: any[] = [];
+    let toolResults: string[] = [];
+
+    if (supportsTools) {
+      try {
+        tools = await generateToolsForConfiguredPlugins();
+        if (tools.length > 0) {
+          console.log(`[ToolCalling] ${tools.length} tools available from plugins`);
+
+          // First, check if LLM wants to use any tools
+          const modelWithTools = chatModel.bindTools(tools);
+          const toolCheckResponse = await modelWithTools.invoke(langchainMessages);
+
+          // Check if the response contains tool calls
+          if (
+            toolCheckResponse.tool_calls &&
+            toolCheckResponse.tool_calls.length > 0
+          ) {
+            console.log(
+              `[ToolCalling] Model requested ${toolCheckResponse.tool_calls.length} tool calls`,
+            );
+
+            // Execute each tool call
+            for (const toolCall of toolCheckResponse.tool_calls) {
+              const tool = tools.find((t) => t.name === toolCall.name);
+              if (tool) {
+                console.log(
+                  `[ToolCalling] Executing tool: ${toolCall.name}`,
+                  toolCall.args,
+                );
+                try {
+                  const result = await tool.func(toolCall.args);
+                  toolResults.push(
+                    `Tool '${toolCall.name}' returned:\n${result}`,
+                  );
+                  console.log(
+                    `[ToolCalling] Tool ${toolCall.name} executed successfully`,
+                  );
+                } catch (error) {
+                  console.error(
+                    `[ToolCalling] Error executing tool ${toolCall.name}:`,
+                    error,
+                  );
+                  toolResults.push(
+                    `Tool '${toolCall.name}' failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                  );
+                }
+              }
+            }
+
+            // Add tool results to the context for final response
+            if (toolResults.length > 0) {
+              const toolResultsText = toolResults.join("\n\n");
+              langchainMessages.push(
+                new SystemMessage(
+                  `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
+                ),
+              );
+              console.log(
+                `[ToolCalling] Added ${toolResults.length} tool results to context`,
+              );
+            }
+          } else {
+            console.log("[ToolCalling] Model did not request any tool calls");
+          }
+        } else {
+          console.log("[ToolCalling] No tools available from plugins");
+        }
+      } catch (error) {
+        console.error(
+          "[ToolCalling] Error in tool calling flow, continuing without:",
+          error,
+        );
+      }
+    } else {
+      console.log(
+        `[ToolCalling] Model ${modelName} does not support tool calling, skipping`,
+      );
+    }
+
+    // Now stream the final response
     const parser = new StringOutputParser();
     const stream = await chatModel.pipe(parser).stream(langchainMessages);
 
