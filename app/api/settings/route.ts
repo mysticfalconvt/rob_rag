@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         embeddingModel: config.EMBEDDING_MODEL_NAME,
         chatModel: config.CHAT_MODEL_NAME,
+        fastChatModel: null,
         embeddingModelDimension: 1024,
         isDefault: true,
         paperlessUrl: null,
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       embeddingModel: settings.embeddingModel,
       chatModel: settings.chatModel,
+      fastChatModel: settings.fastChatModel,
       embeddingModelDimension: settings.embeddingModelDimension,
       isDefault: false,
       paperlessUrl: settings.paperlessUrl,
@@ -56,6 +58,7 @@ export async function POST(req: NextRequest) {
     const {
       embeddingModel,
       chatModel,
+      fastChatModel,
       embeddingModelDimension,
       paperlessUrl,
       paperlessExternalUrl,
@@ -91,6 +94,7 @@ export async function POST(req: NextRequest) {
     const updateData: any = {
       embeddingModel,
       chatModel,
+      fastChatModel: fastChatModel || null,
       embeddingModelDimension: embeddingModelDimension || 1024,
     };
 
@@ -115,6 +119,7 @@ export async function POST(req: NextRequest) {
         id: "singleton",
         embeddingModel,
         chatModel,
+        fastChatModel: fastChatModel || null,
         embeddingModelDimension: embeddingModelDimension || 1024,
         paperlessUrl: paperlessUrl || null,
         paperlessExternalUrl: paperlessExternalUrl || null,
@@ -126,6 +131,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       embeddingModel: settings.embeddingModel,
       chatModel: settings.chatModel,
+      fastChatModel: settings.fastChatModel,
       embeddingModelDimension: settings.embeddingModelDimension,
       paperlessUrl: settings.paperlessUrl,
       paperlessExternalUrl: settings.paperlessExternalUrl,

@@ -13,6 +13,7 @@ import styles from "./page.module.css";
 interface Settings {
   embeddingModel: string;
   chatModel: string;
+  fastChatModel?: string | null;
   embeddingModelDimension: number;
   isDefault?: boolean;
   paperlessUrl: string | null;
@@ -43,6 +44,7 @@ export default function ConfigPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState("");
   const [selectedChatModel, setSelectedChatModel] = useState("");
+  const [selectedFastChatModel, setSelectedFastChatModel] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   const [paperlessUrl, setPaperlessUrl] = useState("");
@@ -82,6 +84,7 @@ export default function ConfigPage() {
         setSettings(data);
         setSelectedEmbeddingModel(data.embeddingModel);
         setSelectedChatModel(data.chatModel);
+        setSelectedFastChatModel(data.fastChatModel || "");
         setPaperlessUrl(data.paperlessUrl || "");
         setPaperlessExternalUrl(data.paperlessExternalUrl || "");
         setPaperlessEnabled(data.paperlessEnabled || false);
@@ -143,6 +146,7 @@ export default function ConfigPage() {
         body: JSON.stringify({
           embeddingModel: selectedEmbeddingModel,
           chatModel: selectedChatModel,
+          fastChatModel: selectedFastChatModel || null,
           embeddingModelDimension: 1024,
         }),
       });
@@ -338,7 +342,8 @@ export default function ConfigPage() {
   const hasChanges = !!(
     settings &&
     (selectedEmbeddingModel !== settings.embeddingModel ||
-      selectedChatModel !== settings.chatModel)
+      selectedChatModel !== settings.chatModel ||
+      selectedFastChatModel !== (settings.fastChatModel || ""))
   );
 
   if (isLoading)
@@ -361,10 +366,12 @@ export default function ConfigPage() {
               chatModels={chatModels}
               selectedEmbeddingModel={selectedEmbeddingModel}
               selectedChatModel={selectedChatModel}
+              selectedFastChatModel={selectedFastChatModel}
               isSaving={isSaving}
               hasChanges={hasChanges}
               onEmbeddingModelChange={setSelectedEmbeddingModel}
               onChatModelChange={setSelectedChatModel}
+              onFastChatModelChange={setSelectedFastChatModel}
               onSave={handleSaveSettings}
             />
 

@@ -1,5 +1,5 @@
 import prisma from "./prisma";
-import { getChatModel } from "./ai";
+import { getChatModel, getFastChatModel } from "./ai";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 interface Message {
@@ -115,8 +115,8 @@ Current Question: ${currentQuery}
 
 Rephrased Question:`;
 
-    const chatModel = await getChatModel(); // Use current settings
-    const response = await chatModel.invoke([new HumanMessage(rephrasePrompt)]);
+    const fastModel = await getFastChatModel(); // Use fast model for auxiliary task
+    const response = await fastModel.invoke([new HumanMessage(rephrasePrompt)]);
 
     const rephrasedText =
       typeof response.content === "string"
@@ -172,8 +172,8 @@ New message: ${newMessage}
 
 Topics (as JSON array):`;
 
-        const chatModel = await getChatModel(); // Use current settings
-        const response = await chatModel.invoke([
+        const fastModel = await getFastChatModel(); // Use fast model for auxiliary task
+        const response = await fastModel.invoke([
           new HumanMessage(topicPrompt),
         ]);
 

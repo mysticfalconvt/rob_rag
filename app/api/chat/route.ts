@@ -5,7 +5,7 @@ import {
 } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { type NextRequest, NextResponse } from "next/server";
-import { getChatModel } from "@/lib/ai";
+import { getChatModel, getFastChatModel } from "@/lib/ai";
 import { readFileContent } from "@/lib/files";
 import prisma from "@/lib/prisma";
 import { search } from "@/lib/retrieval";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/contextBuilder";
 import { manageContext } from "@/lib/contextWindow";
 import { requireAuth } from "@/lib/session";
+import { analyzeReferencedSources } from "@/lib/sourceAnalysis";
 
 export async function POST(req: NextRequest) {
   try {
@@ -291,7 +292,20 @@ export async function POST(req: NextRequest) {
     const stream = await chatModel.pipe(parser).stream(langchainMessages);
 
     // Prepare sources data
-    const sourcesData = {
+    interface SourceData {
+      fileName: string;
+      filePath: string;
+      chunk: string;
+      score: number;
+      source: string;
+      relevanceScore?: number;
+      isReferenced?: boolean;
+    }
+
+    const sourcesData: {
+      type: string;
+      sources: SourceData[];
+    } = {
       type: "sources",
       sources: searchResults.map((r) => ({
         fileName: r.metadata.fileName,
@@ -354,7 +368,7 @@ export async function POST(req: NextRequest) {
                     assistantMessage: fullResponse,
                   },
                 );
-                const titleModel = await getChatModel(); // Use current settings
+                const titleModel = await getFastChatModel(); // Use fast model for auxiliary task
                 const titleResponse = await titleModel.invoke([
                   new HumanMessage(titlePrompt),
                 ]);
@@ -379,9 +393,33 @@ export async function POST(req: NextRequest) {
               console.error("Failed to update topics:", err),
             );
 
+            // Analyze which sources were actually referenced
+            let analyzedSources = sourcesData.sources;
+            if (fullResponse && sourcesData.sources.length > 0) {
+              try {
+                console.log(
+                  "[SourceAnalysis] Analyzing referenced sources for response...",
+                );
+                analyzedSources = await analyzeReferencedSources(
+                  fullResponse,
+                  sourcesData.sources,
+                );
+
+                // Update the stored message with analyzed sources
+                await prisma.message.update({
+                  where: { id: assistantMessage.id },
+                  data: { sources: JSON.stringify(analyzedSources) },
+                });
+              } catch (error) {
+                console.error("[SourceAnalysis] Failed to analyze sources:", error);
+                // Keep original sources if analysis fails
+              }
+            }
+
             // Send sources and conversation ID
             const finalData = {
-              ...sourcesData,
+              type: "sources",
+              sources: analyzedSources,
               conversationId: convId,
             };
             controller.enqueue(

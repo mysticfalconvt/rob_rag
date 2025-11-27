@@ -2,14 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-interface Source {
-  fileName: string;
-  filePath: string;
-  chunk: string;
-  score: number;
-  source?: string;
-}
+import type { Source } from "@/types/source";
 
 interface Message {
   role: "user" | "assistant";

@@ -37,6 +37,7 @@ export async function getActiveConfig() {
         ...config,
         EMBEDDING_MODEL_NAME: settings.embeddingModel,
         CHAT_MODEL_NAME: settings.chatModel,
+        FAST_CHAT_MODEL_NAME: settings.fastChatModel || settings.chatModel, // Fallback to main model
         EMBEDDING_MODEL_DIMENSION: settings.embeddingModelDimension,
       };
     }
@@ -49,6 +50,7 @@ export async function getActiveConfig() {
 
   return {
     ...config,
+    FAST_CHAT_MODEL_NAME: config.CHAT_MODEL_NAME, // Fallback to main model
     EMBEDDING_MODEL_DIMENSION: 1024,
   };
 }

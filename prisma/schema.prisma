@@ -109,6 +109,7 @@ model Settings {
   id                      String @id @default("singleton")
   embeddingModel          String
   chatModel               String
+  fastChatModel           String? // Optional fast model for auxiliary tasks
   embeddingModelDimension Int    @default(1024)
 
   // Paperless-ngx Configuration

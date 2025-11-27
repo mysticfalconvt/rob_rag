@@ -6,6 +6,7 @@ import styles from "./ModelConfiguration.module.css";
 interface Settings {
   embeddingModel: string;
   chatModel: string;
+  fastChatModel?: string | null;
   isDefault?: boolean;
 }
 
@@ -15,10 +16,12 @@ interface ModelConfigurationProps {
   chatModels: string[];
   selectedEmbeddingModel: string;
   selectedChatModel: string;
+  selectedFastChatModel: string;
   isSaving: boolean;
   hasChanges: boolean;
   onEmbeddingModelChange: (model: string) => void;
   onChatModelChange: (model: string) => void;
+  onFastChatModelChange: (model: string) => void;
   onSave: () => void;
 }
 
@@ -28,10 +31,12 @@ export default function ModelConfiguration({
   chatModels,
   selectedEmbeddingModel,
   selectedChatModel,
+  selectedFastChatModel,
   isSaving,
   hasChanges,
   onEmbeddingModelChange,
   onChatModelChange,
+  onFastChatModelChange,
   onSave,
 }: ModelConfigurationProps) {
   return (
@@ -78,7 +83,7 @@ export default function ModelConfiguration({
       </div>
 
       <div className={styles.formGroup}>
-        <label htmlFor="chatModel">Chat Model</label>
+        <label htmlFor="chatModel">Main Chat Model</label>
         <select
           id="chatModel"
           value={selectedChatModel}
@@ -96,6 +101,34 @@ export default function ModelConfiguration({
             ))
           )}
         </select>
+        <p className={styles.helpText}>
+          Used for generating final responses to user queries
+        </p>
+      </div>
+
+      <div className={styles.formGroup}>
+        <label htmlFor="fastChatModel">
+          Fast Chat Model
+          <span className={styles.optional}>(Optional)</span>
+        </label>
+        <select
+          id="fastChatModel"
+          value={selectedFastChatModel}
+          onChange={(e) => onFastChatModelChange(e.target.value)}
+          className={styles.select}
+          disabled={isSaving}
+        >
+          <option value="">Use Main Model</option>
+          {chatModels.map((model: string) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+        <p className={styles.helpText}>
+          Used for auxiliary tasks (query rephrasing, title generation, topic
+          extraction). Leave empty to use main model.
+        </p>
       </div>
 
       <button

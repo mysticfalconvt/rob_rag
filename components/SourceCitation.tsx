@@ -3,14 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import styles from "./SourceCitation.module.css";
-
-interface Source {
-  fileName: string;
-  filePath: string;
-  chunk: string;
-  score: number;
-  source?: string;
-}
+import type { Source } from "@/types/source";
 
 interface SourceCitationProps {
   sources: Source[];
@@ -18,14 +11,49 @@ interface SourceCitationProps {
 
 export default function SourceCitation({ sources }: SourceCitationProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [showAllSources, setShowAllSources] = useState(false);
 
   if (!sources || sources.length === 0) return null;
 
+  // Separate referenced and non-referenced sources
+  const referencedSources = sources.filter((s) => s.isReferenced);
+  const nonReferencedSources = sources.filter((s) => !s.isReferenced);
+
+  // Determine which sources to display
+  const displaySources = showAllSources ? sources : referencedSources;
+
+  // If no sources have relevance analysis, show all sources by default
+  const hasRelevanceData = sources.some(
+    (s) => s.relevanceScore !== undefined && s.isReferenced !== undefined,
+  );
+  const sourcesToShow = hasRelevanceData ? displaySources : sources;
+
   return (
     <div className={styles.container}>
-      <div className={styles.label}>Sources:</div>
+      <div className={styles.header}>
+        <div className={styles.label}>
+          Sources:
+          {hasRelevanceData && referencedSources.length > 0 && (
+            <span className={styles.count}>
+              {showAllSources
+                ? `${referencedSources.length} referenced, ${nonReferencedSources.length} additional`
+                : `${referencedSources.length} referenced`}
+            </span>
+          )}
+        </div>
+        {hasRelevanceData &&
+          referencedSources.length > 0 &&
+          nonReferencedSources.length > 0 && (
+            <button
+              className={styles.toggleButton}
+              onClick={() => setShowAllSources(!showAllSources)}
+            >
+              {showAllSources ? "Show Referenced Only" : `Show All (${sources.length})`}
+            </button>
+          )}
+      </div>
       <div className={styles.sources}>
-        {sources.map((source, index) => {
+        {sourcesToShow.map((source, index) => {
           const _encodedPath = encodeURIComponent(source.filePath);
 
           return (

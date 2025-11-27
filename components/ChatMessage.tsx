@@ -4,14 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import SourceCitation from "@/components/SourceCitation";
 import styles from "./ChatMessage.module.css";
-
-interface Source {
-  fileName: string;
-  filePath: string;
-  chunk: string;
-  score: number;
-  source?: string;
-}
+import type { Source } from "@/types/source";
 
 interface Message {
   role: "user" | "assistant";

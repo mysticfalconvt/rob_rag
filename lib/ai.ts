@@ -18,6 +18,23 @@ export async function getChatModel(): Promise<ChatOpenAI> {
   });
 }
 
+/**
+ * Get fast chat model for auxiliary tasks (rephrasing, title generation, etc.)
+ * Falls back to main chat model if no fast model is configured
+ */
+export async function getFastChatModel(): Promise<ChatOpenAI> {
+  const activeConfig = await getActiveConfig();
+
+  return new ChatOpenAI({
+    apiKey: config.LM_STUDIO_API_KEY || "lm-studio",
+    configuration: {
+      baseURL: config.LM_STUDIO_API_URL,
+    },
+    modelName: activeConfig.FAST_CHAT_MODEL_NAME || activeConfig.CHAT_MODEL_NAME,
+    temperature: 0.7,
+  });
+}
+
 // Legacy export for backwards compatibility (uses env vars only)
 // DEPRECATED: Use getChatModel() instead to respect database settings
 export const chatModel = new ChatOpenAI({
