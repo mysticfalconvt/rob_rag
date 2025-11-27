@@ -27,6 +27,7 @@ import { analyzeReferencedSources } from "@/lib/sourceAnalysis";
 import { initializeApp } from "@/lib/init";
 import { generateToolsForConfiguredPlugins } from "@/lib/toolGenerator";
 import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
+import { generateUtilityTools } from "@/lib/utilityTools";
 
 export async function POST(req: NextRequest) {
   try {
@@ -384,7 +385,11 @@ export async function POST(req: NextRequest) {
 
     if (supportsTools) {
       try {
-        tools = await generateToolsForConfiguredPlugins();
+        // Get both plugin tools and utility tools
+        const pluginTools = await generateToolsForConfiguredPlugins();
+        const utilityTools = generateUtilityTools();
+        tools = [...pluginTools, ...utilityTools];
+
         if (tools.length > 0) {
 
           // Add guidance about tool usage
