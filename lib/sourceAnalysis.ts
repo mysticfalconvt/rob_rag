@@ -120,7 +120,6 @@ export async function analyzeReferencedSources(
       sourcesWithRelevance[0].isReferenced = true;
     }
 
-
     return sourcesWithRelevance;
   } catch (error) {
     console.error("[SourceAnalysis] Error analyzing sources:", error);

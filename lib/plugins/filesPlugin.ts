@@ -125,7 +125,9 @@ export class FilesPlugin implements DataSourcePlugin {
       }
 
       const data = await response.json();
-      const points = Array.isArray(data.result?.points) ? data.result.points : [];
+      const points = Array.isArray(data.result?.points)
+        ? data.result.points
+        : [];
 
       return points.map((p: any) => ({
         content: p.payload?.content as string,
@@ -192,7 +194,9 @@ export class FilesPlugin implements DataSourcePlugin {
     ];
   }
 
-  async scan(options?: { source?: "uploaded" | "synced" | "all" }): Promise<ScanResult> {
+  async scan(options?: {
+    source?: "uploaded" | "synced" | "all";
+  }): Promise<ScanResult> {
     try {
       const source = options?.source || "all";
 
@@ -204,7 +208,9 @@ export class FilesPlugin implements DataSourcePlugin {
         const prisma = await import("../prisma");
 
         const allFiles = await getAllFiles(config.DOCUMENTS_FOLDER_PATH);
-        const uploadedFiles = allFiles.filter((f) => f.includes("/File Uploads/"));
+        const uploadedFiles = allFiles.filter((f) =>
+          f.includes("/File Uploads/"),
+        );
 
         let indexed = 0;
         for (const filePath of uploadedFiles) {

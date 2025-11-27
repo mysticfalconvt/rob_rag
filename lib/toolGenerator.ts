@@ -94,9 +94,10 @@ function generateToolsForPlugin(
               })
               .join("\n");
 
-            const preview = results.length > 50
-              ? `\n\n(Showing first 50 of ${results.length} results)`
-              : '';
+            const preview =
+              results.length > 50
+                ? `\n\n(Showing first 50 of ${results.length} results)`
+                : "";
 
             return `ACCURATE DATABASE COUNT: ${results.length} matching results.\n\nSample titles:${preview}\n${titleList}`;
           }

@@ -148,7 +148,9 @@ export class PaperlessPlugin implements DataSourcePlugin {
       }
 
       const data = await response.json();
-      const points = Array.isArray(data.result?.points) ? data.result.points : [];
+      const points = Array.isArray(data.result?.points)
+        ? data.result.points
+        : [];
 
       let results = points.map((p: any) => ({
         content: p.payload?.content as string,
@@ -169,15 +171,16 @@ export class PaperlessPlugin implements DataSourcePlugin {
           if (!docTags) return false;
 
           // Handle both string (pipe-separated) and array formats
-          const tagList: string[] = typeof docTags === 'string'
-            ? docTags.split('|').map((t: string) => t.trim().toLowerCase())
-            : Array.isArray(docTags)
-            ? docTags.map((t: any) => String(t).toLowerCase())
-            : [];
+          const tagList: string[] =
+            typeof docTags === "string"
+              ? docTags.split("|").map((t: string) => t.trim().toLowerCase())
+              : Array.isArray(docTags)
+                ? docTags.map((t: any) => String(t).toLowerCase())
+                : [];
 
           // Check if any search tag is contained in any document tag
           return searchTags.some((searchTag: string) =>
-            tagList.some((docTag: string) => docTag.includes(searchTag))
+            tagList.some((docTag: string) => docTag.includes(searchTag)),
           );
         });
       }

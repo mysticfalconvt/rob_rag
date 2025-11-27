@@ -118,11 +118,21 @@ export class GoodreadsPlugin implements DataSourcePlugin {
 
     // Date range filters
     if (params.startDate && params.endDate) {
-      builder.dateRange("dateRead", new Date(params.startDate), new Date(params.endDate));
+      builder.dateRange(
+        "dateRead",
+        new Date(params.startDate),
+        new Date(params.endDate),
+      );
     } else if (params.startDate) {
-      builder.greaterThanOrEqual("dateRead", new Date(params.startDate).toISOString());
+      builder.greaterThanOrEqual(
+        "dateRead",
+        new Date(params.startDate).toISOString(),
+      );
     } else if (params.endDate) {
-      builder.lessThanOrEqual("dateRead", new Date(params.endDate).toISOString());
+      builder.lessThanOrEqual(
+        "dateRead",
+        new Date(params.endDate).toISOString(),
+      );
     }
 
     // Read count filter
@@ -163,7 +173,9 @@ export class GoodreadsPlugin implements DataSourcePlugin {
       }
 
       const data = await response.json();
-      const points = Array.isArray(data.result?.points) ? data.result.points : [];
+      const points = Array.isArray(data.result?.points)
+        ? data.result.points
+        : [];
 
       return points.map((p: any) => ({
         content: p.payload?.content as string,
@@ -192,13 +204,15 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "minRating",
             type: "number",
             required: false,
-            description: "Minimum rating (1-5 stars). Use minRating=5 to find 5-star books.",
+            description:
+              "Minimum rating (1-5 stars). Use minRating=5 to find 5-star books.",
           },
           {
             name: "maxRating",
             type: "number",
             required: false,
-            description: "Maximum rating (1-5 stars). Use maxRating=5 with minRating=5 to find exactly 5-star books.",
+            description:
+              "Maximum rating (1-5 stars). Use maxRating=5 with minRating=5 to find exactly 5-star books.",
           },
           {
             name: "author",
@@ -210,7 +224,8 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "limit",
             type: "number",
             required: false,
-            description: "Maximum number of results to return (default: 500). Should capture all books in most cases.",
+            description:
+              "Maximum number of results to return (default: 500). Should capture all books in most cases.",
           },
         ],
       },
@@ -235,7 +250,8 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "limit",
             type: "number",
             required: false,
-            description: "Maximum number of results to return (default: 500). Should capture all books in most cases.",
+            description:
+              "Maximum number of results to return (default: 500). Should capture all books in most cases.",
           },
         ],
       },
@@ -260,7 +276,8 @@ export class GoodreadsPlugin implements DataSourcePlugin {
             name: "limit",
             type: "number",
             required: false,
-            description: "Maximum number of results to return (default: 500). Should capture all books in most cases.",
+            description:
+              "Maximum number of results to return (default: 500). Should capture all books in most cases.",
           },
         ],
       },

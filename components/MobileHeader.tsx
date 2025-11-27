@@ -10,7 +10,7 @@ interface MobileHeaderProps {
 export default function MobileHeader({ title }: MobileHeaderProps) {
   const handleMobileMenuClick = () => {
     // Dispatch custom event to open sidebar menu
-    window.dispatchEvent(new CustomEvent('openMobileMenu'));
+    window.dispatchEvent(new CustomEvent("openMobileMenu"));
   };
 
   return (
@@ -33,4 +33,3 @@ export default function MobileHeader({ title }: MobileHeaderProps) {
     </div>
   );
 }
-

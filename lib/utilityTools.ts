@@ -56,14 +56,16 @@ function createCurrentDateTimeTool(): DynamicStructuredTool {
           const parts = formatter.formatToParts(date);
 
           // Extract date components
-          const year = parts.find(p => p.type === 'year')?.value;
-          const month = parts.find(p => p.type === 'month')?.value;
-          const day = parts.find(p => p.type === 'day')?.value;
-          const hour = parts.find(p => p.type === 'hour')?.value;
-          const minute = parts.find(p => p.type === 'minute')?.value;
-          const second = parts.find(p => p.type === 'second')?.value;
+          const year = parts.find((p) => p.type === "year")?.value;
+          const month = parts.find((p) => p.type === "month")?.value;
+          const day = parts.find((p) => p.type === "day")?.value;
+          const hour = parts.find((p) => p.type === "hour")?.value;
+          const minute = parts.find((p) => p.type === "minute")?.value;
+          const second = parts.find((p) => p.type === "second")?.value;
 
-          date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+          date = new Date(
+            `${year}-${month}-${day}T${hour}:${minute}:${second}`,
+          );
         }
 
         let result: string;
@@ -196,9 +198,7 @@ function createDateDifferenceTool(): DynamicStructuredTool {
     description:
       "Calculate the difference between two dates. Returns the difference in days, weeks, months, and years. Useful for questions like 'how many days until Christmas' or 'how long ago was that date'.",
     schema: z.object({
-      startDate: z
-        .string()
-        .describe("First date in YYYY-MM-DD format"),
+      startDate: z.string().describe("First date in YYYY-MM-DD format"),
       endDate: z
         .string()
         .optional()

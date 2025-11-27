@@ -127,7 +127,6 @@ export async function POST(req: NextRequest) {
     const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
     const skipRagForTools = isCountingQuery && sourceFilter !== "none";
 
-
     if (sourceFilter !== "none" && !skipRagForTools) {
       // Enhance search query based on context
       if (isFirstMessage) {
@@ -243,7 +242,8 @@ export async function POST(req: NextRequest) {
       }
     } else if (skipRagForTools) {
       // For counting queries, use a special prompt that emphasizes tool usage
-      systemPrompt = `You are a helpful assistant with access to database query tools. ` +
+      systemPrompt =
+        `You are a helpful assistant with access to database query tools. ` +
         `The user has asked a counting or metadata query. You should use the appropriate tool to get accurate results from the database. ` +
         `Do not make up or estimate numbers - only use the exact counts returned by the tools.`;
       if (userContextString) {
@@ -264,17 +264,13 @@ export async function POST(req: NextRequest) {
       | "smart";
     const windowSize = contextSettings?.slidingWindowSize ?? 10;
 
-    const {
-      messages: managedMessages,
-      summary,
-    } = await manageContext(
+    const { messages: managedMessages, summary } = await manageContext(
       messages.slice(0, -1), // Exclude current message (we'll add it separately)
       systemPrompt,
       maxTokens,
       strategy,
       windowSize,
     );
-
 
     // 4. Prepare messages for LangChain
     const langchainMessages: (SystemMessage | HumanMessage | AIMessage)[] = [
@@ -377,7 +373,8 @@ export async function POST(req: NextRequest) {
     const chatModel = await getChatModel(); // Get model instance with current settings
 
     // Check if model supports tool calling and generate tools
-    const modelName = (chatModel as any).modelName || (chatModel as any).model || "";
+    const modelName =
+      (chatModel as any).modelName || (chatModel as any).model || "";
     const supportsTools = shouldEnableIterativeRetrieval(modelName);
 
     let tools: any[] = [];
@@ -391,21 +388,24 @@ export async function POST(req: NextRequest) {
         tools = [...pluginTools, ...utilityTools];
 
         if (tools.length > 0) {
-
           // Add guidance about tool usage
           const toolGuidanceMessage = new SystemMessage(
             `You have access to tools that query databases directly for ACCURATE counts and metadata. ` +
-            `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
-            `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
-            `The context documents are just a semantic search sample (limited to ~20 items). ` +
-            `The tools query the FULL database and return the ACCURATE total count. ` +
-            `ALWAYS report the count from the tool result, not from the context.`
+              `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
+              `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
+              `The context documents are just a semantic search sample (limited to ~20 items). ` +
+              `The tools query the FULL database and return the ACCURATE total count. ` +
+              `ALWAYS report the count from the tool result, not from the context.`,
           );
-          const messagesWithGuidance = [...langchainMessages, toolGuidanceMessage];
+          const messagesWithGuidance = [
+            ...langchainMessages,
+            toolGuidanceMessage,
+          ];
 
           // First, check if LLM wants to use any tools
           const modelWithTools = chatModel.bindTools(tools);
-          const toolCheckResponse = await modelWithTools.invoke(messagesWithGuidance);
+          const toolCheckResponse =
+            await modelWithTools.invoke(messagesWithGuidance);
 
           // Check if the response contains tool calls
           if (
@@ -434,9 +434,10 @@ export async function POST(req: NextRequest) {
               const toolResultsText = toolResults.join("\n\n");
 
               // Check if tool returned 0 results - if so, fall back to RAG search
-              const toolReturnedZero = toolResultsText.includes("Count: 0") ||
-                                       toolResultsText.includes("count: 0") ||
-                                       toolResultsText.includes("0 matching results");
+              const toolReturnedZero =
+                toolResultsText.includes("Count: 0") ||
+                toolResultsText.includes("count: 0") ||
+                toolResultsText.includes("0 matching results");
 
               if (toolReturnedZero && skipRagForTools) {
                 // Perform RAG search now
@@ -456,7 +457,9 @@ export async function POST(req: NextRequest) {
                 context = contextParts.join("\n\n");
 
                 // Update system prompt to include the RAG context
-                systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, { context });
+                systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, {
+                  context,
+                });
                 if (userContextString) {
                   systemPrompt += `\n\n${userContextString}`;
                 }
@@ -597,7 +600,6 @@ export async function POST(req: NextRequest) {
             let analyzedSources = sourcesData.sources;
             if (fullResponse && sourcesData.sources.length > 0) {
               try {
-
                 analyzedSources = await analyzeReferencedSources(
                   fullResponse,
                   sourcesData.sources,
