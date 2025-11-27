@@ -44,16 +44,21 @@ function createCurrentDateTimeTool(): DynamicStructuredTool {
         switch (format) {
           case "iso":
             // For ISO, show the time in the specified timezone
-            result = now.toLocaleString("en-US", {
-              timeZone: tz,
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: false,
-            }).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, "$3-$1-$2T$4:$5:$6");
+            result = now
+              .toLocaleString("en-US", {
+                timeZone: tz,
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              })
+              .replace(
+                /(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/,
+                "$3-$1-$2T$4:$5:$6",
+              );
             break;
           case "date":
             result = now.toLocaleDateString("en-CA", { timeZone: tz }); // en-CA gives YYYY-MM-DD
@@ -85,10 +90,13 @@ function createCurrentDateTimeTool(): DynamicStructuredTool {
         }
 
         // Get timezone abbreviation (EST/EDT, PST/PDT, etc.)
-        const tzAbbr = now.toLocaleTimeString("en-US", {
-          timeZone: tz,
-          timeZoneName: "short",
-        }).split(" ").pop();
+        const tzAbbr = now
+          .toLocaleTimeString("en-US", {
+            timeZone: tz,
+            timeZoneName: "short",
+          })
+          .split(" ")
+          .pop();
 
         return JSON.stringify({
           success: true,

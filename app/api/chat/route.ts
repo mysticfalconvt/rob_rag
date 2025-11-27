@@ -28,6 +28,7 @@ import { initializeApp } from "@/lib/init";
 import { generateToolsForConfiguredPlugins } from "@/lib/toolGenerator";
 import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 import { generateUtilityTools } from "@/lib/utilityTools";
+import { routeQuery } from "@/lib/queryRouter";
 
 export async function POST(req: NextRequest) {
   try {
@@ -80,6 +81,10 @@ export async function POST(req: NextRequest) {
 
     // Check if this is the first message
     const isFirstMessage = messages.length === 1;
+
+    // Route query to determine optimization strategy
+    const queryRoute = routeQuery(query, isFirstMessage, messages.slice(0, -1));
+    console.log(`[QueryRouter] ${queryRoute.reason}`);
 
     // Create or get conversation
     let convId = conversationId;
@@ -136,8 +141,8 @@ export async function POST(req: NextRequest) {
           userProfile.userName,
           userProfile.userBio,
         );
-      } else {
-        // Follow-up message: Rephrase if needed
+      } else if (!queryRoute.skipRephrasing) {
+        // Follow-up message: Rephrase if needed (skip for fast path)
         const { rephrased, wasRephrased } = await rephraseQuestionIfNeeded(
           query,
           messages.slice(0, -1),
@@ -151,13 +156,19 @@ export async function POST(req: NextRequest) {
       const clampedSourceCount = Math.max(1, Math.min(35, sourceCount));
 
       if (!sourceFilter || sourceFilter === "all") {
-        // Smart search: analyze query and use optimal sources/chunk count
-        const smartResult = await smartSearch(
-          searchQuery,
-          undefined, // No user filter
-          clampedSourceCount, // Max chunks
-        );
-        searchResults = smartResult.results;
+        // Fast path: use direct search, skip two-stage probe for simple queries
+        if (queryRoute.path === "fast") {
+          console.log("[QueryRouter] Fast path: using direct search");
+          searchResults = await search(searchQuery, 10, "all"); // Smaller chunk count for fast queries
+        } else {
+          // Slow path: Smart search with two-stage analysis
+          const smartResult = await smartSearch(
+            searchQuery,
+            undefined, // No user filter
+            clampedSourceCount, // Max chunks
+          );
+          searchResults = smartResult.results;
+        }
       } else {
         // Manual filter: respect user's source selection
         searchResults = await search(
@@ -297,9 +308,53 @@ export async function POST(req: NextRequest) {
     langchainMessages.push(new HumanMessage(query));
 
     // 4.5 Check if we should retrieve more context (iterative retrieval)
+    // Fast path gets a lightweight check, slow path gets full iterative retrieval
     let additionalSources: any[] = [];
     const MAX_TOTAL_CHUNKS = 35; // Match smartRetrieval.ts maxChunks default
-    if (searchResults.length > 0 && searchResults.length < MAX_TOTAL_CHUNKS) {
+    let upgradedToSlowPath = false;
+
+    // Fast path escape hatch: quick check if we got zero or very few results
+    if (
+      queryRoute.skipIterativeRetrieval &&
+      searchResults.length > 0 &&
+      searchResults.length < 3
+    ) {
+      console.log(
+        `[QueryRouter] Fast path got only ${searchResults.length} results, checking if upgrade needed`,
+      );
+      try {
+        const fastModel = await getFastChatModel();
+        const escapeCheck = await fastModel.invoke([
+          new SystemMessage(systemPrompt),
+          new HumanMessage(query),
+          new HumanMessage(
+            "Can you answer this question with the provided context? Reply with ONLY 'YES' or 'NO'.",
+          ),
+        ]);
+        const canAnswer =
+          typeof escapeCheck.content === "string"
+            ? escapeCheck.content.trim().toUpperCase()
+            : "";
+
+        if (canAnswer.includes("NO")) {
+          console.log("[QueryRouter] Fast path upgrading to slow path");
+          upgradedToSlowPath = true;
+          queryRoute.skipIterativeRetrieval = false;
+          queryRoute.path = "slow";
+        }
+      } catch (error) {
+        // Continue with fast path on error
+        console.log(
+          "[QueryRouter] Escape hatch check failed, continuing fast path",
+        );
+      }
+    }
+
+    if (
+      !queryRoute.skipIterativeRetrieval &&
+      searchResults.length > 0 &&
+      searchResults.length < MAX_TOTAL_CHUNKS
+    ) {
       // Only check if we have some results but not at max
 
       // Quick check with first ~200 chars of a fast preview
@@ -597,8 +652,13 @@ export async function POST(req: NextRequest) {
             );
 
             // Analyze which sources were actually referenced
+            // Skip for fast path queries with few sources
             let analyzedSources = sourcesData.sources;
-            if (fullResponse && sourcesData.sources.length > 0) {
+            if (
+              fullResponse &&
+              sourcesData.sources.length > 0 &&
+              !queryRoute.skipSourceAnalysis
+            ) {
               try {
                 analyzedSources = await analyzeReferencedSources(
                   fullResponse,
