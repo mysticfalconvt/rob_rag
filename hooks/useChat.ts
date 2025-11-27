@@ -58,7 +58,6 @@ export function useChat(conversationId: string | null) {
       | "goodreads"
       | "none"
       | string[],
-    sourceCount: number = 5,
   ) => {
     if (!input.trim() || isLoading) return;
 
@@ -74,7 +73,6 @@ export function useChat(conversationId: string | null) {
           messages: [...messages, userMessage],
           conversationId: currentConversationId,
           sourceFilter,
-          sourceCount,
         }),
       });
 

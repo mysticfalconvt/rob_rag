@@ -11,7 +11,6 @@ interface GoodreadsUser {
 
 interface SettingsDialogProps {
   isOpen: boolean;
-  sourceCount: number;
   useUploaded: boolean;
   useSynced: boolean;
   usePaperless: boolean;
@@ -19,7 +18,6 @@ interface SettingsDialogProps {
   conversationId: string | null;
   isSaving: boolean;
   onClose: () => void;
-  onSourceCountChange: (count: number) => void;
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
   onTogglePaperless: () => void;
@@ -30,7 +28,6 @@ interface SettingsDialogProps {
 
 export default function SettingsDialog({
   isOpen,
-  sourceCount,
   useUploaded,
   useSynced,
   usePaperless,
@@ -38,7 +35,6 @@ export default function SettingsDialog({
   conversationId,
   isSaving,
   onClose,
-  onSourceCountChange,
   onToggleUploaded,
   onToggleSynced,
   onTogglePaperless,
@@ -146,34 +142,6 @@ export default function SettingsDialog({
                   ></i>
                 </button>
               ))}
-            </div>
-          </div>
-
-          <div className={styles.section}>
-            <h3>RAG Settings</h3>
-            <div className={styles.setting}>
-              <div className={styles.labelRow}>
-                <label htmlFor="sourceCount">Number of Sources</label>
-                <span className={styles.valueDisplay}>{sourceCount}</span>
-              </div>
-              <p className={styles.description}>
-                Controls how many document chunks are retrieved for each query.
-                Default is 10. Higher values may improve accuracy but increase
-                latency.
-              </p>
-              <input
-                id="sourceCount"
-                type="range"
-                min="1"
-                max="20"
-                value={sourceCount}
-                onChange={(e) => onSourceCountChange(Number(e.target.value))}
-                className={styles.slider}
-              />
-              <div className={styles.sliderLabels}>
-                <span>1</span>
-                <span>20</span>
-              </div>
             </div>
           </div>
 

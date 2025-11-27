@@ -22,7 +22,6 @@ function ChatPageContent() {
     useConversationActions(currentConversationId);
 
   const [input, setInput] = useState("");
-  const [sourceCount, setSourceCount] = useState(10);
   const [useUploaded, setUseUploaded] = useState(true);
   const [useSynced, setUseSynced] = useState(true);
   const [usePaperless, setUsePaperless] = useState(true);
@@ -113,7 +112,7 @@ function ChatPageContent() {
     if (!input.trim() || isLoading) return;
 
     const sourceFilter = getSourceFilter();
-    await sendMessage(input, sourceFilter, sourceCount);
+    await sendMessage(input, sourceFilter);
     setInput("");
   };
 
@@ -192,7 +191,6 @@ function ChatPageContent() {
         <ChatInput
           value={input}
           isLoading={isLoading}
-          sourceCount={sourceCount}
           showSettings={showSettings}
           useUploaded={useUploaded}
           useSynced={useSynced}
@@ -202,7 +200,6 @@ function ChatPageContent() {
           isSaving={isSaving}
           onChange={setInput}
           onSubmit={handleSubmit}
-          onSourceCountChange={setSourceCount}
           onToggleSettings={() => setShowSettings(!showSettings)}
           onToggleUploaded={() => setUseUploaded(!useUploaded)}
           onToggleSynced={() => setUseSynced(!useSynced)}

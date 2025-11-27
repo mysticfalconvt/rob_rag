@@ -12,7 +12,6 @@ interface GoodreadsUser {
 interface ChatInputProps {
   value: string;
   isLoading: boolean;
-  sourceCount: number;
   showSettings: boolean;
   useUploaded: boolean;
   useSynced: boolean;
@@ -22,7 +21,6 @@ interface ChatInputProps {
   isSaving: boolean;
   onChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
-  onSourceCountChange: (count: number) => void;
   onToggleSettings: () => void;
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
@@ -35,7 +33,6 @@ interface ChatInputProps {
 export default function ChatInput({
   value,
   isLoading,
-  sourceCount,
   showSettings,
   useUploaded,
   useSynced,
@@ -45,7 +42,6 @@ export default function ChatInput({
   isSaving,
   onChange,
   onSubmit,
-  onSourceCountChange,
   onToggleSettings,
   onToggleUploaded,
   onToggleSynced,
@@ -81,7 +77,6 @@ export default function ChatInput({
 
       <SettingsDialog
         isOpen={showSettings}
-        sourceCount={sourceCount}
         useUploaded={useUploaded}
         useSynced={useSynced}
         usePaperless={usePaperless}
@@ -89,7 +84,6 @@ export default function ChatInput({
         conversationId={conversationId}
         isSaving={isSaving}
         onClose={onToggleSettings}
-        onSourceCountChange={onSourceCountChange}
         onToggleUploaded={onToggleUploaded}
         onToggleSynced={onToggleSynced}
         onTogglePaperless={onTogglePaperless}

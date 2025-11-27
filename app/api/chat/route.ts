@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       messages,
       conversationId,
       sourceFilter,
-      sourceCount = 5,
+      sourceCount = 35, // Default to max, smart retrieval will adjust down based on complexity
     } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const query = lastMessage.content;
