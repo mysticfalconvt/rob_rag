@@ -19,7 +19,7 @@ function createCurrentDateTimeTool(): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: "get_current_datetime",
     description:
-      "Get the current date and time. Useful for answering questions about 'today', 'now', 'current time', etc.",
+      "Get the current date and time in America/New_York timezone (EST/EDT). Useful for answering questions about 'today', 'now', 'current time', etc.",
     schema: z.object({
       format: z
         .enum(["iso", "date", "time", "datetime", "timestamp"])
@@ -31,60 +31,49 @@ function createCurrentDateTimeTool(): DynamicStructuredTool {
         .string()
         .optional()
         .describe(
-          "Optional timezone (e.g., 'America/New_York', 'Europe/London'). Defaults to system timezone.",
+          "Optional timezone (e.g., 'America/New_York', 'America/Los_Angeles', 'Europe/London'). Defaults to America/New_York (EST/EDT).",
         ),
     }),
     func: async ({ format, timezone }) => {
       try {
         const now = new Date();
-
-        // Handle timezone if specified
-        let date = now;
-        if (timezone) {
-          // Convert to specified timezone
-          const options: Intl.DateTimeFormatOptions = {
-            timeZone: timezone,
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-            hour12: false,
-          };
-          const formatter = new Intl.DateTimeFormat("en-US", options);
-          const parts = formatter.formatToParts(date);
-
-          // Extract date components
-          const year = parts.find((p) => p.type === "year")?.value;
-          const month = parts.find((p) => p.type === "month")?.value;
-          const day = parts.find((p) => p.type === "day")?.value;
-          const hour = parts.find((p) => p.type === "hour")?.value;
-          const minute = parts.find((p) => p.type === "minute")?.value;
-          const second = parts.find((p) => p.type === "second")?.value;
-
-          date = new Date(
-            `${year}-${month}-${day}T${hour}:${minute}:${second}`,
-          );
-        }
+        // Default to America/New_York if no timezone specified
+        const tz = timezone || "America/New_York";
 
         let result: string;
         switch (format) {
           case "iso":
-            result = date.toISOString();
+            // For ISO, show the time in the specified timezone
+            result = now.toLocaleString("en-US", {
+              timeZone: tz,
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            }).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, "$3-$1-$2T$4:$5:$6");
             break;
           case "date":
-            result = date.toISOString().split("T")[0];
+            result = now.toLocaleDateString("en-CA", { timeZone: tz }); // en-CA gives YYYY-MM-DD
             break;
           case "time":
-            result = date.toTimeString().split(" ")[0];
+            result = now.toLocaleTimeString("en-US", {
+              timeZone: tz,
+              hour12: false,
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
             break;
           case "timestamp":
-            result = date.getTime().toString();
+            result = now.getTime().toString();
             break;
           case "datetime":
           default:
-            result = date.toLocaleString("en-US", {
+            result = now.toLocaleString("en-US", {
+              timeZone: tz,
               weekday: "long",
               year: "numeric",
               month: "long",
@@ -92,16 +81,22 @@ function createCurrentDateTimeTool(): DynamicStructuredTool {
               hour: "2-digit",
               minute: "2-digit",
               second: "2-digit",
-              timeZone: timezone,
             });
         }
+
+        // Get timezone abbreviation (EST/EDT, PST/PDT, etc.)
+        const tzAbbr = now.toLocaleTimeString("en-US", {
+          timeZone: tz,
+          timeZoneName: "short",
+        }).split(" ").pop();
 
         return JSON.stringify({
           success: true,
           currentDateTime: result,
           format,
-          timezone: timezone || "system default",
-          timestamp: date.getTime(),
+          timezone: tz,
+          timezoneAbbr: tzAbbr,
+          timestamp: now.getTime(),
         });
       } catch (error) {
         return JSON.stringify({
