@@ -2,20 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { getPaperlessClient } from "@/lib/paperless";
 import prisma from "@/lib/prisma";
-import { qdrantClient } from "@/lib/qdrant";
 import { requireAuth } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
   try {
     // Require authentication to view system status
     await requireAuth(req);
-    // 1. Check Qdrant
-    let qdrantStatus = "disconnected";
+
+    // 1. Check PostgreSQL (via Prisma)
+    let postgresStatus = "disconnected";
     try {
-      await qdrantClient.getCollections();
-      qdrantStatus = "connected";
+      await prisma.$queryRaw`SELECT 1`;
+      postgresStatus = "connected";
     } catch (e) {
-      console.error("Qdrant check failed:", e);
+      console.error("PostgreSQL check failed:", e);
     }
 
     // 2. Check LM Studio
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
           name: user.name,
           email: user.email,
           bookCount: user._count.goodreadsBooks,
-          lastSyncedAt: user.goodreadsSources[0]?.lastSyncedAt,
+          lastSyncedAt: user.goodreadsSources?.lastSyncedAt,
         }));
       }
     } catch (e) {
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
       fileCount > 0 ? (chunkStats._sum.chunkCount || 0) / fileCount : 0;
 
     return NextResponse.json({
-      qdrant: qdrantStatus,
+      postgres: postgresStatus,
       lmStudio: lmStudioStatus,
       paperless: paperlessStatus,
       goodreads: goodreadsStatus,

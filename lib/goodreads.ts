@@ -211,15 +211,10 @@ export async function importBooksForUser(
 }
 
 /**
- * Index all books for a user into RAG system
+ * Index all books for a user into RAG system (PostgreSQL with pgvector)
  */
 export async function indexGoodreadsBooks(userId: string): Promise<number> {
-  const { v4: uuidv4 } = await import("uuid");
   const { generateEmbedding } = await import("./ai");
-  const { config } = await import("./config");
-  const { ensureCollection, COLLECTION_NAME, qdrantClient } = await import(
-    "./qdrant"
-  );
 
   // Get user with books
   const user = await prisma.goodreadsUser.findUnique({
@@ -237,29 +232,19 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
     `[indexGoodreadsBooks] User ${user.name} has ${user.goodreadsBooks.length} books`,
   );
 
-  // Delete old Goodreads points for this user
-  await ensureCollection();
-  const deleteResult = await qdrantClient.delete(COLLECTION_NAME, {
-    filter: {
-      must: [
-        {
-          key: "source",
-          match: { value: "goodreads" },
-        },
-        {
-          key: "userId",
-          match: { value: userId },
-        },
-      ],
+  // Delete old DocumentChunks for this user's books
+  const deleteResult = await prisma.documentChunk.deleteMany({
+    where: {
+      source: "goodreads",
+      userId: userId,
     },
   });
   console.log(
-    `[indexGoodreadsBooks] Deleted old vectors for user ${user.name}:`,
-    deleteResult,
+    `[indexGoodreadsBooks] Deleted ${deleteResult.count} old chunks for user ${user.name}`,
   );
 
   // Generate chunks and embeddings
-  const points = [];
+  let indexed = 0;
   for (const book of user.goodreadsBooks) {
     const chunkText = generateBookChunk(user.name, book);
     const embedding = await generateEmbedding(chunkText);
@@ -267,7 +252,7 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
     const shelves = book.shelves ? JSON.parse(book.shelves) : [];
     const filePath = `goodreads://${userId}/${book.id}`;
 
-    // Parse read dates for payload
+    // Parse read dates for storage
     let readDates: string[] = [];
     if (book.readDates) {
       try {
@@ -277,59 +262,35 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
       }
     }
 
-    points.push({
-      id: uuidv4(),
-      vector: embedding,
-      payload: {
-        content: chunkText,
-        source: "goodreads",
-        filePath: filePath,
-        fileName: book.title,
-        fileType: "goodreads",
-        userId: userId,
-        userName: user.name,
-        bookId: book.goodreadsBookId,
-        bookTitle: book.title,
-        bookAuthor: book.author,
-        userRating: book.userRating || 0,
-        dateRead: book.dateRead?.toISOString() || "", // Most recent read
-        readDates: readDates.join("|"), // Convert array to delimited string
-        readCount: book.readCount,
-        shelves: shelves.join("|"), // Convert array to delimited string
-      },
-    });
+    // Create DocumentChunk with pgvector embedding using raw SQL
+    // Prisma doesn't support vector types directly yet
+    const { v4: uuidv4 } = await import("uuid");
+    const chunkId = uuidv4();
+    const embeddingStr = `[${embedding.join(",")}]`;
+
+    await prisma.$executeRaw`
+      INSERT INTO "DocumentChunk" (
+        id, content, embedding, source, "fileName", "filePath", "fileType",
+        "bookId", "chunkIndex", "totalChunks", "userId", "userName",
+        "bookTitle", "bookAuthor", "userRating", "dateRead", "readDates",
+        "readCount", shelves, "embeddingVersion", "lastEmbedded",
+        "createdAt", "updatedAt"
+      ) VALUES (
+        ${chunkId}, ${chunkText}, ${embeddingStr}::vector, ${"goodreads"},
+        ${book.title}, ${filePath}, ${"goodreads"}, ${book.id}, ${0}, ${1},
+        ${userId}, ${user.name}, ${book.title}, ${book.author},
+        ${book.userRating}, ${book.dateRead?.toISOString()}, ${readDates.join("|")},
+        ${book.readCount}, ${shelves.join("|")}, ${1}, NOW(), NOW(), NOW()
+      )
+    `;
+    indexed++;
   }
 
-  // Upsert to Qdrant
-  if (points.length > 0) {
-    console.log(
-      `[indexGoodreadsBooks] Upserting ${points.length} points for user ${user.name}`,
-    );
-    const response = await fetch(
-      `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ points }),
-      },
-    );
+  console.log(
+    `[indexGoodreadsBooks] Successfully indexed ${indexed} books for user ${user.name}`,
+  );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(
-        `Qdrant upsert failed: ${response.status} ${response.statusText} - ${errText}`,
-      );
-    }
-    console.log(
-      `[indexGoodreadsBooks] Successfully upserted ${points.length} points for user ${user.name}`,
-    );
-  } else {
-    console.log(
-      `[indexGoodreadsBooks] No books to index for user ${user.name}`,
-    );
-  }
-
-  return points.length;
+  return indexed;
 }
 
 /**

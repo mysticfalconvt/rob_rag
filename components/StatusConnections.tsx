@@ -11,7 +11,7 @@ interface GoodreadsUserStatus {
 }
 
 interface ConnectionStatus {
-  qdrant: "connected" | "disconnected";
+  postgres: "connected" | "disconnected";
   lmStudio: "connected" | "disconnected";
   paperless: "connected" | "disconnected" | "not_configured" | "disabled";
   goodreads: "connected" | "not_configured";
@@ -27,9 +27,9 @@ export default function StatusConnections({ status }: StatusConnectionsProps) {
     <div className={styles.card}>
       <h2>Connections</h2>
       <div className={styles.item}>
-        <span>Qdrant Vector DB</span>
-        <span className={`${styles.badge} ${styles[status.qdrant]}`}>
-          {status.qdrant}
+        <span>PostgreSQL (pgvector)</span>
+        <span className={`${styles.badge} ${styles[status.postgres]}`}>
+          {status.postgres}
         </span>
       </div>
       <div className={styles.item}>

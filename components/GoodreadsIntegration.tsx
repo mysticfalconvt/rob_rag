@@ -128,16 +128,16 @@ export default function GoodreadsIntegration({
             <h3>{user.name}</h3>
             <p>Books: {user._count.goodreadsBooks}</p>
 
-            {user.goodreadsSources.length > 0 && (
+            {user.goodreadsSources && (
               <div>
                 <p>
                   RSS Feed configured
-                  {user.goodreadsSources[0].lastSyncedAt && (
+                  {user.goodreadsSources.lastSyncedAt && (
                     <span>
                       {" "}
                       - Last synced:{" "}
                       {new Date(
-                        user.goodreadsSources[0].lastSyncedAt,
+                        user.goodreadsSources.lastSyncedAt,
                       ).toLocaleString()}
                     </span>
                   )}
@@ -174,7 +174,7 @@ export default function GoodreadsIntegration({
               )}
             </div>
 
-            {user.goodreadsSources.length === 0 && (
+            {!user.goodreadsSources && (
               <div className={styles.formGroup}>
                 <label>RSS Feed URL</label>
                 <input

@@ -1,43 +1,75 @@
-version: '3.8'
-
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/mysticfalconvt/rob_rag:latest
     container_name: rob_rag_app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - 4345:3000
     environment:
-      - DATABASE_URL=file:/app/prisma/dev.db
+      # PostgreSQL database (replaces SQLite)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-robrag}:${POSTGRES_PASSWORD:-robrag_prod_password_change_me}@postgres-prod:5432/${POSTGRES_DB:-robrag_prod}
       - DOCUMENTS_FOLDER_PATH=/app/documents
-      - QDRANT_URL=http://qdrant:6333
+      # Use PostgreSQL for vectors (no Qdrant)
+      - USE_POSTGRES_VECTORS=true
       - LM_STUDIO_API_URL=${LM_STUDIO_API_URL}
       - LM_STUDIO_API_KEY=${LM_STUDIO_API_KEY}
       - EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME:-nomic-embed-text}
       - CHAT_MODEL_NAME=${CHAT_MODEL_NAME:-llama-3.2-1b-instruct}
       - APP_NAME=${APP_NAME:-RobRAG}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_NAME=${ADMIN_NAME}
+      - SESSION_SECRET=${SESSION_SECRET}
     volumes:
-      - ./prisma:/app/prisma:z
-      - ./documents:/app/documents:z
+      - /mnt/user/appdata/rob_rag/app/documents:/app/documents
+      - /mnt/user/MiscStorage/sync/Sync/Obsidian/Robs Info:/app/documents/Sync Files/obsidian
     depends_on:
-      - qdrant
+      postgres-prod:
+        condition: service_healthy
     networks:
-      - rob_rag_network
+      - rag-network
 
-  qdrant:
-    image: qdrant/qdrant:latest
+  # PostgreSQL with pgvector for production
+  postgres-prod:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-rag-prod
     restart: unless-stopped
-    container_name: rob_rag_qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-robrag}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-robrag_prod_password_change_me}
+      - POSTGRES_DB=${POSTGRES_DB:-robrag_prod}
     volumes:
-      - ./qdrant_storage:/qdrant/storage:z
+      - /mnt/user/appdata/rob_rag/pgProd:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    # No external ports - internal access only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-robrag} -d ${POSTGRES_DB:-robrag_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
-      - rob_rag_network
+      - rag-network
+
+  # PostgreSQL dev database (exposed for local development tools)
+  postgres-dev:
+    image: pgvector/pgvector:pg16
+    container_name: postgres-rag-dev
+    restart: unless-stopped
+    ports:
+      - 4344:5432  # Using old Qdrant port for consistency
+    environment:
+      - POSTGRES_USER=${DEV_POSTGRES_USER:-robrag}
+      - POSTGRES_PASSWORD=${DEV_POSTGRES_PASSWORD:-robrag_dev_password}
+      - POSTGRES_DB=${DEV_POSTGRES_DB:-robrag_dev}
+    volumes:
+      - /mnt/user/appdata/rob_rag/pgDev:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - rag-network
 
 networks:
-  rob_rag_network:
+  rag-network:
     driver: bridge
+
+volumes: {}

@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
 
         // Step 1: Sync RSS feeds for users that have them configured
         for (const user of users) {
-          if (user.goodreadsSources.length > 0) {
-            const source = user.goodreadsSources[0];
+          if (user.goodreadsSources) {
+            const source = user.goodreadsSources;
             try {
               console.log(`[Goodreads Scan] Syncing RSS feed for ${user.name}`);
               const response = await fetch(source.rssFeedUrl);

@@ -7,9 +7,6 @@ import {
   ScanResult,
 } from "../dataSourceRegistry";
 import { SearchResult } from "../retrieval";
-import { createQueryBuilder } from "../queryBuilder";
-import { config } from "../config";
-import { COLLECTION_NAME } from "../qdrant";
 import prisma from "../prisma";
 
 /**
@@ -96,94 +93,72 @@ export class GoodreadsPlugin implements DataSourcePlugin {
   }
 
   async queryByMetadata(params: QueryParams): Promise<SearchResult[]> {
-    const builder = createQueryBuilder().source(this.name);
-
-    // Handle userId if provided
-    if (params.userId) {
-      builder.userId(params.userId);
-    }
-
-    // Rating filters
-    if (params.minRating !== undefined) {
-      builder.greaterThanOrEqual("userRating", params.minRating);
-    }
-    if (params.maxRating !== undefined) {
-      builder.lessThanOrEqual("userRating", params.maxRating);
-    }
-
-    // Author filter
-    if (params.author) {
-      builder.equals("bookAuthor", params.author);
-    }
-
-    // Date range filters
-    if (params.startDate && params.endDate) {
-      builder.dateRange(
-        "dateRead",
-        new Date(params.startDate),
-        new Date(params.endDate),
-      );
-    } else if (params.startDate) {
-      builder.greaterThanOrEqual(
-        "dateRead",
-        new Date(params.startDate).toISOString(),
-      );
-    } else if (params.endDate) {
-      builder.lessThanOrEqual(
-        "dateRead",
-        new Date(params.endDate).toISOString(),
-      );
-    }
-
-    // Read count filter
-    if (params.minReadCount !== undefined) {
-      builder.greaterThanOrEqual("readCount", params.minReadCount);
-    }
-
-    // Shelf filter (would need to check if shelf string contains the value)
-    // Note: This is limited by Qdrant's string matching capabilities
-    if (params.shelf) {
-      builder.equals("shelves", params.shelf);
-    }
-
-    const filter = builder.build();
-
-    // Query Qdrant with the built filter
-    // Use very high default limit (500) to capture all items for accurate counting
-    // Treat 0 or undefined as unspecified (use default)
     const limit = params.limit && params.limit > 0 ? params.limit : 500;
 
     try {
-      const response = await fetch(
-        `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filter,
-            limit,
-            with_payload: true,
-            with_vector: false,
-          }),
-        },
-      );
+      // Build Prisma where clause
+      const where: any = {
+        source: this.name,
+      };
 
-      if (!response.ok) {
-        throw new Error(`Qdrant query failed: ${response.statusText}`);
+      if (params.userId) {
+        where.userId = params.userId;
       }
 
-      const data = await response.json();
-      const points = Array.isArray(data.result?.points)
-        ? data.result.points
-        : [];
+      if (params.minRating !== undefined || params.maxRating !== undefined) {
+        where.userRating = {};
+        if (params.minRating !== undefined) {
+          where.userRating.gte = params.minRating;
+        }
+        if (params.maxRating !== undefined) {
+          where.userRating.lte = params.maxRating;
+        }
+      }
 
-      return points.map((p: any) => ({
-        content: p.payload?.content as string,
+      if (params.author) {
+        where.bookAuthor = params.author;
+      }
+
+      if (params.startDate || params.endDate) {
+        where.dateRead = {};
+        if (params.startDate) {
+          where.dateRead.gte = new Date(params.startDate).toISOString();
+        }
+        if (params.endDate) {
+          where.dateRead.lte = new Date(params.endDate).toISOString();
+        }
+      }
+
+      if (params.minReadCount !== undefined) {
+        where.readCount = { gte: params.minReadCount };
+      }
+
+      if (params.shelf) {
+        where.shelves = { contains: params.shelf };
+      }
+
+      // Query PostgreSQL
+      const chunks = await prisma.documentChunk.findMany({
+        where,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return chunks.map((chunk) => ({
+        content: chunk.content,
         metadata: {
-          filePath: p.payload?.filePath,
-          fileName: p.payload?.fileName,
-          fileType: p.payload?.fileType,
-          ...p.payload,
+          filePath: chunk.filePath,
+          fileName: chunk.fileName,
+          fileType: chunk.fileType || undefined,
+          bookTitle: chunk.bookTitle || undefined,
+          bookAuthor: chunk.bookAuthor || undefined,
+          userRating: chunk.userRating || undefined,
+          dateRead: chunk.dateRead || undefined,
+          readDates: chunk.readDates || undefined,
+          readCount: chunk.readCount || undefined,
+          shelves: chunk.shelves || undefined,
+          userId: chunk.userId || undefined,
+          userName: chunk.userName || undefined,
         },
         score: 1.0, // Metadata query doesn't have similarity score
       }));
@@ -305,8 +280,8 @@ export class GoodreadsPlugin implements DataSourcePlugin {
 
       // Step 1: Sync RSS feeds for users that have them configured
       for (const user of users) {
-        if (user.goodreadsSources.length > 0) {
-          const source = user.goodreadsSources[0];
+        if (user.goodreadsSources) {
+          const source = user.goodreadsSources;
           try {
             console.log(`[GoodreadsPlugin] Syncing RSS feed for ${user.name}`);
             const response = await fetch(source.rssFeedUrl);

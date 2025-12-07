@@ -8,6 +8,11 @@ const envSchema = z.object({
   EMBEDDING_MODEL_NAME: z.string().default("nomic-embed-text"),
   CHAT_MODEL_NAME: z.string().default("llama-3.2-1b-instruct"),
   APP_NAME: z.string().default("RobRAG"),
+  // Feature flag for migration
+  USE_POSTGRES_VECTORS: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((val) => val === "true"),
 });
 
 export const config = envSchema.parse({
@@ -18,6 +23,7 @@ export const config = envSchema.parse({
   EMBEDDING_MODEL_NAME: process.env.EMBEDDING_MODEL_NAME,
   CHAT_MODEL_NAME: process.env.CHAT_MODEL_NAME,
   APP_NAME: process.env.APP_NAME,
+  USE_POSTGRES_VECTORS: process.env.USE_POSTGRES_VECTORS,
 });
 
 // Get active configuration from database with fallback to env vars

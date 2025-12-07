@@ -7,9 +7,7 @@ import {
   ScanResult,
 } from "../dataSourceRegistry";
 import { SearchResult } from "../retrieval";
-import { createQueryBuilder } from "../queryBuilder";
-import { config } from "../config";
-import { COLLECTION_NAME } from "../qdrant";
+import prisma from "../prisma";
 import { getPaperlessClient } from "../paperless";
 
 /**
@@ -80,85 +78,61 @@ export class PaperlessPlugin implements DataSourcePlugin {
   }
 
   async queryByMetadata(params: QueryParams): Promise<SearchResult[]> {
-    const builder = createQueryBuilder().source(this.name);
-
-    // Document ID filter
-    if (params.documentId !== undefined) {
-      builder.equals("documentId", params.documentId);
-    }
-
-    // Correspondent filter
-    if (params.correspondent) {
-      builder.equals("correspondent", params.correspondent);
-    }
-
-    // Tags filter - we'll do case-insensitive contains matching after fetching results
-    // Don't add to Qdrant filter since tags are stored as pipe-separated strings
-    // and we want case-insensitive partial matching
-
-    // Document date range
-    if (params.documentStartDate && params.documentEndDate) {
-      builder.dateRange(
-        "documentDate",
-        new Date(params.documentStartDate),
-        new Date(params.documentEndDate),
-      );
-    } else if (params.documentStartDate) {
-      builder.greaterThanOrEqual(
-        "documentDate",
-        new Date(params.documentStartDate).toISOString(),
-      );
-    } else if (params.documentEndDate) {
-      builder.lessThanOrEqual(
-        "documentDate",
-        new Date(params.documentEndDate).toISOString(),
-      );
-    }
-
-    // Added date range
-    if (params.addedStartDate && params.addedEndDate) {
-      builder.dateRange(
-        "addedDate",
-        new Date(params.addedStartDate),
-        new Date(params.addedEndDate),
-      );
-    }
-
-    const filter = builder.build();
     // Use default 500 for counting, treat 0 as unspecified
     const limit = params.limit && params.limit > 0 ? params.limit : 500;
 
     try {
-      const response = await fetch(
-        `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filter,
-            limit,
-            with_payload: true,
-            with_vector: false,
-          }),
-        },
-      );
+      // Build where clause for Prisma query
+      const where: any = {
+        source: "paperless",
+      };
 
-      if (!response.ok) {
-        throw new Error(`Qdrant query failed: ${response.statusText}`);
+      // Document ID filter
+      if (params.documentId !== undefined) {
+        where.paperlessId = params.documentId;
       }
 
-      const data = await response.json();
-      const points = Array.isArray(data.result?.points)
-        ? data.result.points
-        : [];
+      // Correspondent filter
+      if (params.correspondent) {
+        where.paperlessCorrespondent = { contains: params.correspondent };
+      }
 
-      let results = points.map((p: any) => ({
-        content: p.payload?.content as string,
+      // Document date range
+      if (params.documentStartDate && params.documentEndDate) {
+        where.documentDate = {
+          gte: new Date(params.documentStartDate).toISOString(),
+          lte: new Date(params.documentEndDate).toISOString(),
+        };
+      } else if (params.documentStartDate) {
+        where.documentDate = {
+          gte: new Date(params.documentStartDate).toISOString(),
+        };
+      } else if (params.documentEndDate) {
+        where.documentDate = {
+          lte: new Date(params.documentEndDate).toISOString(),
+        };
+      }
+
+      const chunks = await prisma.documentChunk.findMany({
+        where,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      let results = chunks.map((chunk) => ({
+        content: chunk.content,
         metadata: {
-          filePath: p.payload?.filePath,
-          fileName: p.payload?.fileName,
-          fileType: p.payload?.fileType,
-          ...p.payload,
+          filePath: chunk.filePath,
+          fileName: chunk.fileName,
+          fileType: chunk.fileType || undefined,
+          source: chunk.source,
+          paperlessId: chunk.paperlessId || undefined,
+          paperlessTitle: chunk.paperlessTitle || undefined,
+          paperlessTags: chunk.paperlessTags || undefined,
+          paperlessCorrespondent: chunk.paperlessCorrespondent || undefined,
+          documentDate: chunk.documentDate || undefined,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunk.totalChunks,
         },
         score: 1.0, // Metadata query doesn't have similarity score
       }));
@@ -167,7 +141,7 @@ export class PaperlessPlugin implements DataSourcePlugin {
       if (params.tags && Array.isArray(params.tags) && params.tags.length > 0) {
         const searchTags = params.tags.map((t: string) => t.toLowerCase());
         results = results.filter((result: any) => {
-          const docTags = result.metadata.tags;
+          const docTags = result.metadata.paperlessTags;
           if (!docTags) return false;
 
           // Handle both string (pipe-separated) and array formats

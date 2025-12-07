@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { generateEmbedding } from "./ai";
 import { config } from "./config";
 import {
@@ -9,7 +8,6 @@ import {
 } from "./files";
 import type { PaperlessDocument, PaperlessDocumentMetadata } from "./paperless";
 import prisma from "./prisma";
-import { COLLECTION_NAME, ensureCollection, qdrantClient } from "./qdrant";
 
 export async function indexFile(filePath: string, uploadedBy?: string) {
   try {
@@ -34,96 +32,52 @@ export async function indexFile(filePath: string, uploadedBy?: string) {
     const chunks = await processFile(filePath);
     console.log(`Generated ${chunks.length} chunks for ${filePath}`);
 
-    // 3. Generate embeddings
-    const points = [];
-    // Determine if this is an uploaded file or synced file
+    // 3. Determine if this is an uploaded file or synced file
     const isUploaded = filePath.includes("/File Uploads/");
     const source = isUploaded ? "uploaded" : "synced";
 
+    // 4. Delete old chunks for this file if they exist
+    await prisma.documentChunk.deleteMany({
+      where: { filePath },
+    });
+
+    // 5. Generate embeddings and create DocumentChunks
+    let chunksCreated = 0;
+    const { v4: uuidv4 } = await import("uuid");
+
     for (const chunk of chunks) {
-      const embedding = await generateEmbedding(chunk.content);
-
-      // Validate and sanitize payload
-      const payload = {
-        content: chunk.content || "",
-        filePath: chunk.metadata.filePath,
-        fileName: chunk.metadata.fileName,
-        fileType: chunk.metadata.fileType,
-        parentFolder: chunk.metadata.parentFolder,
-        chunkIndex: chunk.metadata.chunkIndex,
-        totalChunks: chunk.metadata.totalChunks,
-        fileHash: chunk.metadata.fileHash,
-        source,
-      };
-
       // Skip if content is empty or too large
-      if (!payload.content || payload.content.length === 0) {
+      if (!chunk.content || chunk.content.length === 0) {
         console.warn(`Skipping empty chunk for ${filePath}`);
         continue;
       }
-      if (payload.content.length > 100000) {
+      if (chunk.content.length > 100000) {
         console.warn(`Skipping oversized chunk for ${filePath}`);
         continue;
       }
 
-      points.push({
-        id: uuidv4(),
-        vector: embedding,
-        payload,
-      });
+      const embedding = await generateEmbedding(chunk.content);
+      const chunkId = uuidv4();
+      const embeddingStr = `[${embedding.join(",")}]`;
+
+      // Create DocumentChunk with pgvector embedding using raw SQL
+      await prisma.$executeRaw`
+        INSERT INTO "DocumentChunk" (
+          id, content, embedding, source, "fileName", "filePath", "fileType",
+          "chunkIndex", "totalChunks", "embeddingVersion", "lastEmbedded",
+          "createdAt", "updatedAt"
+        ) VALUES (
+          ${chunkId}, ${chunk.content}, ${embeddingStr}::vector, ${source},
+          ${chunk.metadata.fileName}, ${chunk.metadata.filePath}, ${chunk.metadata.fileType},
+          ${chunk.metadata.chunkIndex}, ${chunk.metadata.totalChunks}, ${1}, NOW(), NOW(), NOW()
+        )
+      `;
+      chunksCreated++;
     }
 
-    // 4. Store in Qdrant
-    await ensureCollection();
+    console.log(`Created ${chunksCreated} chunks in PostgreSQL`);
 
-    // Delete old points for this file if they exist
-    // We can delete by filter on filePath
-    await qdrantClient.delete(COLLECTION_NAME, {
-      filter: {
-        must: [
-          {
-            key: "filePath",
-            match: {
-              value: filePath,
-            },
-          },
-        ],
-      },
-    });
-
-    // Upsert new points
-    if (points.length > 0) {
-      console.log(
-        `Generated ${points.length} points. Upserting to Qdrant via fetch...`,
-      );
-      try {
-        const response = await fetch(
-          `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ points }),
-          },
-        );
-
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(
-            `Qdrant upsert failed: ${response.status} ${response.statusText} - ${errText}`,
-          );
-        }
-
-        const _result = await response.json();
-        // console.log('✅ Upsert result:', JSON.stringify(result));
-      } catch (upErr) {
-        console.error("❌ Upsert failed for file", filePath, upErr);
-        throw upErr;
-      }
-    } else {
-      console.warn(`No points generated for ${filePath}`);
-    }
-
-    // 5. Update SQLite
+    // 6. Update IndexedFile
     await prisma.indexedFile.upsert({
       where: { filePath },
       update: {
@@ -169,21 +123,12 @@ export async function deleteFileIndex(filePath: string) {
   try {
     console.log(`Deleting index for: ${filePath}`);
 
-    // Delete from Qdrant
-    await qdrantClient.delete(COLLECTION_NAME, {
-      filter: {
-        must: [
-          {
-            key: "filePath",
-            match: {
-              value: filePath,
-            },
-          },
-        ],
-      },
+    // Delete DocumentChunks (cascades from IndexedFile if linked)
+    await prisma.documentChunk.deleteMany({
+      where: { filePath },
     });
 
-    // Delete from SQLite
+    // Delete from IndexedFile
     await prisma.indexedFile.delete({
       where: { filePath },
     });
@@ -298,91 +243,52 @@ export async function indexPaperlessDocument(
       `Generated ${chunks.length} chunks for Paperless document ${doc.id}`,
     );
 
-    // 3. Generate embeddings
-    const points = [];
+    // 3. Delete old chunks for this document if they exist
+    await prisma.documentChunk.deleteMany({
+      where: { filePath },
+    });
+
+    // 4. Generate embeddings and create DocumentChunks
+    let chunksCreated = 0;
+    const { v4: uuidv4 } = await import("uuid");
+
     for (const chunk of chunks) {
-      const embedding = await generateEmbedding(chunk.content);
-
-      // Validate and sanitize payload
-      const payload = {
-        content: chunk.content || "",
-        filePath: chunk.metadata.filePath,
-        fileName: chunk.metadata.fileName,
-        fileType: chunk.metadata.fileType,
-        parentFolder: chunk.metadata.parentFolder,
-        chunkIndex: chunk.metadata.chunkIndex,
-        totalChunks: chunk.metadata.totalChunks,
-        fileHash: chunk.metadata.fileHash,
-        source: chunk.metadata.source,
-        paperlessId: chunk.metadata.paperlessId || 0,
-        paperlessTags: chunk.metadata.paperlessTags || "",
-        paperlessCorrespondent: chunk.metadata.paperlessCorrespondent || "",
-        paperlessCreated: chunk.metadata.paperlessCreated || "",
-        paperlessModified: chunk.metadata.paperlessModified || "",
-      };
-
       // Skip if content is empty or too large
-      if (!payload.content || payload.content.length === 0) {
+      if (!chunk.content || chunk.content.length === 0) {
         console.warn(`Skipping empty chunk for Paperless doc ${doc.id}`);
         continue;
       }
-      if (payload.content.length > 100000) {
+      if (chunk.content.length > 100000) {
         console.warn(`Skipping oversized chunk for Paperless doc ${doc.id}`);
         continue;
       }
 
-      points.push({
-        id: uuidv4(),
-        vector: embedding,
-        payload,
-      });
+      const embedding = await generateEmbedding(chunk.content);
+      const chunkId = uuidv4();
+      const embeddingStr = `[${embedding.join(",")}]`;
+
+      // Create DocumentChunk with pgvector embedding using raw SQL
+      await prisma.$executeRaw`
+        INSERT INTO "DocumentChunk" (
+          id, content, embedding, source, "fileName", "filePath", "fileType",
+          "chunkIndex", "totalChunks", "paperlessId", "paperlessTitle",
+          "paperlessTags", "paperlessCorrespondent", "documentDate",
+          "embeddingVersion", "lastEmbedded", "createdAt", "updatedAt"
+        ) VALUES (
+          ${chunkId}, ${chunk.content}, ${embeddingStr}::vector, ${"paperless"},
+          ${chunk.metadata.fileName}, ${chunk.metadata.filePath}, ${chunk.metadata.fileType},
+          ${chunk.metadata.chunkIndex}, ${chunk.metadata.totalChunks},
+          ${chunk.metadata.paperlessId}, ${metadata.title},
+          ${chunk.metadata.paperlessTags}, ${chunk.metadata.paperlessCorrespondent},
+          ${chunk.metadata.paperlessCreated}, ${1}, NOW(), NOW(), NOW()
+        )
+      `;
+      chunksCreated++;
     }
 
-    // 4. Store in Qdrant
-    await ensureCollection();
+    console.log(`Created ${chunksCreated} chunks in PostgreSQL`);
 
-    // Delete old points for this document if they exist
-    await qdrantClient.delete(COLLECTION_NAME, {
-      filter: {
-        must: [
-          {
-            key: "filePath",
-            match: {
-              value: filePath,
-            },
-          },
-        ],
-      },
-    });
-
-    // Upsert new points
-    if (points.length > 0) {
-      console.log(`Generated ${points.length} points. Upserting to Qdrant...`);
-      try {
-        const response = await fetch(
-          `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points?wait=true`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ points }),
-          },
-        );
-
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(
-            `Qdrant upsert failed: ${response.status} ${response.statusText} - ${errText}`,
-          );
-        }
-      } catch (upErr) {
-        console.error("❌ Upsert failed for Paperless document", doc.id, upErr);
-        throw upErr;
-      }
-    } else {
-      console.warn(`No points generated for Paperless document ${doc.id}`);
-    }
-
-    // 5. Update SQLite
+    // 5. Update IndexedFile
     await prisma.indexedFile.upsert({
       where: { filePath },
       update: {

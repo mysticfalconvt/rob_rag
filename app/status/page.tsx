@@ -17,7 +17,7 @@ interface GoodreadsUserStatus {
 }
 
 interface SystemStatus {
-  qdrant: "connected" | "disconnected";
+  postgres: "connected" | "disconnected";
   lmStudio: "connected" | "disconnected";
   paperless: "connected" | "disconnected" | "not_configured" | "disabled";
   goodreads: "connected" | "not_configured";
@@ -178,7 +178,7 @@ export default function StatusPage() {
       <div className={styles.grid}>
         <StatusConnections
           status={{
-            qdrant: status.qdrant,
+            postgres: status.postgres,
             lmStudio: status.lmStudio,
             paperless: status.paperless,
             goodreads: status.goodreads,

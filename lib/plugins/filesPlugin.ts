@@ -7,9 +7,7 @@ import {
   ScanResult,
 } from "../dataSourceRegistry";
 import { SearchResult } from "../retrieval";
-import { createQueryBuilder } from "../queryBuilder";
-import { config } from "../config";
-import { COLLECTION_NAME } from "../qdrant";
+import prisma from "../prisma";
 
 /**
  * Files data source plugin
@@ -72,70 +70,52 @@ export class FilesPlugin implements DataSourcePlugin {
   }
 
   async queryByMetadata(params: QueryParams): Promise<SearchResult[]> {
-    const builder = createQueryBuilder();
-
-    // Source filter (uploaded or synced)
-    if (params.source) {
-      if (params.source === "uploaded" || params.source === "synced") {
-        builder.source(params.source);
-      } else {
-        // Default to both uploaded and synced
-        builder.sources(["uploaded", "synced"]);
-      }
-    } else {
-      // Default to both uploaded and synced
-      builder.sources(["uploaded", "synced"]);
-    }
-
-    // User ID filter (for uploaded files)
-    if (params.userId) {
-      builder.userId(params.userId);
-    }
-
-    // File type filter
-    if (params.fileType) {
-      builder.equals("fileType", params.fileType);
-    }
-
-    // File name contains (partial match - limited by Qdrant capabilities)
-    if (params.fileName) {
-      builder.equals("fileName", params.fileName);
-    }
-
-    const filter = builder.build();
     const limit = params.limit || 20;
 
     try {
-      const response = await fetch(
-        `${config.QDRANT_URL}/collections/${COLLECTION_NAME}/points/scroll`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filter,
-            limit,
-            with_payload: true,
-            with_vector: false,
-          }),
-        },
-      );
+      // Build where clause for Prisma query
+      const where: any = {
+        source: { in: [] },
+      };
 
-      if (!response.ok) {
-        throw new Error(`Qdrant query failed: ${response.statusText}`);
+      // Source filter (uploaded or synced)
+      if (params.source === "uploaded" || params.source === "synced") {
+        where.source = params.source;
+      } else {
+        // Default to both uploaded and synced
+        where.source = { in: ["uploaded", "synced"] };
       }
 
-      const data = await response.json();
-      const points = Array.isArray(data.result?.points)
-        ? data.result.points
-        : [];
+      // User ID filter (for uploaded files)
+      if (params.userId) {
+        where.userId = params.userId;
+      }
 
-      return points.map((p: any) => ({
-        content: p.payload?.content as string,
+      // File type filter
+      if (params.fileType) {
+        where.fileType = params.fileType;
+      }
+
+      // File name filter
+      if (params.fileName) {
+        where.fileName = { contains: params.fileName };
+      }
+
+      const chunks = await prisma.documentChunk.findMany({
+        where,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return chunks.map((chunk) => ({
+        content: chunk.content,
         metadata: {
-          filePath: p.payload?.filePath,
-          fileName: p.payload?.fileName,
-          fileType: p.payload?.fileType,
-          ...p.payload,
+          filePath: chunk.filePath,
+          fileName: chunk.fileName,
+          fileType: chunk.fileType || undefined,
+          source: chunk.source,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunk.totalChunks,
         },
         score: 1.0,
       }));
@@ -204,6 +184,7 @@ export class FilesPlugin implements DataSourcePlugin {
         // Scan uploaded files
         const { getAllFiles } = await import("../files");
         const { indexFile } = await import("../indexer");
+        const { config } = await import("../config");
         const path = await import("path");
         const prisma = await import("../prisma");
 
@@ -272,6 +253,7 @@ export class FilesPlugin implements DataSourcePlugin {
   async isConfigured(): Promise<boolean> {
     // Files plugin is always configured as long as DOCUMENTS_FOLDER_PATH exists
     try {
+      const { config } = await import("../config");
       const fs = await import("fs/promises");
       await fs.access(config.DOCUMENTS_FOLDER_PATH);
       return true;

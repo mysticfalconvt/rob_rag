@@ -652,13 +652,8 @@ export async function POST(req: NextRequest) {
             );
 
             // Analyze which sources were actually referenced
-            // Skip for fast path queries with few sources
             let analyzedSources = sourcesData.sources;
-            if (
-              fullResponse &&
-              sourcesData.sources.length > 0 &&
-              !queryRoute.skipSourceAnalysis
-            ) {
+            if (fullResponse && sourcesData.sources.length > 0) {
               try {
                 analyzedSources = await analyzeReferencedSources(
                   fullResponse,
