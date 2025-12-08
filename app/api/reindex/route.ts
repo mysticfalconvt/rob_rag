@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scanAllFiles } from "@/lib/indexer";
 import prisma from "@/lib/prisma";
-import { COLLECTION_NAME, qdrantClient } from "@/lib/qdrant";
 import { requireAdmin } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
@@ -14,13 +13,9 @@ export async function POST(req: NextRequest) {
     await prisma.indexedFile.deleteMany({});
     console.log("✅ Cleared IndexedFile table.");
 
-    // Delete and recreate Qdrant collection to clear all vectors
-    try {
-      await qdrantClient.deleteCollection(COLLECTION_NAME);
-      console.log("✅ Deleted Qdrant collection.");
-    } catch (_error) {
-      console.log("Collection might not exist, continuing...");
-    }
+    // Delete all DocumentChunks (vectors)
+    await prisma.documentChunk.deleteMany({});
+    console.log("✅ Cleared DocumentChunk table (vectors).");
 
     console.log("Running full re-scan...");
     const result = await scanAllFiles();

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { COLLECTION_NAME, qdrantClient } from "@/lib/qdrant";
 import { indexFile, scanPaperlessDocuments } from "@/lib/indexer";
 import { requireAdmin } from "@/lib/session";
 

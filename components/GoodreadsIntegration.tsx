@@ -8,11 +8,11 @@ interface User {
   id: string;
   name: string;
   email: string | null;
-  goodreadsSources: Array<{
+  goodreadsSources: {
     id: string;
     rssFeedUrl: string;
     lastSyncedAt: string | null;
-  }>;
+  } | null;
   _count: {
     goodreadsBooks: number;
   };
