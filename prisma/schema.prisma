@@ -221,3 +221,49 @@ model DocumentChunk {
   @@index([paperlessId])
   @@index([embedding])
 }
+
+model LLMRequest {
+  id                String     @id @default(uuid())
+  conversationId    String?
+  messageId         String?
+  userId            String?
+  requestType       String
+  model             String
+  promptTokens      Int
+  completionTokens  Int
+  totalTokens       Int
+  duration          Int
+  tokensPerSecond   Float
+  requestPayload    String
+  error             String?
+  createdAt         DateTime   @default(now())
+  calls             LLMCall[]
+
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([userId])
+  @@index([requestType])
+  @@index([model])
+  @@index([createdAt])
+}
+
+model LLMCall {
+  id              String     @id @default(uuid())
+  requestId       String
+  callType        String
+  model           String
+  promptTokens    Int
+  completionTokens Int
+  totalTokens     Int
+  duration        Int
+  tokensPerSecond Float
+  callPayload     String?
+  error           String?
+  createdAt       DateTime   @default(now())
+  request         LLMRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([callType])
+  @@index([model])
+  @@index([createdAt])
+}

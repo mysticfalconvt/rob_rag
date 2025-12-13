@@ -1,5 +1,7 @@
 import { ChatOpenAI } from "@langchain/openai";
+import type { BaseMessage } from "@langchain/core/messages";
 import { config, getActiveConfig } from "./config";
+import type { LLMCallMetrics } from "./llmTracking";
 
 /**
  * Get chat model instance with current configuration
@@ -51,7 +53,11 @@ export const chatModel = new ChatOpenAI({
  * Direct HTTP embedding function (bypasses LangChain due to compatibility issues)
  * This respects database settings for the embedding model
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  onMetrics?: (metrics: LLMCallMetrics) => void | Promise<void>
+): Promise<number[]> {
+  const startTime = Date.now();
   try {
     // Get active config to respect database settings
     const activeConfig = await getActiveConfig();
@@ -71,16 +77,49 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     });
 
     if (!response.ok) {
-      throw new Error(
-        `Embedding API returned ${response.status}: ${response.statusText}`,
-      );
+      const errorMsg = `Embedding API returned ${response.status}: ${response.statusText}`;
+      const duration = Date.now() - startTime;
+
+      if (onMetrics) {
+        await onMetrics({
+          model: activeConfig.EMBEDDING_MODEL_NAME,
+          promptTokens: estimateTokens(cleanText),
+          completionTokens: 0,
+          duration,
+          error: errorMsg,
+        });
+      }
+
+      throw new Error(errorMsg);
     }
 
     const data = await response.json();
     const embedding = data.data[0].embedding;
+    const duration = Date.now() - startTime;
+
+    // Track metrics if callback provided
+    if (onMetrics) {
+      await onMetrics({
+        model: activeConfig.EMBEDDING_MODEL_NAME,
+        promptTokens: data.usage?.prompt_tokens || estimateTokens(cleanText),
+        completionTokens: 0, // Embeddings don't generate tokens
+        duration,
+      });
+    }
 
     return embedding;
   } catch (error) {
+    const duration = Date.now() - startTime;
+    if (onMetrics && error instanceof Error) {
+      const activeConfig = await getActiveConfig();
+      await onMetrics({
+        model: activeConfig.EMBEDDING_MODEL_NAME,
+        promptTokens: estimateTokens(text),
+        completionTokens: 0,
+        duration,
+        error: error.message,
+      });
+    }
     console.error("Error generating embedding:", error);
     throw error;
   }
@@ -110,6 +149,78 @@ export async function getChatCompletion(
     return response.content;
   } catch (error) {
     console.error("Error getting chat completion:", error);
+    throw error;
+  }
+}
+
+/**
+ * Simple token estimation (roughly 4 chars per token for English)
+ */
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Estimate tokens for messages array
+ */
+export function estimateMessageTokens(messages: BaseMessage[]): number {
+  return messages.reduce((total, msg) => {
+    const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+    return total + estimateTokens(content);
+  }, 0);
+}
+
+/**
+ * Wrapper to track a chat model invocation
+ */
+export async function trackChatInvoke(
+  model: ChatOpenAI,
+  messages: BaseMessage[],
+  onMetrics?: (metrics: LLMCallMetrics) => void | Promise<void>
+) {
+  const startTime = Date.now();
+  const modelName = (model as any).modelName || (model as any).model || "unknown";
+
+  try {
+    const response = await model.invoke(messages);
+    const duration = Date.now() - startTime;
+
+    const responseContent = typeof response.content === "string"
+      ? response.content
+      : JSON.stringify(response.content);
+
+    const lastMsg = messages.length > 0 ? messages[messages.length - 1].content : "";
+    const lastMsgPreview = typeof lastMsg === "string" ? lastMsg.substring(0, 100) : "";
+
+    const metrics: LLMCallMetrics = {
+      model: modelName,
+      promptTokens: (response as any).usage_metadata?.input_tokens || estimateMessageTokens(messages),
+      completionTokens: (response as any).usage_metadata?.output_tokens || estimateTokens(responseContent),
+      duration,
+      callPayload: JSON.stringify({
+        messageCount: messages.length,
+        lastMessagePreview: lastMsgPreview
+      })
+    };
+
+    if (onMetrics) {
+      await onMetrics(metrics);
+    }
+
+    return response;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    if (onMetrics && error instanceof Error) {
+      await onMetrics({
+        model: modelName,
+        promptTokens: estimateMessageTokens(messages),
+        completionTokens: 0,
+        duration,
+        error: error.message,
+      });
+    }
+
     throw error;
   }
 }

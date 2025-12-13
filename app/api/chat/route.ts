@@ -5,7 +5,7 @@ import {
 } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { type NextRequest, NextResponse } from "next/server";
-import { getChatModel, getFastChatModel } from "@/lib/ai";
+import { getChatModel, getFastChatModel, trackChatInvoke, estimateMessageTokens } from "@/lib/ai";
 import { readFileContent } from "@/lib/files";
 import prisma from "@/lib/prisma";
 import { search } from "@/lib/retrieval";
@@ -29,6 +29,7 @@ import { generateToolsForConfiguredPlugins } from "@/lib/toolGenerator";
 import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 import { generateUtilityTools } from "@/lib/utilityTools";
 import { routeQuery } from "@/lib/queryRouter";
+import { LLMRequestTracker } from "@/lib/llmTracking";
 
 export async function POST(req: NextRequest) {
   try {
@@ -114,12 +115,26 @@ export async function POST(req: NextRequest) {
     }
 
     // Save user message
-    await prisma.message.create({
+    const userMessage = await prisma.message.create({
       data: {
         conversationId: convId,
         role: "user",
         content: query,
       },
+    });
+
+    // Initialize LLM request tracker
+    const llmTracker = new LLMRequestTracker({
+      conversationId: convId,
+      messageId: userMessage.id,
+      userId: session.user.id,
+      requestType: "user_chat",
+      requestPayload: JSON.stringify({
+        query: query.substring(0, 200),
+        sourceFilter,
+        sourceCount,
+        isFirstMessage: messages.length === 1,
+      }),
     });
 
     // 1. Retrieve context (skip if sourceFilter is 'none' or if query is a counting/metadata query)
@@ -159,13 +174,38 @@ export async function POST(req: NextRequest) {
         // Fast path: use direct search, skip two-stage probe for simple queries
         if (queryRoute.path === "fast") {
           console.log("[QueryRouter] Fast path: using direct search");
-          searchResults = await search(searchQuery, 10, "all"); // Smaller chunk count for fast queries
+          searchResults = await search(
+            searchQuery,
+            10,
+            "all",
+            (metrics) => llmTracker.trackCall("embedding", {
+              ...metrics,
+              callPayload: JSON.stringify({
+                type: "fast_path_search",
+                queryLength: searchQuery.length,
+                limit: 10,
+                sourceFilter: "all",
+                request: searchQuery,
+                response: "embedding_vector"
+              })
+            })
+          ); // Smaller chunk count for fast queries
         } else {
           // Slow path: Smart search with two-stage analysis
           const smartResult = await smartSearch(
             searchQuery,
             undefined, // No user filter
             clampedSourceCount, // Max chunks
+            (metrics) => llmTracker.trackCall("embedding", {
+              ...metrics,
+              callPayload: JSON.stringify({
+                type: "smart_search",
+                queryLength: searchQuery.length,
+                maxChunks: clampedSourceCount,
+                request: searchQuery,
+                response: "embedding_vector"
+              })
+            })
           );
           searchResults = smartResult.results;
         }
@@ -175,6 +215,17 @@ export async function POST(req: NextRequest) {
           searchQuery,
           clampedSourceCount,
           sourceFilter,
+          (metrics) => llmTracker.trackCall("embedding", {
+            ...metrics,
+            callPayload: JSON.stringify({
+              type: "manual_filter_search",
+              queryLength: searchQuery.length,
+              limit: clampedSourceCount,
+              sourceFilter: Array.isArray(sourceFilter) ? sourceFilter.join(',') : sourceFilter,
+              request: searchQuery,
+              response: "embedding_vector"
+            })
+          })
         );
       }
       // console.log('Search result scores:', searchResults.map(r => ({ file: r.metadata.fileName, score: r.score })));
@@ -324,17 +375,41 @@ export async function POST(req: NextRequest) {
       );
       try {
         const fastModel = await getFastChatModel();
-        const escapeCheck = await fastModel.invoke([
+        const escapeCheckStart = Date.now();
+        const escapeCheckMessages = [
           new SystemMessage(systemPrompt),
           new HumanMessage(query),
           new HumanMessage(
             "Can you answer this question with the provided context? Reply with ONLY 'YES' or 'NO'.",
           ),
-        ]);
+        ];
+        const escapeCheck = await fastModel.invoke(escapeCheckMessages);
+        const escapeCheckDuration = Date.now() - escapeCheckStart;
+
         const canAnswer =
           typeof escapeCheck.content === "string"
             ? escapeCheck.content.trim().toUpperCase()
             : "";
+
+        // Track this call
+        const escapeCheckResponse = typeof escapeCheck.content === "string" ? escapeCheck.content : "";
+        const escapeCheckModelName = (fastModel as any).modelName || (fastModel as any).model || (fastModel as any).kwargs?.model || "unknown";
+        await llmTracker.trackCall("iterative_preview", {
+          model: escapeCheckModelName,
+          promptTokens: (escapeCheck as any).usage_metadata?.input_tokens || estimateMessageTokens(escapeCheckMessages),
+          completionTokens: (escapeCheck as any).usage_metadata?.output_tokens || Math.ceil(escapeCheckResponse.length / 4),
+          duration: escapeCheckDuration,
+          callPayload: JSON.stringify({
+            type: "escape_hatch_check",
+            resultCount: searchResults.length,
+            decision: canAnswer.includes("NO") ? "upgrade_to_slow_path" : "continue_fast_path",
+            request: escapeCheckMessages.map(m => ({
+              role: m._getType(),
+              content: typeof m.content === "string" ? m.content.substring(0, 300) : "non-string"
+            })),
+            response: escapeCheckResponse
+          }),
+        });
 
         if (canAnswer.includes("NO")) {
           console.log("[QueryRouter] Fast path upgrading to slow path");
@@ -367,11 +442,35 @@ export async function POST(req: NextRequest) {
       );
 
       try {
+        const previewStart = Date.now();
         const preview = await fastModel.invoke(previewMessages);
+        const previewDuration = Date.now() - previewStart;
+
         const previewText =
           typeof preview.content === "string"
             ? preview.content.trim().toUpperCase()
             : "";
+
+        // Track this call
+        const previewResponse = typeof preview.content === "string" ? preview.content : "";
+        const previewModelName = (fastModel as any).modelName || (fastModel as any).model || (fastModel as any).kwargs?.model || "unknown";
+        await llmTracker.trackCall("iterative_preview", {
+          model: previewModelName,
+          promptTokens: (preview as any).usage_metadata?.input_tokens || estimateMessageTokens(previewMessages),
+          completionTokens: (preview as any).usage_metadata?.output_tokens || Math.ceil(previewResponse.length / 4),
+          duration: previewDuration,
+          callPayload: JSON.stringify({
+            type: "context_sufficiency_check",
+            currentChunks: searchResults.length,
+            maxChunks: MAX_TOTAL_CHUNKS,
+            decision: previewText.includes("NEED_MORE") ? "retrieve_more" : "sufficient",
+            request: previewMessages.map(m => ({
+              role: m._getType(),
+              content: typeof m.content === "string" ? m.content.substring(0, 300) : "non-string"
+            })),
+            response: previewResponse
+          }),
+        });
 
         if (previewText.includes("NEED_MORE")) {
           const analysis = await shouldRetrieveMore(
@@ -432,10 +531,22 @@ export async function POST(req: NextRequest) {
       (chatModel as any).modelName || (chatModel as any).model || "";
     const supportsTools = shouldEnableIterativeRetrieval(modelName);
 
+    // Skip tools if we have poor search results for general knowledge queries
+    const hasPoorSearchResults = searchResults.length < 3;
+    const isGeneralKnowledgeQuery =
+      !/\b(book|read|document|file|paperless|goodreads|author|rating|shelf)\b/i.test(query);
+    const shouldSkipTools = hasPoorSearchResults && isGeneralKnowledgeQuery && !skipRagForTools;
+
+    if (shouldSkipTools) {
+      console.log(
+        `[Tools] Skipping tool check - general knowledge query with ${searchResults.length} search results`
+      );
+    }
+
     let tools: any[] = [];
     let toolResults: string[] = [];
 
-    if (supportsTools) {
+    if (supportsTools && !shouldSkipTools) {
       try {
         // Get both plugin tools and utility tools
         const pluginTools = await generateToolsForConfiguredPlugins();
@@ -459,27 +570,91 @@ export async function POST(req: NextRequest) {
 
           // First, check if LLM wants to use any tools
           const modelWithTools = chatModel.bindTools(tools);
+          const toolCheckStart = Date.now();
           const toolCheckResponse =
             await modelWithTools.invoke(messagesWithGuidance);
+          const toolCheckDuration = Date.now() - toolCheckStart;
+
+          // Track tool check call
+          const toolCheckResponseText = typeof toolCheckResponse.content === "string" ? toolCheckResponse.content : "";
+          const toolModelName = (chatModel as any).modelName || (chatModel as any).model || (chatModel as any).kwargs?.model || "unknown";
+          await llmTracker.trackCall("tool_execution", {
+            model: toolModelName,
+            promptTokens: (toolCheckResponse as any).usage_metadata?.input_tokens || estimateMessageTokens(messagesWithGuidance),
+            completionTokens: (toolCheckResponse as any).usage_metadata?.output_tokens || Math.ceil(toolCheckResponseText.length / 4),
+            duration: toolCheckDuration,
+            callPayload: JSON.stringify({
+              type: "tool_check",
+              toolsAvailable: tools.length,
+              toolsCalled: toolCheckResponse.tool_calls?.length || 0,
+              availableTools: tools.map(t => t.name),
+              selectedTools: toolCheckResponse.tool_calls?.map(tc => tc.name) || [],
+              request: messagesWithGuidance.map(m => ({
+                role: m._getType(),
+                content: typeof m.content === "string" ? m.content.substring(0, 500) : "non-string"
+              })),
+              response: toolCheckResponseText.substring(0, 1000)
+            }),
+          });
 
           // Check if the response contains tool calls
           if (
             toolCheckResponse.tool_calls &&
             toolCheckResponse.tool_calls.length > 0
           ) {
-            // Execute each tool call
+            // Execute each tool call and track individually
             for (const toolCall of toolCheckResponse.tool_calls) {
               const tool = tools.find((t) => t.name === toolCall.name);
               if (tool) {
+                const toolStartTime = Date.now();
                 try {
                   const result = await tool.func(toolCall.args);
+                  const toolDuration = Date.now() - toolStartTime;
+
                   toolResults.push(
                     `Tool '${toolCall.name}' returned:\n${result}`,
                   );
+
+                  // Track individual tool execution
+                  await llmTracker.trackCall("tool_execution", {
+                    model: "tool",
+                    promptTokens: 0,
+                    completionTokens: 0,
+                    duration: toolDuration,
+                    callPayload: JSON.stringify({
+                      type: "tool_call",
+                      toolName: toolCall.name,
+                      args: toolCall.args,
+                      resultLength: result.length,
+                      success: true,
+                      request: { tool: toolCall.name, args: toolCall.args },
+                      response: result.substring(0, 2000)
+                    }),
+                  });
                 } catch (error) {
+                  const toolDuration = Date.now() - toolStartTime;
+                  const errorMsg = error instanceof Error ? error.message : "Unknown error";
+
                   toolResults.push(
-                    `Tool '${toolCall.name}' failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+                    `Tool '${toolCall.name}' failed: ${errorMsg}`,
                   );
+
+                  // Track failed tool execution
+                  await llmTracker.trackCall("tool_execution", {
+                    model: "tool",
+                    promptTokens: 0,
+                    completionTokens: 0,
+                    duration: toolDuration,
+                    callPayload: JSON.stringify({
+                      type: "tool_call",
+                      toolName: toolCall.name,
+                      args: toolCall.args,
+                      success: false,
+                      request: { tool: toolCall.name, args: toolCall.args },
+                      response: errorMsg
+                    }),
+                    error: errorMsg,
+                  });
                 }
               }
             }
@@ -497,10 +672,35 @@ export async function POST(req: NextRequest) {
               if (toolReturnedZero && skipRagForTools) {
                 // Perform RAG search now
                 if (!sourceFilter || sourceFilter === "all") {
-                  const smartResult = await smartSearch(query, undefined, 20);
+                  const smartResult = await smartSearch(
+                    query,
+                    undefined,
+                    20,
+                    (metrics) => llmTracker.trackCall("embedding", {
+                      ...metrics,
+                      callPayload: JSON.stringify({
+                        type: "fallback_search_after_tool_zero",
+                        queryLength: query.length,
+                        maxChunks: 20
+                      })
+                    })
+                  );
                   searchResults = smartResult.results;
                 } else {
-                  searchResults = await search(query, 20, sourceFilter);
+                  searchResults = await search(
+                    query,
+                    20,
+                    sourceFilter,
+                    (metrics) => llmTracker.trackCall("embedding", {
+                      ...metrics,
+                      callPayload: JSON.stringify({
+                        type: "fallback_search_after_tool_zero",
+                        queryLength: query.length,
+                        limit: 20,
+                        sourceFilter: Array.isArray(sourceFilter) ? sourceFilter.join(',') : sourceFilter
+                      })
+                    })
+                  );
                 }
 
                 // Build context from search results
@@ -544,6 +744,7 @@ export async function POST(req: NextRequest) {
     // Now stream the final response (use fresh model without tools to avoid tool-calling in response)
     const parser = new StringOutputParser();
     const finalModel = await getChatModel(); // Fresh instance without tool binding
+    const streamStartTime = Date.now();
     const stream = await finalModel.pipe(parser).stream(langchainMessages);
 
     // Prepare sources data
@@ -627,13 +828,31 @@ export async function POST(req: NextRequest) {
                   },
                 );
                 const titleModel = await getFastChatModel(); // Use fast model for auxiliary task
-                const titleResponse = await titleModel.invoke([
-                  new HumanMessage(titlePrompt),
-                ]);
+                const titleStart = Date.now();
+                const titleMessages = [new HumanMessage(titlePrompt)];
+                const titleResponse = await titleModel.invoke(titleMessages);
+                const titleDuration = Date.now() - titleStart;
+
                 const newTitle =
                   typeof titleResponse.content === "string"
                     ? titleResponse.content.replace(/^["']|["']$/g, "").trim()
                     : "";
+
+                // Track title generation call
+                const titleModelName = (titleModel as any).modelName || (titleModel as any).model || (titleModel as any).kwargs?.model || "unknown";
+                await llmTracker.trackCall("title_generation", {
+                  model: titleModelName,
+                  promptTokens: (titleResponse as any).usage_metadata?.input_tokens || estimateMessageTokens(titleMessages),
+                  completionTokens: (titleResponse as any).usage_metadata?.output_tokens || Math.ceil(newTitle.length / 4),
+                  duration: titleDuration,
+                  callPayload: JSON.stringify({
+                    type: "conversation_title",
+                    conversationId: convId,
+                    generatedTitle: newTitle,
+                    queryPreview: query.substring(0, 100),
+                    responseLength: fullResponse.length
+                  }),
+                });
 
                 if (newTitle) {
                   await prisma.conversation.update({
@@ -649,6 +868,31 @@ export async function POST(req: NextRequest) {
             // Update conversation topics (async, don't wait)
             updateConversationTopics(convId, fullResponse).catch((err) =>
               console.error("Failed to update topics:", err),
+            );
+
+            // Track LLM usage for this request
+            const streamDuration = Date.now() - streamStartTime;
+            const finalModelName = (finalModel as any).modelName || (finalModel as any).model || (finalModel as any).kwargs?.model || "unknown";
+            await llmTracker.trackCall("chat_completion", {
+              model: finalModelName,
+              promptTokens: estimateMessageTokens(langchainMessages),
+              completionTokens: Math.ceil(fullResponse.length / 4), // Rough estimation
+              duration: streamDuration,
+              callPayload: JSON.stringify({
+                messageCount: langchainMessages.length,
+                responseLength: fullResponse.length,
+                sourceCount: sourcesData.sources.length,
+                request: langchainMessages.map(m => ({
+                  role: m._getType(),
+                  content: typeof m.content === "string" ? m.content.substring(0, 500) : "non-string"
+                })),
+                response: fullResponse.substring(0, 2000)
+              }),
+            });
+
+            // Save all tracked calls to database
+            await llmTracker.save().catch((err) =>
+              console.error("Failed to save LLM tracking:", err),
             );
 
             // Analyze which sources were actually referenced

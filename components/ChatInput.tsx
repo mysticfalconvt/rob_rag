@@ -21,6 +21,7 @@ interface ChatInputProps {
   isSaving: boolean;
   onChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onDirectLLMSubmit: (e: React.FormEvent) => void;
   onToggleSettings: () => void;
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
@@ -42,6 +43,7 @@ export default function ChatInput({
   isSaving,
   onChange,
   onSubmit,
+  onDirectLLMSubmit,
   onToggleSettings,
   onToggleUploaded,
   onToggleSynced,
@@ -69,8 +71,17 @@ export default function ChatInput({
           >
             <i className="fas fa-cog"></i>
           </button>
-          <button type="submit" disabled={isLoading || !value.trim()}>
+          <button
+            type="button"
+            className={styles.directLLMButton}
+            onClick={onDirectLLMSubmit}
+            disabled={isLoading || !value.trim()}
+            title="Quick LLM (no RAG, no tools)"
+          >
             <i className="fas fa-paper-plane"></i>
+          </button>
+          <button type="submit" disabled={isLoading || !value.trim()} title="Full RAG search with tools">
+            <i className="fas fa-brain"></i>
           </button>
         </div>
       </form>

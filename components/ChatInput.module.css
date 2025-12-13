@@ -70,6 +70,29 @@
   cursor: not-allowed;
 }
 
+.directLLMButton {
+  background-color: #f59e0b;
+  color: #fff;
+  border: none;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.directLLMButton:hover:not(:disabled) {
+  background-color: #d97706;
+}
+
+.directLLMButton:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
 @media (prefers-color-scheme: dark) {
   .inputWrapper {
     background: #171717;
@@ -112,6 +135,13 @@
   }
 
   .menuButton {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    min-width: 2.5rem;
+  }
+
+  .directLLMButton {
     width: 2.5rem;
     height: 2.5rem;
     flex-shrink: 0;

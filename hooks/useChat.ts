@@ -187,10 +187,113 @@ export function useChat(conversationId: string | null) {
     }
   };
 
+  const sendDirectLLM = async (input: string) => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = { role: "user", content: input };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/chat-direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, userMessage],
+          conversationId: currentConversationId,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Failed to send message");
+
+      const reader = response.body?.getReader();
+      if (!reader) return;
+
+      const assistantMessage: Message = { role: "assistant", content: "" };
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      let buffer = "";
+      let foundSourcesMarker = false;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          // Stream ended - try to parse metadata if we found the marker
+          if (foundSourcesMarker && buffer.includes("__SOURCES__:")) {
+            const [contentPart, metadataPart] = buffer.split("__SOURCES__:");
+
+            setMessages((prev) => {
+              const newMessages = [...prev];
+              const lastIndex = newMessages.length - 1;
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                content: contentPart.trim(),
+              };
+              return newMessages;
+            });
+
+            try {
+              const metadata = JSON.parse(metadataPart);
+              if (metadata.conversationId && !currentConversationId) {
+                setCurrentConversationId(metadata.conversationId);
+                router.push(`/?conversation=${metadata.conversationId}`);
+              }
+            } catch (e) {
+              console.error("Failed to parse metadata:", e);
+            }
+          }
+          break;
+        }
+
+        const text = new TextDecoder().decode(value);
+        buffer += text;
+
+        // Check if we found the sources marker
+        if (!foundSourcesMarker && buffer.includes("__SOURCES__:")) {
+          foundSourcesMarker = true;
+        }
+
+        // Only update content if we haven't found sources marker yet
+        if (!foundSourcesMarker) {
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: buffer,
+            };
+            return newMessages;
+          });
+        } else {
+          // Update content without metadata part
+          const contentPart = buffer.split("__SOURCES__:")[0];
+          setMessages((prev) => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: contentPart.trim(),
+            };
+            return newMessages;
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "Sorry, something went wrong." },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     messages,
     isLoading,
     currentConversationId,
     sendMessage,
+    sendDirectLLM,
   };
 }

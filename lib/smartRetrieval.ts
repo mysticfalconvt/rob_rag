@@ -1,4 +1,5 @@
 import { search, SearchResult } from "./retrieval";
+import type { LLMCallMetrics } from "./llmTracking";
 
 /**
  * Query classification results
@@ -156,6 +157,7 @@ export async function smartSearch(
     | "none"
     | string[],
   maxChunks: number = 35,
+  onEmbeddingMetrics?: (metrics: LLMCallMetrics) => void | Promise<void>
 ): Promise<{
   results: SearchResult[];
   usedSources: string[] | "all";
@@ -170,7 +172,7 @@ export async function smartSearch(
     const analysis = analyzeQuery(query);
     const chunkCount = Math.min(analysis.suggestedChunkCount, maxChunks);
 
-    const results = await search(query, chunkCount, userSourceFilter);
+    const results = await search(query, chunkCount, userSourceFilter, onEmbeddingMetrics);
 
     return {
       results,
@@ -195,7 +197,7 @@ export async function smartSearch(
       analysis.suggestedSources,
     );
 
-    const results = await search(query, chunkCount, analysis.suggestedSources);
+    const results = await search(query, chunkCount, analysis.suggestedSources, onEmbeddingMetrics);
 
     return {
       results,
@@ -210,7 +212,7 @@ export async function smartSearch(
   );
 
   // Stage 1: Probe with small number from all sources
-  const probeResults = await search(query, 10, "all"); // Get 10 samples from all sources
+  const probeResults = await search(query, 10, "all", onEmbeddingMetrics); // Get 10 samples from all sources
 
   if (probeResults.length === 0) {
     return {
@@ -282,7 +284,7 @@ export async function smartSearch(
 
   // Stage 2: Get more results from focused sources
   const chunkCount = Math.min(analysis.suggestedChunkCount, maxChunks);
-  const finalResults = await search(query, chunkCount, focusedSources);
+  const finalResults = await search(query, chunkCount, focusedSources, onEmbeddingMetrics);
 
   return {
     results: finalResults,

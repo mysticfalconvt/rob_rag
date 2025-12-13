@@ -16,7 +16,7 @@ function ChatPageContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams.get("conversation");
 
-  const { messages, isLoading, currentConversationId, sendMessage } =
+  const { messages, isLoading, currentConversationId, sendMessage, sendDirectLLM } =
     useChat(conversationId);
   const { isSaving, saveConversation, deleteConversation } =
     useConversationActions(currentConversationId);
@@ -116,6 +116,14 @@ function ChatPageContent() {
     setInput("");
   };
 
+  const handleDirectLLMSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    await sendDirectLLM(input);
+    setInput("");
+  };
+
   const handleSaveConversation = async () => {
     setShowSettings(false);
     const result = await saveConversation();
@@ -200,6 +208,7 @@ function ChatPageContent() {
           isSaving={isSaving}
           onChange={setInput}
           onSubmit={handleSubmit}
+          onDirectLLMSubmit={handleDirectLLMSubmit}
           onToggleSettings={() => setShowSettings(!showSettings)}
           onToggleUploaded={() => setUseUploaded(!useUploaded)}
           onToggleSynced={() => setUseSynced(!useSynced)}

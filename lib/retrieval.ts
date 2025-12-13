@@ -1,4 +1,5 @@
 import { generateEmbedding } from "./ai";
+import type { LLMCallMetrics } from "./llmTracking";
 import { searchWithPgVector } from "./pgvector";
 
 export interface SearchResult {
@@ -21,9 +22,10 @@ export async function search(
     | "goodreads"
     | "none"
     | string[], // Support array of sources
+  onEmbeddingMetrics?: (metrics: LLMCallMetrics) => void | Promise<void>
 ): Promise<SearchResult[]> {
   try {
-    const queryEmbedding = await generateEmbedding(query);
+    const queryEmbedding = await generateEmbedding(query, onEmbeddingMetrics);
     console.log("[Retrieval] Using PostgreSQL pgvector for search");
     return await searchWithPgVector(queryEmbedding, limit, sourceFilter);
   } catch (error) {

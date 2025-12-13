@@ -151,6 +151,19 @@ export default function AdminDashboardPage() {
             <div className={styles.statSubtext}>By users</div>
           </div>
         </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>
+            <i className="fas fa-chart-line"></i>
+          </div>
+          <div className={styles.statInfo}>
+            <div className={styles.statValue}>LLM</div>
+            <div className={styles.statLabel}>Analytics</div>
+            <div className={styles.statSubtext}>
+              <Link href="/admin/llm-analytics">View Metrics →</Link>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* User Activity Table */}
