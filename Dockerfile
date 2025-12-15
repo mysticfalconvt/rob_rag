@@ -25,8 +25,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Install OpenSSL and other required dependencies for Prisma
-# Also install GraphicsMagick for pdf2pic OCR functionality
-RUN apk add --no-cache openssl libc6-compat graphicsmagick
+# Also install GraphicsMagick and Ghostscript for pdf2pic OCR functionality
+RUN apk add --no-cache openssl libc6-compat graphicsmagick ghostscript
 
 # Install pnpm
 RUN npm install -g pnpm
