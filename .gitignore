@@ -49,4 +49,5 @@ prisma/dev.db-journal
 # Document storage (runtime data)
 documents/File Uploads/
 documents/Sync Files/
+documents/Custom_Docs/
 qdrant_storage/

@@ -77,11 +77,15 @@ function ChatPageContent() {
     | "uploaded"
     | "synced"
     | "paperless"
-    | "goodreads" => {
+    | "goodreads"
+    | "custom_ocr" => {
     const activeSources = [];
     if (useUploaded) activeSources.push("uploaded");
     if (useSynced) activeSources.push("synced");
-    if (usePaperless) activeSources.push("paperless");
+    if (usePaperless) {
+      activeSources.push("paperless");
+      activeSources.push("custom_ocr"); // Include custom OCR documents with paperless
+    }
 
     // Add enabled Goodreads users with format "goodreads:userId"
     const enabledGoodreadsUsers = goodreadsUsers.filter((u) => u.enabled);
@@ -91,7 +95,7 @@ function ChatPageContent() {
 
     const totalPossibleSources = 3 + goodreadsUsers.length; // uploaded, synced, paperless + all goodreads users
     if (
-      activeSources.length === totalPossibleSources &&
+      activeSources.length === totalPossibleSources + 1 && // +1 for custom_ocr added with paperless
       totalPossibleSources > 0
     )
       return "all";
@@ -101,7 +105,8 @@ function ChatPageContent() {
         | "uploaded"
         | "synced"
         | "paperless"
-        | "goodreads";
+        | "goodreads"
+        | "custom_ocr";
     }
     // Multiple sources selected: return array for OR filtering
     return activeSources;

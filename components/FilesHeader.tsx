@@ -41,6 +41,7 @@ export default function FilesHeader({
         <label className={styles.uploadButton}>
           <input
             type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.md,.txt"
             onChange={onUpload}
             disabled={isScanning}
             style={{ display: "none" }}

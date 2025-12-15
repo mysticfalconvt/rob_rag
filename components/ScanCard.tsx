@@ -6,6 +6,7 @@ interface ScanCardProps {
   uploadedFiles?: number;
   syncedFiles?: number;
   paperlessDocuments?: number;
+  paperlessEnabled?: boolean;
   goodreadsBooks?: number;
   isScanning: string | null;
   onScanSource: (source: string, label: string) => void;
@@ -17,6 +18,7 @@ export default function ScanCard({
   uploadedFiles,
   syncedFiles,
   paperlessDocuments,
+  paperlessEnabled,
   goodreadsBooks,
   isScanning,
   onScanSource,
@@ -74,7 +76,7 @@ export default function ScanCard({
                 : `Scan Local Files (${syncedFiles})`}
             </button>
           )}
-          {paperlessDocuments !== undefined && paperlessDocuments > 0 && (
+          {paperlessEnabled && (
             <button
               onClick={() => onScanSource("paperless", "Paperless")}
               disabled={isScanning !== null}
@@ -85,7 +87,7 @@ export default function ScanCard({
               ></i>
               {isScanning === "paperless"
                 ? "Scanning..."
-                : `Scan Paperless (${paperlessDocuments})`}
+                : `Scan Paperless${paperlessDocuments !== undefined ? ` (${paperlessDocuments})` : ""}`}
             </button>
           )}
           {goodreadsBooks !== undefined && goodreadsBooks > 0 && (

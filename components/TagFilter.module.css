@@ -1,0 +1,253 @@
+.container {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--bg-secondary, #f9f9f9);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #ddd);
+}
+
+.taggedFilter {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.taggedButton {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.taggedButton:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.taggedButton.active {
+  background: var(--primary-color, #2196f3);
+  color: white;
+  border-color: var(--primary-color, #2196f3);
+}
+
+.tagSelector {
+  position: relative;
+  min-width: 200px;
+}
+
+.dropdownButton {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: space-between;
+  transition: all 0.2s;
+}
+
+.dropdownButton:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  width: 100%;
+  min-width: 300px;
+  max-height: 400px;
+  background: white;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdownHeader {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-color, #ddd);
+}
+
+.searchInput {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.clearButton {
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--danger-color, #ef4444);
+  color: var(--danger-color, #ef4444);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background: var(--danger-color, #ef4444);
+  color: white;
+}
+
+.tagList {
+  overflow-y: auto;
+  max-height: 300px;
+}
+
+.tagOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tagOption:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.tagOption input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.tagName {
+  flex: 1;
+}
+
+.pendingBadge {
+  padding: 0.15rem 0.4rem;
+  background: var(--warning-color, #f59e0b);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.emptyMessage {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-secondary, #666);
+  font-size: 0.9rem;
+}
+
+.selectedTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.selectedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--primary-color, #2196f3);
+  color: white;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.removeTag {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.2rem;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.2s;
+}
+
+.removeTag:hover {
+  opacity: 0.8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .container {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .taggedButton {
+    background: var(--bg-tertiary, #111827);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .taggedButton:hover {
+    background: var(--bg-hover, #374151);
+  }
+
+  .dropdownButton {
+    background: var(--bg-tertiary, #111827);
+    color: var(--text-primary, #f9fafb);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .dropdownButton:hover {
+    background: var(--bg-hover, #374151);
+  }
+
+  .dropdown {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .dropdownHeader {
+    border-bottom-color: var(--border-dark, #374151);
+  }
+
+  .searchInput {
+    background: var(--bg-tertiary, #111827);
+    color: var(--text-primary, #f9fafb);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .tagOption:hover {
+    background: var(--bg-hover, #374151);
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .taggedFilter {
+    flex-wrap: wrap;
+  }
+
+  .tagSelector {
+    width: 100%;
+  }
+
+  .dropdown {
+    width: calc(100vw - 4rem);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}

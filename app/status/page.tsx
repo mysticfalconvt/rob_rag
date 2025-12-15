@@ -20,6 +20,7 @@ interface SystemStatus {
   postgres: "connected" | "disconnected";
   lmStudio: "connected" | "disconnected";
   paperless: "connected" | "disconnected" | "not_configured" | "disabled";
+  paperlessEnabled?: boolean;
   goodreads: "connected" | "not_configured";
   goodreadsUsers?: GoodreadsUserStatus[];
   totalFiles: number;
@@ -203,6 +204,7 @@ export default function StatusPage() {
               uploadedFiles={status.uploadedFiles}
               syncedFiles={status.syncedFiles}
               paperlessDocuments={status.paperlessDocuments}
+              paperlessEnabled={status.paperlessEnabled}
               goodreadsBooks={status.goodreadsBooks}
               isScanning={isScanning}
               onScanSource={handleScanSource}

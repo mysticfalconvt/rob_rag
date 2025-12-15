@@ -17,6 +17,50 @@ export function embeddingToSql(embedding: number[]): string {
 }
 
 /**
+ * Build WHERE clause that respects custom OCR overrides
+ * When a paperless doc has custom OCR, we want to exclude the paperless version
+ * and only show the custom_ocr version
+ */
+function buildSourceWhereClause(sourceFilter?:
+  | 'all'
+  | 'uploaded'
+  | 'synced'
+  | 'paperless'
+  | 'goodreads'
+  | 'custom_ocr'
+  | 'none'
+  | string[]
+): string {
+  const conditions: string[] = [];
+
+  // Handle source filtering
+  if (sourceFilter && sourceFilter !== 'all' && sourceFilter !== 'none') {
+    if (Array.isArray(sourceFilter)) {
+      // Multiple sources
+      const sources = sourceFilter.map((s) => `'${s}'`).join(',');
+      conditions.push(`source IN (${sources})`);
+    } else {
+      // Single source
+      conditions.push(`source = '${sourceFilter}'`);
+    }
+  }
+
+  // IMPORTANT: Exclude paperless docs that have been converted to custom OCR
+  // Since custom OCR docs now have source='custom_ocr', we don't need the complex check
+  // Just ensure we don't show old paperless chunks if the file has been converted
+  conditions.push(`
+    (source != 'paperless' OR
+     NOT EXISTS (
+       SELECT 1 FROM "IndexedFile"
+       WHERE "IndexedFile"."filePath" = "DocumentChunk"."filePath"
+       AND "IndexedFile"."source" = 'custom_ocr'
+     ))
+  `);
+
+  return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+}
+
+/**
  * Search using pgvector cosine distance
  * @param queryEmbedding - The query vector
  * @param limit - Maximum number of results
@@ -32,23 +76,14 @@ export async function searchWithPgVector(
     | 'synced'
     | 'paperless'
     | 'goodreads'
+    | 'custom_ocr'
     | 'none'
     | string[],
 ): Promise<SearchResult[]> {
   const vectorStr = embeddingToSql(queryEmbedding);
 
-  // Build WHERE clause for source filtering
-  let whereClause = '';
-  if (sourceFilter && sourceFilter !== 'all' && sourceFilter !== 'none') {
-    if (Array.isArray(sourceFilter)) {
-      // Multiple sources
-      const sources = sourceFilter.map((s) => `'${s}'`).join(',');
-      whereClause = `WHERE source IN (${sources})`;
-    } else {
-      // Single source
-      whereClause = `WHERE source = '${sourceFilter}'`;
-    }
-  }
+  // Build WHERE clause for source filtering with custom OCR respect
+  const whereClause = buildSourceWhereClause(sourceFilter);
 
   try {
     // Use cosine distance operator: <=>
@@ -191,6 +226,17 @@ export async function hybridSearch(
   if (filters.author) {
     conditions.push(`"bookAuthor" ILIKE '%${filters.author}%'`);
   }
+
+  // IMPORTANT: Exclude paperless docs that have custom OCR versions
+  conditions.push(`
+    (source != 'paperless' OR
+     NOT EXISTS (
+       SELECT 1 FROM "IndexedFile"
+       WHERE "IndexedFile"."filePath" = "DocumentChunk"."filePath"
+       AND "IndexedFile"."useCustomOcr" = true
+       AND "IndexedFile"."sourceOverride" = 'custom_ocr'
+     ))
+  `);
 
   const whereClause =
     conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

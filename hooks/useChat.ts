@@ -56,6 +56,7 @@ export function useChat(conversationId: string | null) {
       | "synced"
       | "paperless"
       | "goodreads"
+      | "custom_ocr"
       | "none"
       | string[],
   ) => {

@@ -158,6 +158,15 @@ function SidebarContent({ appName }: SidebarContentProps) {
           </Link>
 
           <Link
+            href="/tags"
+            className={`${styles.link} ${isActive("/tags") ? styles.active : ""}`}
+            onClick={closeMobileMenu}
+          >
+            <i className="fas fa-tags"></i>
+            <span>Tags</span>
+          </Link>
+
+          <Link
             href="/config"
             className={`${styles.link} ${isActive("/config") ? styles.active : ""}`}
             onClick={closeMobileMenu}

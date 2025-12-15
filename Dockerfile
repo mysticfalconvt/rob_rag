@@ -25,7 +25,8 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Install OpenSSL and other required dependencies for Prisma
-RUN apk add --no-cache openssl libc6-compat
+# Also install GraphicsMagick for pdf2pic OCR functionality
+RUN apk add --no-cache openssl libc6-compat graphicsmagick
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -52,7 +53,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 
 # Create necessary directories for volumes
-RUN mkdir -p /app/documents/File\ Uploads /app/documents/Sync\ Files /app/prisma
+RUN mkdir -p /app/documents/File\ Uploads /app/documents/Sync\ Files /app/documents/Custom_Docs/originals /app/documents/Custom_Docs/markdown /app/prisma
 
 # Set environment variables
 ENV NODE_ENV=production

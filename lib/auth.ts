@@ -117,6 +117,24 @@ export async function createUser(data: {
     },
   });
 
+  // Auto-create a tag for this user (lowercase, approved)
+  try {
+    const tagName = name.toLowerCase().trim();
+    await prisma.tag.upsert({
+      where: { name: tagName },
+      update: {}, // If tag exists, don't update it
+      create: {
+        name: tagName,
+        status: "approved", // User tags are auto-approved
+        color: "#2196f3", // Blue color for user tags
+      },
+    });
+    console.log(`Created user tag: ${tagName}`);
+  } catch (error) {
+    console.error("Error creating user tag:", error);
+    // Don't fail user creation if tag creation fails
+  }
+
   return user;
 }
 

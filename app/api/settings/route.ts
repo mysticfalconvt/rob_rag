@@ -19,12 +19,14 @@ export async function GET(req: NextRequest) {
         embeddingModel: config.EMBEDDING_MODEL_NAME,
         chatModel: config.CHAT_MODEL_NAME,
         fastChatModel: null,
+        visionModel: null,
         embeddingModelDimension: 1024,
         isDefault: true,
         paperlessUrl: null,
         paperlessExternalUrl: null,
         paperlessEnabled: false,
         paperlessConfigured: false,
+        customOcrEnabled: false,
       });
     }
 
@@ -32,12 +34,14 @@ export async function GET(req: NextRequest) {
       embeddingModel: settings.embeddingModel,
       chatModel: settings.chatModel,
       fastChatModel: settings.fastChatModel,
+      visionModel: settings.visionModel,
       embeddingModelDimension: settings.embeddingModelDimension,
       isDefault: false,
       paperlessUrl: settings.paperlessUrl,
       paperlessExternalUrl: settings.paperlessExternalUrl,
       paperlessEnabled: settings.paperlessEnabled,
       paperlessConfigured: !!settings.paperlessApiToken,
+      customOcrEnabled: settings.customOcrEnabled,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -59,11 +63,13 @@ export async function POST(req: NextRequest) {
       embeddingModel,
       chatModel,
       fastChatModel,
+      visionModel,
       embeddingModelDimension,
       paperlessUrl,
       paperlessExternalUrl,
       paperlessApiToken,
       paperlessEnabled,
+      customOcrEnabled,
     } = await req.json();
 
     // Validate Paperless URL if provided
@@ -95,6 +101,7 @@ export async function POST(req: NextRequest) {
       embeddingModel,
       chatModel,
       fastChatModel: fastChatModel || null,
+      visionModel: visionModel || null,
       embeddingModelDimension: embeddingModelDimension || 1024,
     };
 
@@ -112,6 +119,14 @@ export async function POST(req: NextRequest) {
       updateData.paperlessEnabled = paperlessEnabled;
     }
 
+    // Update custom OCR fields if provided
+    if (visionModel !== undefined) {
+      updateData.visionModel = visionModel || null;
+    }
+    if (customOcrEnabled !== undefined) {
+      updateData.customOcrEnabled = customOcrEnabled;
+    }
+
     const settings = await prisma.settings.upsert({
       where: { id: "singleton" },
       update: updateData,
@@ -120,11 +135,13 @@ export async function POST(req: NextRequest) {
         embeddingModel,
         chatModel,
         fastChatModel: fastChatModel || null,
+        visionModel: visionModel || null,
         embeddingModelDimension: embeddingModelDimension || 1024,
         paperlessUrl: paperlessUrl || null,
         paperlessExternalUrl: paperlessExternalUrl || null,
         paperlessApiToken: paperlessApiToken || null,
         paperlessEnabled: paperlessEnabled || false,
+        customOcrEnabled: customOcrEnabled || false,
       },
     });
 
@@ -132,11 +149,13 @@ export async function POST(req: NextRequest) {
       embeddingModel: settings.embeddingModel,
       chatModel: settings.chatModel,
       fastChatModel: settings.fastChatModel,
+      visionModel: settings.visionModel,
       embeddingModelDimension: settings.embeddingModelDimension,
       paperlessUrl: settings.paperlessUrl,
       paperlessExternalUrl: settings.paperlessExternalUrl,
       paperlessEnabled: settings.paperlessEnabled,
       paperlessConfigured: !!settings.paperlessApiToken,
+      customOcrEnabled: settings.customOcrEnabled,
     });
   } catch (error) {
     if (error instanceof Error) {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import ModelConfiguration from "@/components/ModelConfiguration";
 import PaperlessConfiguration from "@/components/PaperlessConfiguration";
+import CustomOcrConfiguration from "@/components/CustomOcrConfiguration";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
 import PromptConfiguration from "@/components/PromptConfiguration";
 import UserProfile from "@/components/UserProfile";
@@ -14,12 +15,14 @@ interface Settings {
   embeddingModel: string;
   chatModel: string;
   fastChatModel?: string | null;
+  visionModel?: string | null;
   embeddingModelDimension: number;
   isDefault?: boolean;
   paperlessUrl: string | null;
   paperlessExternalUrl: string | null;
   paperlessEnabled: boolean;
   paperlessConfigured: boolean;
+  customOcrEnabled: boolean;
 }
 
 interface User {
@@ -41,10 +44,13 @@ export default function ConfigPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [embeddingModels, setEmbeddingModels] = useState<string[]>([]);
   const [chatModels, setChatModels] = useState<string[]>([]);
+  const [visionModels, setVisionModels] = useState<string[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState("");
   const [selectedChatModel, setSelectedChatModel] = useState("");
   const [selectedFastChatModel, setSelectedFastChatModel] = useState("");
+  const [selectedVisionModel, setSelectedVisionModel] = useState("");
+  const [customOcrEnabled, setCustomOcrEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const [paperlessUrl, setPaperlessUrl] = useState("");
@@ -68,8 +74,22 @@ export default function ConfigPage() {
         const chatModelsList = allModels.filter(
           (model: string) => !model.toLowerCase().includes("embed"),
         );
+        // Vision models typically have "vision", "vl", "llava", "pixtral", "ocr" in their names
+        const visionModelsList = allModels.filter((model: string) => {
+          const lower = model.toLowerCase();
+          return (
+            lower.includes("vision") ||
+            lower.includes("-vl") ||
+            lower.includes("llava") ||
+            lower.includes("pixtral") ||
+            lower.includes("qwen2-vl") ||
+            lower.includes("ocr") ||
+            lower.includes("gemma")
+          );
+        });
         setEmbeddingModels(embedModels);
         setChatModels(chatModelsList);
+        setVisionModels(visionModelsList);
       }
     } catch (error) {
       console.error("Error fetching models:", error);
@@ -85,6 +105,8 @@ export default function ConfigPage() {
         setSelectedEmbeddingModel(data.embeddingModel);
         setSelectedChatModel(data.chatModel);
         setSelectedFastChatModel(data.fastChatModel || "");
+        setSelectedVisionModel(data.visionModel || "");
+        setCustomOcrEnabled(data.customOcrEnabled || false);
         setPaperlessUrl(data.paperlessUrl || "");
         setPaperlessExternalUrl(data.paperlessExternalUrl || "");
         setPaperlessEnabled(data.paperlessEnabled || false);
@@ -126,13 +148,13 @@ export default function ConfigPage() {
     if (embeddingModelChanged) {
       const confirmed = confirm(
         "⚠️ Warning: Changing Embedding Model\n\n" +
-          "Changing the embedding model will require re-indexing ALL documents.\n" +
-          "Different embedding models produce incompatible vector representations.\n\n" +
-          "You will need to:\n" +
-          "1. Go to the Files page\n" +
-          '2. Click "Force Reindex All"\n' +
-          "3. Wait for re-indexing to complete\n\n" +
-          "Are you sure you want to continue?",
+        "Changing the embedding model will require re-indexing ALL documents.\n" +
+        "Different embedding models produce incompatible vector representations.\n\n" +
+        "You will need to:\n" +
+        "1. Go to the Files page\n" +
+        '2. Click "Force Reindex All"\n' +
+        "3. Wait for re-indexing to complete\n\n" +
+        "Are you sure you want to continue?",
       );
 
       if (!confirmed) return;
@@ -147,7 +169,9 @@ export default function ConfigPage() {
           embeddingModel: selectedEmbeddingModel,
           chatModel: selectedChatModel,
           fastChatModel: selectedFastChatModel || null,
+          visionModel: selectedVisionModel || null,
           embeddingModelDimension: 1024,
+          customOcrEnabled,
         }),
       });
 
@@ -155,9 +179,9 @@ export default function ConfigPage() {
         await fetchSettings();
         alert(
           "✅ Settings saved successfully!" +
-            (embeddingModelChanged
-              ? "\n\n⚠️ Remember to re-index all files!"
-              : ""),
+          (embeddingModelChanged
+            ? "\n\n⚠️ Remember to re-index all files!"
+            : ""),
         );
       } else {
         alert("❌ Failed to save settings");
@@ -184,7 +208,9 @@ export default function ConfigPage() {
         body: JSON.stringify({
           embeddingModel: selectedEmbeddingModel,
           chatModel: selectedChatModel,
+          visionModel: selectedVisionModel || null,
           embeddingModelDimension: 1024,
+          customOcrEnabled,
           paperlessUrl,
           paperlessExternalUrl: paperlessExternalUrl || undefined,
           paperlessApiToken: paperlessApiToken || undefined,
@@ -222,7 +248,9 @@ export default function ConfigPage() {
         body: JSON.stringify({
           embeddingModel: selectedEmbeddingModel,
           chatModel: selectedChatModel,
+          visionModel: selectedVisionModel || null,
           embeddingModelDimension: 1024,
+          customOcrEnabled,
           paperlessUrl: paperlessUrl || null,
           paperlessExternalUrl: paperlessExternalUrl || null,
           paperlessApiToken: paperlessApiToken || undefined,
@@ -234,6 +262,40 @@ export default function ConfigPage() {
         await fetchSettings();
         alert("✅ Paperless-ngx settings saved successfully!");
         setPaperlessApiToken("");
+      } else {
+        alert("❌ Failed to save settings");
+      }
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      alert("❌ Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveOcrSettings = async () => {
+    if (!selectedVisionModel) {
+      alert("⚠️ Please select a vision model");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          embeddingModel: selectedEmbeddingModel,
+          chatModel: selectedChatModel,
+          embeddingModelDimension: 1024,
+          visionModel: selectedVisionModel || null,
+          customOcrEnabled,
+        }),
+      });
+
+      if (res.ok) {
+        await fetchSettings();
+        alert("✅ Custom OCR settings saved successfully!");
       } else {
         alert("❌ Failed to save settings");
       }
@@ -389,6 +451,16 @@ export default function ConfigPage() {
               onEnabledChange={setPaperlessEnabled}
               onTest={handleTestPaperlessConnection}
               onSave={handleSavePaperlessSettings}
+            />
+
+            <CustomOcrConfiguration
+              visionModels={visionModels}
+              selectedVisionModel={selectedVisionModel}
+              customOcrEnabled={customOcrEnabled}
+              onVisionModelChange={setSelectedVisionModel}
+              onEnabledChange={setCustomOcrEnabled}
+              onSave={handleSaveOcrSettings}
+              isSaving={isSaving}
             />
 
             <PromptConfiguration />

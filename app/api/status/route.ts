@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
       | "not_configured"
       | "disabled" = "not_configured";
     let paperlessDocCount = 0;
+    let paperlessEnabled = false;
 
     try {
       const settings = await prisma.settings.findUnique({
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
       });
 
       if (settings?.paperlessUrl && settings.paperlessApiToken) {
+        paperlessEnabled = settings.paperlessEnabled;
         if (!settings.paperlessEnabled) {
           paperlessStatus = "disabled";
         } else {
@@ -124,6 +126,7 @@ export async function GET(req: NextRequest) {
       postgres: postgresStatus,
       lmStudio: lmStudioStatus,
       paperless: paperlessStatus,
+      paperlessEnabled,
       goodreads: goodreadsStatus,
       goodreadsUsers: goodreadsUsersData,
       totalFiles: fileCount,

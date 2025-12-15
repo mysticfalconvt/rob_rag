@@ -1,0 +1,298 @@
+.container {
+  padding: 1rem;
+  background: var(--bg-secondary, #f9f9f9);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #ddd);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--text-primary, #333);
+}
+
+.generateButton {
+  padding: 0.5rem 1rem;
+  background: var(--primary-color, #2196f3);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.generateButton:hover:not(:disabled) {
+  background: var(--primary-hover, #1976d2);
+}
+
+.generateButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tagSection {
+  margin-bottom: 1rem;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: var(--tag-bg, #e5e7eb);
+  color: var(--tag-color, #374151);
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.tagName {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pendingTag {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid var(--warning-color, #f59e0b);
+  color: var(--warning-dark, #92400e);
+}
+
+.pendingBadge {
+  padding: 0.15rem 0.4rem;
+  background: var(--warning-color, #f59e0b);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.removeButton {
+  background: transparent;
+  border: none;
+  color: var(--danger-color, #ef4444);
+  cursor: pointer;
+  padding: 0.2rem;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.removeButton:hover {
+  color: var(--danger-hover, #dc2626);
+}
+
+.suggestionsSection {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--bg-tertiary, #fff);
+  border: 2px dashed var(--primary-color, #2196f3);
+  border-radius: 8px;
+}
+
+.suggestionsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-color, #2196f3);
+}
+
+.suggestionsHint {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: var(--text-secondary, #666);
+}
+
+.suggestedTag {
+  background: white;
+  border: 1px solid var(--border-color, #ddd);
+  padding: 0.5rem 0.8rem;
+}
+
+.newTag {
+  border-color: var(--success-color, #10b981);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.existingTag {
+  border-color: var(--primary-color, #2196f3);
+  background: rgba(33, 150, 243, 0.05);
+}
+
+.newBadge {
+  padding: 0.15rem 0.4rem;
+  background: var(--success-color, #10b981);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 0.3rem;
+}
+
+.suggestedActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.addButton,
+.dismissButton {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.3rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.addButton {
+  color: var(--success-color, #10b981);
+}
+
+.addButton:hover {
+  color: var(--success-hover, #059669);
+}
+
+.dismissButton {
+  color: var(--text-secondary, #666);
+}
+
+.dismissButton:hover {
+  color: var(--danger-color, #ef4444);
+}
+
+.addSection {
+  position: relative;
+}
+
+.addTagButton {
+  padding: 0.5rem 1rem;
+  background: transparent;
+  color: var(--primary-color, #2196f3);
+  border: 1px solid var(--primary-color, #2196f3);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+}
+
+.addTagButton:hover {
+  background: var(--primary-color, #2196f3);
+  color: white;
+}
+
+.tagPicker {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--border-color, #ddd);
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.availableTags {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.availableTag {
+  padding: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.availableTag:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.noTags {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary, #666);
+  font-size: 0.9rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .container {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .suggestionsSection {
+    background: var(--bg-tertiary, #111827);
+  }
+
+  .suggestedTag {
+    background: var(--bg-secondary, #1f2937);
+  }
+
+  .newTag {
+    background: rgba(16, 185, 129, 0.1);
+  }
+
+  .existingTag {
+    background: rgba(33, 150, 243, 0.1);
+  }
+
+  .pendingTag {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: var(--warning-color, #f59e0b);
+    color: var(--warning-light, #fbbf24);
+  }
+
+  .tagPicker {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .searchInput {
+    background: var(--bg-tertiary, #111827);
+    color: var(--text-primary, #f9fafb);
+    border-bottom-color: var(--border-dark, #374151);
+  }
+
+  .availableTag:hover {
+    background: var(--bg-hover, #374151);
+  }
+}

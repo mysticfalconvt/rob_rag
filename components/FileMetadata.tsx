@@ -13,6 +13,11 @@ interface Metadata {
   dateAdded?: string | null;
   shelves?: string[];
   userName?: string;
+  extractedDate?: string;
+  extractedTags?: string[];
+  documentType?: string;
+  documentSummary?: string;
+  originalDocPath?: string;
 }
 
 interface FileMetadataProps {
@@ -32,6 +37,7 @@ export default function FileMetadata({
 }: FileMetadataProps) {
   const isGoodreads = source === "goodreads";
   const isPaperless = source === "paperless";
+  const isCustomOcr = source === "custom_ocr";
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -45,6 +51,42 @@ export default function FileMetadata({
 
   return (
     <div className={styles.metadata}>
+      {isCustomOcr && (
+        <div className={styles.metadataItem}>
+          <span className={styles.metadataLabel}>
+            <i className="fas fa-eye"></i> Custom OCR:
+          </span>
+          <span className={styles.metadataValue}>
+            Vision LLM processed document
+          </span>
+        </div>
+      )}
+      {isCustomOcr && metadata.documentType && (
+        <div className={styles.metadataItem}>
+          <span className={styles.metadataLabel}>Document Type:</span>
+          <span className={styles.metadataValue}>{metadata.documentType}</span>
+        </div>
+      )}
+      {isCustomOcr && metadata.extractedDate && (
+        <div className={styles.metadataItem}>
+          <span className={styles.metadataLabel}>Extracted Date:</span>
+          <span className={styles.metadataValue}>
+            {formatDate(metadata.extractedDate)}
+          </span>
+        </div>
+      )}
+      {isCustomOcr && metadata.extractedTags && metadata.extractedTags.length > 0 && (
+        <div className={styles.metadataItem}>
+          <span className={styles.metadataLabel}>Extracted Tags:</span>
+          <span className={styles.metadataValue}>
+            {metadata.extractedTags.map((tag, idx) => (
+              <span key={idx} className={styles.tag}>
+                {tag}
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
       {isGoodreads && metadata.author && (
         <div className={styles.metadataItem}>
           <span className={styles.metadataLabel}>Author:</span>
@@ -103,7 +145,7 @@ export default function FileMetadata({
           <span className={styles.metadataValue}>{paperlessCorrespondent}</span>
         </div>
       )}
-      {!isGoodreads && (
+      {!isGoodreads && !isCustomOcr && (
         <div className={styles.metadataItem}>
           <span className={styles.metadataLabel}>Type:</span>
           <span className={styles.metadataValue}>

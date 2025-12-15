@@ -46,6 +46,11 @@
   color: var(--synced-badge-color, #383d41);
 }
 
+.sourceBadge.customOcr {
+  background: var(--custom-ocr-badge-bg, #d1c4e9);
+  color: var(--custom-ocr-badge-color, #4a148c);
+}
+
 .pathCell {
   max-width: 400px;
 }
@@ -78,6 +83,22 @@
 .bookRating {
   font-size: 0.875rem;
   margin-top: 0.25rem;
+}
+
+.globalTags {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.globalTag {
+  padding: 0.25rem 0.6rem;
+  background: var(--primary-color, #2196f3);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 500;
 }
 
 .tags {
@@ -145,7 +166,8 @@
 }
 
 .reindexButton,
-.deleteButton {
+.deleteButton,
+.ocrButton {
   width: 32px;
   height: 32px;
   display: flex;
@@ -173,4 +195,27 @@
   background: var(--error-light, #ffebee);
   border-color: var(--error-color, #f44336);
   color: var(--error-color, #f44336);
+}
+
+.ocrButton:hover:not(:disabled) {
+  background: var(--purple-light, #f3e5f5);
+  border-color: var(--purple-color, #9c27b0);
+  color: var(--purple-color, #9c27b0);
+}
+
+.ocrButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.processingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--info-light, #e1f5fe);
+  color: var(--info-dark, #01579b);
 }

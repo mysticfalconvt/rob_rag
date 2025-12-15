@@ -262,6 +262,27 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
       }
     }
 
+    // Create or update IndexedFile entry for this book
+    // Use book ID as fileHash for consistency
+    const now = new Date();
+    await prisma.indexedFile.upsert({
+      where: { filePath },
+      update: {
+        chunkCount: 1,
+        lastIndexed: now,
+        status: "indexed",
+      },
+      create: {
+        filePath,
+        fileHash: book.id, // Use book ID as hash
+        chunkCount: 1,
+        lastIndexed: now,
+        lastModified: book.updatedAt || now, // Use book's last update time
+        status: "indexed",
+        source: "goodreads",
+      },
+    });
+
     // Create DocumentChunk with pgvector embedding using raw SQL
     // Prisma doesn't support vector types directly yet
     const { v4: uuidv4 } = await import("uuid");

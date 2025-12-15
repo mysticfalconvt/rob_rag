@@ -7,16 +7,19 @@ interface FileFilterBarProps {
   showSynced: boolean;
   showPaperless: boolean;
   showGoodreads: boolean;
+  showCustomOcr: boolean;
   uploadedCount: number;
   syncedCount: number;
   paperlessCount: number;
   goodreadsCount: number;
+  customOcrCount: number;
   filteredCount: number;
   totalCount: number;
   onToggleUploaded: () => void;
   onToggleSynced: () => void;
   onTogglePaperless: () => void;
   onToggleGoodreads: () => void;
+  onToggleCustomOcr: () => void;
 }
 
 export default function FileFilterBar({
@@ -24,16 +27,19 @@ export default function FileFilterBar({
   showSynced,
   showPaperless,
   showGoodreads,
+  showCustomOcr,
   uploadedCount,
   syncedCount,
   paperlessCount,
   goodreadsCount,
+  customOcrCount,
   filteredCount,
   totalCount,
   onToggleUploaded,
   onToggleSynced,
   onTogglePaperless,
   onToggleGoodreads,
+  onToggleCustomOcr,
 }: FileFilterBarProps) {
   return (
     <div className={styles.filterBar}>
@@ -71,6 +77,14 @@ export default function FileFilterBar({
             <i className="fas fa-book"></i>
             Goodreads
             <span className={styles.count}>({goodreadsCount})</span>
+          </button>
+          <button
+            className={`${styles.filterToggle} ${showCustomOcr ? styles.active : ""} ${customOcrCount === 0 ? styles.empty : ""}`}
+            onClick={onToggleCustomOcr}
+          >
+            <i className="fas fa-eye"></i>
+            Custom OCR
+            <span className={styles.count}>({customOcrCount})</span>
           </button>
         </div>
       </div>

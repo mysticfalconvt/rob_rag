@@ -79,6 +79,8 @@
 
 .markdown {
   line-height: 1.7;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .markdown h1,
@@ -90,6 +92,7 @@
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
   font-weight: 600;
+  word-wrap: break-word;
 }
 
 .markdown h1 {
@@ -106,6 +109,8 @@
 
 .markdown p {
   margin-bottom: 1rem;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .markdown ul,
@@ -147,6 +152,42 @@
   margin: 1rem 0;
   color: #6b7280;
   font-style: italic;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  display: block;
+  max-width: 100%;
+}
+
+.markdown table thead {
+  background: #f3f4f6;
+}
+
+.markdown table th,
+.markdown table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 400px;
+}
+
+.markdown table th {
+  font-weight: 600;
+  color: #374151;
+}
+
+.markdown table tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+.markdown table tr:hover {
+  background: #f3f4f6;
 }
 
 .plainText {
@@ -200,6 +241,27 @@
   }
 
   .markdown code {
+    background: #374151;
+  }
+
+  .markdown table thead {
+    background: #374151;
+  }
+
+  .markdown table th {
+    color: #f9fafb;
+    border-color: #4b5563;
+  }
+
+  .markdown table td {
+    border-color: #4b5563;
+  }
+
+  .markdown table tr:nth-child(even) {
+    background: #1f2937;
+  }
+
+  .markdown table tr:hover {
     background: #374151;
   }
 

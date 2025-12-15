@@ -60,6 +60,15 @@ model IndexedFile {
   paperlessTitle         String?
   paperlessTags          String?
   paperlessCorrespondent String?
+  useCustomOcr           Boolean         @default(false)
+  customOcrStatus        String?
+  originalDocPath        String?
+  ocrOutputPath          String?
+  extractedDate          DateTime?
+  extractedTags          String?
+  documentType           String?
+  documentSummary        String?
+  sourceOverride         String?
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
   chunks                 DocumentChunk[]
@@ -68,6 +77,35 @@ model IndexedFile {
   @@index([uploadedBy])
   @@index([source])
   @@index([filePath])
+  @@index([useCustomOcr])
+  @@index([sourceOverride])
+  documentTags DocumentTag[]
+}
+
+model Tag {
+  id             String        @id @default(uuid())
+  name           String        @unique
+  status         String        @default("pending") // "pending" or "approved"
+  color          String?       // Optional color for UI
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  documentTags   DocumentTag[]
+
+  @@index([status])
+  @@index([name])
+}
+
+model DocumentTag {
+  id           String      @id @default(uuid())
+  fileId       String
+  tagId        String
+  createdAt    DateTime    @default(now())
+  file         IndexedFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  tag          Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([fileId, tagId])
+  @@index([fileId])
+  @@index([tagId])
 }
 
 model Conversation {
@@ -101,11 +139,13 @@ model Settings {
   embeddingModel          String
   chatModel               String
   fastChatModel           String?
+  visionModel             String?
   embeddingModelDimension Int      @default(1024)
   paperlessUrl            String?
   paperlessExternalUrl    String?
   paperlessApiToken       String?
   paperlessEnabled        Boolean  @default(false)
+  customOcrEnabled        Boolean  @default(false)
   ragSystemPrompt         String?
   noSourcesSystemPrompt   String?
   titleGenerationPrompt   String?
@@ -190,6 +230,7 @@ model DocumentChunk {
   bookId                 String?
   chunkIndex             Int
   totalChunks            Int
+  chunkType              String?
   userId                 String?
   userName               String?
   bookTitle              String?
@@ -220,6 +261,7 @@ model DocumentChunk {
   @@index([dateRead])
   @@index([paperlessId])
   @@index([embedding])
+  @@index([chunkType])
 }
 
 model LLMRequest {

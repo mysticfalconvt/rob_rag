@@ -7,10 +7,19 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import FileViewerHeader from "@/components/FileViewerHeader";
 import FileMetadata from "@/components/FileMetadata";
+import DocumentTags from "@/components/DocumentTags";
 import { useFileHighlight } from "@/hooks/useFileHighlight";
 import styles from "./page.module.css";
 
+interface Tag {
+  id: string;
+  name: string;
+  status: string;
+  color?: string;
+}
+
 interface FileData {
+  fileId: string;
   fileName: string;
   filePath: string;
   fileType: string;
@@ -21,6 +30,7 @@ interface FileData {
   paperlessTags?: string[];
   paperlessCorrespondent?: string;
   goodreadsBookId?: string;
+  tags?: Tag[];
   metadata: {
     size?: number;
     lastModified?: string;
@@ -32,6 +42,11 @@ interface FileData {
     dateAdded?: string | null;
     shelves?: string[];
     userName?: string;
+    extractedDate?: string;
+    extractedTags?: string[];
+    documentType?: string;
+    documentSummary?: string;
+    originalDocPath?: string;
   };
 }
 
@@ -42,6 +57,7 @@ function FileViewerPageContent() {
   const [fileData, setFileData] = useState<FileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isReverting, setIsReverting] = useState(false);
 
   const chunkText = searchParams.get("chunk");
   const highlightedContent = useFileHighlight(
@@ -146,6 +162,46 @@ function FileViewerPageContent() {
     );
   }
 
+  const handleRevertOcr = async () => {
+    if (!fileData?.paperlessId) return;
+
+    if (
+      !confirm(
+        "Are you sure you want to revert to Paperless OCR?\n\n" +
+          "This will:\n" +
+          "- Delete the custom OCR output\n" +
+          "- Delete the original PDF copy\n" +
+          "- Re-index with Paperless OCR content\n\n" +
+          "This action cannot be undone.",
+      )
+    ) {
+      return;
+    }
+
+    setIsReverting(true);
+    try {
+      const res = await fetch("/api/ocr/revert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paperlessId: fileData.paperlessId }),
+      });
+
+      if (res.ok) {
+        alert("✅ Successfully reverted to Paperless OCR");
+        // Redirect back to files page
+        window.location.href = "/files";
+      } else {
+        const error = await res.json();
+        alert(`❌ Failed to revert: ${error.details || error.error}`);
+      }
+    } catch (error) {
+      console.error("Error reverting OCR:", error);
+      alert("❌ Failed to revert OCR");
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
   const isMarkdown =
     fileData.fileType === "md" ||
     fileData.fileType === "markdown" ||
@@ -157,6 +213,9 @@ function FileViewerPageContent() {
         fileName={fileData.fileName}
         source={fileData.source || ""}
         paperlessUrl={fileData.paperlessUrl}
+        originalDocPath={fileData.metadata.originalDocPath}
+        paperlessId={fileData.paperlessId}
+        onRevertOcr={isReverting ? undefined : handleRevertOcr}
       />
 
       <FileMetadata
@@ -166,6 +225,13 @@ function FileViewerPageContent() {
         paperlessTags={fileData.paperlessTags}
         paperlessCorrespondent={fileData.paperlessCorrespondent}
       />
+
+      {fileData.fileId && (
+        <DocumentTags
+          fileId={fileData.fileId}
+          initialTags={fileData.tags || []}
+        />
+      )}
 
       <div className={styles.content} ref={contentRef}>
         {isMarkdown ? (

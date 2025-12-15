@@ -12,6 +12,7 @@ interface IndexedFile {
   needsReindexing?: boolean;
   fileMissing?: boolean;
   source: string;
+  tags?: string[];
   paperlessId?: number;
   paperlessTitle?: string;
   paperlessTags?: string;
@@ -20,6 +21,8 @@ interface IndexedFile {
   goodreadsAuthor?: string;
   goodreadsRating?: number | null;
   userName?: string;
+  useCustomOcr?: boolean;
+  customOcrStatus?: string;
 }
 
 interface FileTableRowProps {
@@ -27,6 +30,7 @@ interface FileTableRowProps {
   isScanning: boolean;
   onReindex: (filePath: string) => void;
   onDelete: (filePath: string) => void;
+  onUseCustomOcr?: (paperlessId: number) => void;
 }
 
 export default function FileTableRow({
@@ -34,10 +38,12 @@ export default function FileTableRow({
   isScanning,
   onReindex,
   onDelete,
+  onUseCustomOcr,
 }: FileTableRowProps) {
   const isPaperless = file.source === "paperless";
+  const isCustomOcr = file.source === "custom_ocr" || file.useCustomOcr;
   const isGoodreads = file.source === "goodreads";
-  const displayName = isPaperless
+  const displayName = isPaperless || isCustomOcr
     ? file.paperlessTitle || `Document ${file.paperlessId}`
     : isGoodreads
       ? file.goodreadsTitle || "Unknown Book"
@@ -65,22 +71,26 @@ export default function FileTableRow({
       <td>
         <span
           className={`${styles.sourceBadge} ${
-            isPaperless
-              ? styles.paperless
-              : isGoodreads
-                ? styles.goodreads
-                : file.source === "uploaded"
-                  ? styles.uploaded
-                  : styles.synced
+            isCustomOcr
+              ? styles.customOcr
+              : isPaperless
+                ? styles.paperless
+                : isGoodreads
+                  ? styles.goodreads
+                  : file.source === "uploaded"
+                    ? styles.uploaded
+                    : styles.synced
           }`}
         >
-          {isPaperless
-            ? "🗂️ Paperless"
-            : isGoodreads
-              ? "📚 Goodreads"
-              : file.source === "uploaded"
-                ? "📤 Uploaded"
-                : "🔄 Synced"}
+          {isCustomOcr
+            ? "✨ Custom OCR"
+            : isPaperless
+              ? "🗂️ Paperless"
+              : isGoodreads
+                ? "📚 Goodreads"
+                : file.source === "uploaded"
+                  ? "📤 Uploaded"
+                  : "🔄 Synced"}
         </span>
       </td>
       <td className={styles.pathCell}>
@@ -95,6 +105,15 @@ export default function FileTableRow({
             {file.goodreadsAuthor && (
               <div className={styles.bookAuthor}>by {file.goodreadsAuthor}</div>
             )}
+            {file.tags && file.tags.length > 0 && (
+              <div className={styles.globalTags}>
+                {file.tags.map((tag, idx) => (
+                  <span key={idx} className={styles.globalTag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
             {file.goodreadsRating && (
               <div className={styles.bookRating}>
                 {"⭐".repeat(file.goodreadsRating)}
@@ -104,7 +123,7 @@ export default function FileTableRow({
               <div className={styles.userName}>{file.userName}'s library</div>
             )}
           </div>
-        ) : isPaperless ? (
+        ) : isPaperless || isCustomOcr ? (
           <div>
             <Link
               href={`/files/${encodeURIComponent(file.filePath)}`}
@@ -112,6 +131,15 @@ export default function FileTableRow({
             >
               {displayName}
             </Link>
+            {file.tags && file.tags.length > 0 && (
+              <div className={styles.globalTags}>
+                {file.tags.map((tag, idx) => (
+                  <span key={idx} className={styles.globalTag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
             {tags.length > 0 && (
               <div className={styles.tags}>
                 {tags.map((tag, idx) => (
@@ -128,11 +156,20 @@ export default function FileTableRow({
             )}
           </div>
         ) : (
-          <>
+          <div>
             <Link href={`/files${file.filePath}`} className={styles.fileLink}>
               {displayName}
             </Link>
             <span className={styles.fullPath}>{file.filePath}</span>
+            {file.tags && file.tags.length > 0 && (
+              <div className={styles.globalTags}>
+                {file.tags.map((tag, idx) => (
+                  <span key={idx} className={styles.globalTag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
             {file.fileMissing && (
               <span
                 className={styles.missingBadge}
@@ -141,7 +178,7 @@ export default function FileTableRow({
                 Missing
               </span>
             )}
-          </>
+          </div>
         )}
       </td>
       <td>{file.chunkCount}</td>
@@ -166,6 +203,7 @@ export default function FileTableRow({
           {file.needsReindexing &&
             !file.fileMissing &&
             !isPaperless &&
+            !isCustomOcr &&
             !isGoodreads && (
               <button
                 onClick={() => onReindex(file.filePath)}
@@ -176,11 +214,26 @@ export default function FileTableRow({
                 <i className={`fas fa-sync ${isScanning ? "fa-spin" : ""}`}></i>
               </button>
             )}
+          {isPaperless && !isCustomOcr && onUseCustomOcr && file.paperlessId && (
+            <button
+              onClick={() => onUseCustomOcr(file.paperlessId!)}
+              className={styles.ocrButton}
+              title="Use Vision OCR for better text extraction"
+              disabled={isScanning}
+            >
+              <i className="fas fa-eye"></i>
+            </button>
+          )}
+          {file.customOcrStatus === "processing" && (
+            <span className={styles.processingBadge} title="OCR in progress">
+              <i className="fas fa-spinner fa-spin"></i> Processing...
+            </span>
+          )}
           {!isGoodreads && (
             <button
               onClick={() => onDelete(file.filePath)}
               className={styles.deleteButton}
-              title={isPaperless ? "Remove from index" : "Delete file"}
+              title={isPaperless || isCustomOcr ? "Remove from index" : "Delete file"}
             >
               <i className="fas fa-trash"></i>
             </button>

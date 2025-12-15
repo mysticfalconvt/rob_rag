@@ -1,0 +1,404 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.stats {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.stat {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #666);
+}
+
+.stat.pending {
+  color: var(--warning-color, #f59e0b);
+}
+
+.stat strong {
+  color: var(--text-primary, #333);
+  font-size: 1.1rem;
+}
+
+.controls {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  align-items: center;
+}
+
+.filterButtons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filterButton {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  background: var(--bg-secondary, #f9f9f9);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.filterButton:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.filterButton.active {
+  background: var(--primary-color, #2196f3);
+  color: white;
+  border-color: var(--primary-color, #2196f3);
+}
+
+.searchInput {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.createTag {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--bg-secondary, #f9f9f9);
+  border-radius: 8px;
+}
+
+.input {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.createButton {
+  padding: 0.5rem 1.5rem;
+  background: var(--success-color, #10b981);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.createButton:hover {
+  background: var(--success-hover, #059669);
+}
+
+.tagList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.tagCard {
+  padding: 1rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px;
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: box-shadow 0.2s;
+}
+
+.tagCard:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pendingCard {
+  border-color: var(--warning-color, #f59e0b);
+  background: var(--warning-bg, #fffbeb);
+}
+
+.tagInfo {
+  flex: 1;
+}
+
+.tagName {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tagBadge {
+  padding: 0.25rem 0.75rem;
+  background: var(--tag-bg, #e5e7eb);
+  color: var(--tag-color, #374151);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.pendingBadge {
+  padding: 0.25rem 0.5rem;
+  background: var(--warning-color, #f59e0b);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tagMeta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #666);
+}
+
+.docCount {
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.approveButton {
+  padding: 0.5rem 1rem;
+  background: var(--success-color, #10b981);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.approveButton:hover {
+  background: var(--success-hover, #059669);
+}
+
+.deleteButton {
+  padding: 0.5rem;
+  background: transparent;
+  color: var(--danger-color, #ef4444);
+  border: 1px solid var(--danger-color, #ef4444);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.deleteButton:hover {
+  background: var(--danger-color, #ef4444);
+  color: white;
+}
+
+.editButton {
+  padding: 0.5rem;
+  background: transparent;
+  color: var(--primary-color, #2196f3);
+  border: 1px solid var(--primary-color, #2196f3);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.editButton:hover {
+  background: var(--primary-color, #2196f3);
+  color: white;
+}
+
+.mergeButtonSmall {
+  padding: 0.5rem;
+  background: transparent;
+  color: var(--purple-color, #9c27b0);
+  border: 1px solid var(--purple-color, #9c27b0);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.mergeButtonSmall:hover {
+  background: var(--purple-color, #9c27b0);
+  color: white;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: white;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.modalContent h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+}
+
+.modalSubtitle {
+  margin: 0 0 1rem 0;
+  color: var(--text-secondary, #666);
+  font-size: 0.9rem;
+}
+
+.modalDescription {
+  margin: 0 0 1rem 0;
+  color: var(--text-secondary, #666);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.saveButton {
+  padding: 0.5rem 1.5rem;
+  background: var(--primary-color, #2196f3);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.saveButton:hover {
+  background: var(--primary-hover, #1976d2);
+}
+
+.mergeButton {
+  padding: 0.5rem 1.5rem;
+  background: var(--purple-color, #9c27b0);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s;
+}
+
+.mergeButton:hover:not(:disabled) {
+  background: var(--purple-hover, #7b1fa2);
+}
+
+.mergeButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancelButton {
+  padding: 0.5rem 1.5rem;
+  background: var(--bg-secondary, #f9f9f9);
+  color: var(--text-primary, #333);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.cancelButton:hover {
+  background: var(--bg-hover, #f0f0f0);
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-secondary, #666);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tagCard {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .pendingCard {
+    background: rgba(245, 158, 11, 0.1);
+  }
+
+  .filterButton {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .filterButton:hover {
+    background: var(--bg-hover, #374151);
+  }
+
+  .createTag {
+    background: var(--bg-secondary, #1f2937);
+  }
+
+  .modalContent {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .cancelButton {
+    background: var(--bg-secondary, #1f2937);
+    border-color: var(--border-dark, #374151);
+  }
+
+  .cancelButton:hover {
+    background: var(--bg-hover, #374151);
+  }
+}

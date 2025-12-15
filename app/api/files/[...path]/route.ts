@@ -13,12 +13,13 @@ export async function GET(
     const decodedPath = path
       .map((segment) => decodeURIComponent(segment))
       .join("/");
-    // For Paperless and Goodreads paths, they come as a single encoded segment
+    // For Paperless, Goodreads, and Uploaded OCR paths, they come as a single encoded segment
     // We need to handle both cases: already has leading slash or needs one
     const filePath =
       decodedPath.startsWith("/") ||
       decodedPath.startsWith("paperless:") ||
-      decodedPath.startsWith("goodreads:")
+      decodedPath.startsWith("goodreads:") ||
+      decodedPath.startsWith("uploaded:")
         ? decodedPath
         : `/${decodedPath}`;
 
@@ -111,13 +112,30 @@ ${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
 
 *From ${book.user.name}'s Goodreads library*`;
 
+      // Get file ID and tags for this Goodreads book
+      const fileRecord = await prisma.indexedFile.findUnique({
+        where: { filePath },
+        include: {
+          documentTags: {
+            include: { tag: true },
+          },
+        },
+      });
+
       return NextResponse.json({
+        fileId: fileRecord?.id,
         fileName: book.title,
         filePath,
         fileType: "goodreads",
         content,
         source: "goodreads",
         goodreadsBookId: book.goodreadsBookId,
+        tags: fileRecord?.documentTags.map((dt) => ({
+          id: dt.tag.id,
+          name: dt.tag.name,
+          status: dt.tag.status,
+          color: dt.tag.color,
+        })) || [],
         metadata: {
           author: book.author,
           rating: book.userRating,
@@ -134,6 +152,11 @@ ${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
     // Get file metadata from database
     const fileRecord = await prisma.indexedFile.findUnique({
       where: { filePath },
+      include: {
+        documentTags: {
+          include: { tag: true },
+        },
+      },
     });
 
     if (!fileRecord) {
@@ -143,8 +166,73 @@ ${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
       );
     }
 
-    // Check if this is a Paperless document
-    if (fileRecord.source === "paperless") {
+    // Check if this is a Paperless or Custom OCR document
+    if (fileRecord.source === "paperless" || fileRecord.source === "custom_ocr") {
+      // If this is a custom OCR document, use the custom OCR output
+      if (fileRecord.source === "custom_ocr" && fileRecord.ocrOutputPath && fileRecord.customOcrStatus === "completed") {
+        try {
+          const ocrContent = await fs.readFile(fileRecord.ocrOutputPath, "utf-8");
+
+          // Get Paperless settings for URL
+          const settings = await prisma.settings.findUnique({
+            where: { id: "singleton" },
+          });
+          const displayUrl =
+            settings?.paperlessExternalUrl || settings?.paperlessUrl || "";
+
+          // Parse tags
+          let tags: string[] = [];
+          if (fileRecord.paperlessTags) {
+            try {
+              tags = JSON.parse(fileRecord.paperlessTags);
+            } catch (e) {
+              console.error("Error parsing tags:", e);
+            }
+          }
+
+          // Parse extracted tags
+          let extractedTags: string[] = [];
+          if (fileRecord.extractedTags) {
+            extractedTags = fileRecord.extractedTags.split("|").filter(Boolean);
+          }
+
+          return NextResponse.json({
+            fileId: fileRecord.id,
+            fileName: fileRecord.paperlessTitle || filePath.split('/').pop() || "Untitled Document",
+            filePath,
+            fileType: "md",
+            content: ocrContent,
+            source: "custom_ocr",
+            paperlessId: fileRecord.paperlessId,
+            paperlessUrl: displayUrl && fileRecord.paperlessId
+              ? `${displayUrl}/documents/${fileRecord.paperlessId}`
+              : undefined,
+            tags: fileRecord.documentTags.map((dt) => ({
+              id: dt.tag.id,
+              name: dt.tag.name,
+              status: dt.tag.status,
+              color: dt.tag.color,
+            })),
+            metadata: {
+              size: ocrContent.length,
+              lastModified: fileRecord.lastModified,
+              chunkCount: fileRecord.chunkCount,
+              lastIndexed: fileRecord.lastIndexed,
+              extractedDate: fileRecord.extractedDate,
+              extractedTags,
+              documentType: fileRecord.documentType,
+              documentSummary: fileRecord.documentSummary,
+              originalDocPath: fileRecord.originalDocPath,
+            },
+            paperlessTags: tags,
+            paperlessCorrespondent: fileRecord.paperlessCorrespondent,
+          });
+        } catch (error) {
+          console.error("Error reading OCR output:", error);
+          // Fall through to regular paperless content
+        }
+      }
+
       // Get Paperless settings
       const settings = await prisma.settings.findUnique({
         where: { id: "singleton" },
@@ -177,6 +265,7 @@ ${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
       }
 
       return NextResponse.json({
+        fileId: fileRecord.id,
         fileName:
           fileRecord.paperlessTitle || `Document ${fileRecord.paperlessId}`,
         filePath,
@@ -187,6 +276,12 @@ ${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
         paperlessUrl: `${displayUrl}/documents/${fileRecord.paperlessId}`,
         paperlessTags: tags,
         paperlessCorrespondent: fileRecord.paperlessCorrespondent,
+        tags: fileRecord.documentTags.map((dt) => ({
+          id: dt.tag.id,
+          name: dt.tag.name,
+          status: dt.tag.status,
+          color: dt.tag.color,
+        })),
         metadata: {
           size: content.length,
           lastModified: fileRecord.lastModified,
@@ -201,11 +296,18 @@ ${book.privateNotes ? `## Private Notes\n\n${book.privateNotes}` : ""}
     const stats = await fs.stat(filePath);
 
     return NextResponse.json({
+      fileId: fileRecord.id,
       fileName: filePath.split("/").pop(),
       filePath,
       fileType: filePath.split(".").pop() || "txt",
       content,
       source: "local",
+      tags: fileRecord.documentTags.map((dt) => ({
+        id: dt.tag.id,
+        name: dt.tag.name,
+        status: dt.tag.status,
+        color: dt.tag.color,
+      })),
       metadata: {
         size: stats.size,
         lastModified: stats.mtime,

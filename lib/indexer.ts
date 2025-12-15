@@ -41,6 +41,20 @@ export async function indexFile(filePath: string, uploadedBy?: string) {
       where: { filePath },
     });
 
+    // 5. Get tags for this document to include in embeddings
+    let documentTags: string[] = [];
+    const fileRecord = await prisma.indexedFile.findUnique({
+      where: { filePath },
+      include: {
+        documentTags: {
+          include: { tag: true },
+        },
+      },
+    });
+    if (fileRecord?.documentTags) {
+      documentTags = fileRecord.documentTags.map((dt) => dt.tag.name);
+    }
+
     // 5. Generate embeddings and create DocumentChunks
     let chunksCreated = 0;
     const { v4: uuidv4 } = await import("uuid");
@@ -56,7 +70,13 @@ export async function indexFile(filePath: string, uploadedBy?: string) {
         continue;
       }
 
-      const embedding = await generateEmbedding(chunk.content);
+      // Append tags to content for embedding if tags exist
+      let contentWithTags = chunk.content;
+      if (documentTags.length > 0) {
+        contentWithTags = `${chunk.content}\n\nTags: ${documentTags.join(", ")}`;
+      }
+
+      const embedding = await generateEmbedding(contentWithTags);
       const chunkId = uuidv4();
       const embeddingStr = `[${embedding.join(",")}]`;
 
@@ -248,6 +268,20 @@ export async function indexPaperlessDocument(
       where: { filePath },
     });
 
+    // 4. Get tags for this document to include in embeddings
+    let documentTags: string[] = [];
+    const fileRecord = await prisma.indexedFile.findUnique({
+      where: { filePath },
+      include: {
+        documentTags: {
+          include: { tag: true },
+        },
+      },
+    });
+    if (fileRecord?.documentTags) {
+      documentTags = fileRecord.documentTags.map((dt) => dt.tag.name);
+    }
+
     // 4. Generate embeddings and create DocumentChunks
     let chunksCreated = 0;
     const { v4: uuidv4 } = await import("uuid");
@@ -263,7 +297,13 @@ export async function indexPaperlessDocument(
         continue;
       }
 
-      const embedding = await generateEmbedding(chunk.content);
+      // Append tags to content for embedding if tags exist
+      let contentWithTags = chunk.content;
+      if (documentTags.length > 0) {
+        contentWithTags = `${chunk.content}\n\nTags: ${documentTags.join(", ")}`;
+      }
+
+      const embedding = await generateEmbedding(contentWithTags);
       const chunkId = uuidv4();
       const embeddingStr = `[${embedding.join(",")}]`;
 
@@ -360,6 +400,18 @@ export async function scanPaperlessDocuments() {
     let indexedCount = 0;
     for (const doc of documents) {
       try {
+        // Check if this document is using custom OCR
+        const filePath = `paperless://${doc.id}`;
+        const existingFile = await prisma.indexedFile.findUnique({
+          where: { filePath },
+        });
+
+        // Skip if using custom OCR (will be indexed separately)
+        if (existingFile?.useCustomOcr && existingFile?.sourceOverride === "custom_ocr") {
+          console.log(`Skipping ${doc.id} - using custom OCR`);
+          continue;
+        }
+
         const metadata = await client.getDocumentMetadata(doc.id);
         const content = await client.getDocumentContent(doc.id);
 
@@ -374,7 +426,7 @@ export async function scanPaperlessDocuments() {
     // Find deleted documents (in DB but not in Paperless-ngx)
     const dbDocs = await prisma.indexedFile.findMany({
       where: { source: "paperless" },
-      select: { filePath: true, paperlessId: true },
+      select: { filePath: true, paperlessId: true, useCustomOcr: true },
     });
 
     const paperlessIds = new Set(documents.map((d) => d.id));
@@ -382,14 +434,17 @@ export async function scanPaperlessDocuments() {
 
     for (const dbDoc of dbDocs) {
       if (dbDoc.paperlessId && !paperlessIds.has(dbDoc.paperlessId)) {
-        try {
-          await deleteFileIndex(dbDoc.filePath);
-          deletedCount++;
-        } catch (error) {
-          console.error(
-            `Failed to delete index for Paperless document ${dbDoc.paperlessId}:`,
-            error,
-          );
+        // Only delete if not using custom OCR (custom OCR docs are independent)
+        if (!dbDoc.useCustomOcr) {
+          try {
+            await deleteFileIndex(dbDoc.filePath);
+            deletedCount++;
+          } catch (error) {
+            console.error(
+              `Failed to delete index for Paperless document ${dbDoc.paperlessId}:`,
+              error,
+            );
+          }
         }
       }
     }
@@ -404,5 +459,159 @@ export async function scanPaperlessDocuments() {
   } catch (error) {
     console.error("Error during Paperless-ngx scan:", error);
     return { indexedCount: 0, deletedCount: 0 };
+  }
+}
+
+/**
+ * Index a document that has been processed with custom OCR
+ */
+export async function indexCustomOcrDocument(
+  paperlessId: number,
+  ocrResult: { markdown: string; summary: string; metadata: any },
+) {
+  const filePath = `paperless://${paperlessId}`;
+
+  try {
+    console.log(`Indexing custom OCR document: ${paperlessId}`);
+
+    // Get file record with paths
+    const fileRecord = await prisma.indexedFile.findUnique({
+      where: { filePath },
+    });
+
+    if (!fileRecord?.ocrOutputPath) {
+      throw new Error("OCR output path not found");
+    }
+
+    // Create hash from markdown content
+    const crypto = require("node:crypto");
+    const currentHash = crypto
+      .createHash("sha256")
+      .update(ocrResult.markdown)
+      .digest("hex");
+
+    // Delete old chunks for this document
+    await prisma.documentChunk.deleteMany({
+      where: { filePath },
+    });
+
+    // Create splitter for content chunks
+    const { RecursiveCharacterTextSplitter } = await import("@langchain/textsplitters");
+    const splitter = new RecursiveCharacterTextSplitter({
+      chunkSize: 800,
+      chunkOverlap: 200,
+    });
+
+    const contentChunks = await splitter.createDocuments([ocrResult.markdown]);
+
+    // Get tags for this document to include in embeddings
+    let documentTags: string[] = [];
+    const fileRecordWithTags = await prisma.indexedFile.findUnique({
+      where: { filePath },
+      include: {
+        documentTags: {
+          include: { tag: true },
+        },
+      },
+    });
+    if (fileRecordWithTags?.documentTags) {
+      documentTags = fileRecordWithTags.documentTags.map((dt) => dt.tag.name);
+    }
+
+    // Get the document title from the file record
+    const documentTitle = fileRecordWithTags?.paperlessTitle || `Document ${paperlessId}`;
+
+    // Calculate total chunks (1 summary + N content)
+    const totalChunks = contentChunks.length + 1;
+    let chunksCreated = 0;
+    const { v4: uuidv4 } = await import("uuid");
+
+    // Create summary chunk (index 0)
+    let summaryText = `Document Summary:\n${ocrResult.summary}\n\nExtracted Metadata:\n- Type: ${ocrResult.metadata.documentType || "Unknown"}\n- Date: ${ocrResult.metadata.extractedDate ? new Date(ocrResult.metadata.extractedDate).toISOString().split("T")[0] : "Unknown"}\n- Tags: ${ocrResult.metadata.extractedTags.join(", ")}\n\nFull document available at: ${filePath}`;
+
+    // Append global tags to summary if they exist
+    if (documentTags.length > 0) {
+      summaryText += `\n\nGlobal Tags: ${documentTags.join(", ")}`;
+    }
+
+    const summaryEmbedding = await generateEmbedding(summaryText);
+    const summaryChunkId = uuidv4();
+    const summaryEmbeddingStr = `[${summaryEmbedding.join(",")}]`;
+
+    await prisma.$executeRaw`
+      INSERT INTO "DocumentChunk" (
+        id, content, embedding, source, "fileName", "filePath", "fileType",
+        "chunkIndex", "totalChunks", "chunkType", "paperlessId",
+        "embeddingVersion", "lastEmbedded", "createdAt", "updatedAt"
+      ) VALUES (
+        ${summaryChunkId}, ${summaryText}, ${summaryEmbeddingStr}::vector,
+        ${"custom_ocr"}, ${documentTitle}, ${filePath}, ${"markdown"},
+        ${0}, ${totalChunks}, ${"summary"}, ${paperlessId},
+        ${1}, NOW(), NOW(), NOW()
+      )
+    `;
+    chunksCreated++;
+
+    // Create content chunks (index 1+)
+    for (let i = 0; i < contentChunks.length; i++) {
+      const chunk = contentChunks[i];
+
+      if (!chunk.pageContent || chunk.pageContent.length === 0) {
+        continue;
+      }
+      if (chunk.pageContent.length > 100000) {
+        console.warn(`Skipping oversized chunk for custom OCR doc ${paperlessId}`);
+        continue;
+      }
+
+      // Append tags to content for embedding if tags exist
+      let contentWithTags = chunk.pageContent;
+      if (documentTags.length > 0) {
+        contentWithTags = `${chunk.pageContent}\n\nTags: ${documentTags.join(", ")}`;
+      }
+
+      const embedding = await generateEmbedding(contentWithTags);
+      const chunkId = uuidv4();
+      const embeddingStr = `[${embedding.join(",")}]`;
+
+      await prisma.$executeRaw`
+        INSERT INTO "DocumentChunk" (
+          id, content, embedding, source, "fileName", "filePath", "fileType",
+          "chunkIndex", "totalChunks", "chunkType", "paperlessId",
+          "embeddingVersion", "lastEmbedded", "createdAt", "updatedAt"
+        ) VALUES (
+          ${chunkId}, ${chunk.pageContent}, ${embeddingStr}::vector,
+          ${"custom_ocr"}, ${documentTitle}, ${filePath}, ${"markdown"},
+          ${i + 1}, ${totalChunks}, ${"content"}, ${paperlessId},
+          ${1}, NOW(), NOW(), NOW()
+        )
+      `;
+      chunksCreated++;
+    }
+
+    console.log(`Created ${chunksCreated} chunks (1 summary + ${contentChunks.length} content) in PostgreSQL`);
+
+    // Update IndexedFile
+    await prisma.indexedFile.update({
+      where: { filePath },
+      data: {
+        fileHash: currentHash,
+        lastIndexed: new Date(),
+        chunkCount: chunksCreated,
+        status: "indexed",
+      },
+    });
+
+    console.log(`Successfully indexed custom OCR document ${paperlessId}`);
+  } catch (error) {
+    console.error(`Error indexing custom OCR document ${paperlessId}:`, error);
+    await prisma.indexedFile.update({
+      where: { filePath },
+      data: {
+        status: "error",
+        customOcrStatus: "error",
+      },
+    });
+    throw error;
   }
 }
