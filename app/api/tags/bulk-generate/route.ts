@@ -50,9 +50,20 @@ export async function POST(req: NextRequest) {
 
     // Get all users to provide as context (their names are also tags)
     const users = await prisma.authUser.findMany({
-      select: { name: true },
+      select: { name: true, userName: true, userBio: true },
     });
     const userNames = users.map((u) => u.name).join(", ");
+
+    // Get user profile info for context
+    const profileContext = users
+      .filter((u) => u.userName || u.userBio)
+      .map((u) => {
+        const parts = [];
+        if (u.userName) parts.push(u.userName);
+        if (u.userBio) parts.push(u.userBio);
+        return parts.join(": ");
+      })
+      .join("\n");
 
     // Process files (this will run synchronously, but we could make it async with a job queue)
     let tagged = 0;
@@ -176,7 +187,7 @@ export async function POST(req: NextRequest) {
 
         const prompt = `You are generating tags for a document. Tags should be concise, relevant keywords that describe the content.
 
-${approvedTagNames ? `EXISTING APPROVED TAGS IN THE SYSTEM (STRONGLY PREFER THESE):\n${approvedTagNames}\n\n` : ""}${userNames ? `PEOPLE/USERS IN THE SYSTEM (use these tags if the document mentions these people):\n${userNames}\n\n` : ""}Document content:
+${approvedTagNames ? `EXISTING APPROVED TAGS IN THE SYSTEM (STRONGLY PREFER THESE):\n${approvedTagNames}\n\n` : ""}${userNames ? `PEOPLE/USERS IN THE SYSTEM (use these tags if the document mentions these people):\n${userNames}\n\n` : ""}${profileContext ? `USER PROFILE CONTEXT (consider when generating relevant tags):\n${profileContext}\n\n` : ""}Document content:
 ${textForTagging}
 
 Generate 3-7 relevant tags for this document. IMPORTANT RULES:
