@@ -17,7 +17,10 @@ export default function ReindexCard({
 }: ReindexCardProps) {
   return (
     <div className={styles.card}>
-      <h2>Reindex by Source</h2>
+      <h2>Reindex by Source (Full Regeneration)</h2>
+      <p className={styles.description}>
+        Reindex regenerates ALL embeddings for the selected source. Use this if embeddings need to be rebuilt from scratch (e.g., after model changes).
+      </p>
       <div className={styles.reindexButtons}>
         <button
           onClick={() => onReindexSource("uploaded", "Uploaded")}

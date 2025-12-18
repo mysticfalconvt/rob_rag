@@ -394,6 +394,7 @@ export async function insertChunk(data: {
   // Optional metadata
   fileId?: string;
   bookId?: string;
+  eventId?: string;
   userId?: string;
   userName?: string;
   bookTitle?: string;
@@ -408,6 +409,12 @@ export async function insertChunk(data: {
   paperlessTags?: string;
   paperlessCorrespondent?: string;
   documentDate?: string;
+  eventTitle?: string;
+  eventStartTime?: string;
+  eventEndTime?: string;
+  eventLocation?: string;
+  eventAttendees?: string;
+  calendarName?: string;
 }): Promise<string> {
   const embeddingStr = embeddingToSql(data.embedding);
   const id = data.id || crypto.randomUUID();
@@ -417,25 +424,29 @@ export async function insertChunk(data: {
       INSERT INTO "DocumentChunk" (
         id, content, embedding, source, "fileName", "filePath", "fileType",
         "chunkIndex", "totalChunks",
-        "fileId", "bookId",
+        "fileId", "bookId", "eventId",
         "userId", "userName", "bookTitle", "bookAuthor",
         "userRating", "dateRead", "readDates", "readCount", "shelves",
         "paperlessId", "paperlessTitle", "paperlessTags", "paperlessCorrespondent", "documentDate",
+        "eventTitle", "eventStartTime", "eventEndTime", "eventLocation", "eventAttendees", "calendarName",
         "embeddingVersion", "lastEmbedded", "createdAt", "updatedAt"
       ) VALUES (
         '${id}', '${data.content.replace(/'/g, "''")}', '${embeddingStr}'::vector,
-        '${data.source}', '${data.fileName}', '${data.filePath}', ${data.fileType ? `'${data.fileType}'` : 'NULL'},
+        '${data.source}', '${data.fileName.replace(/'/g, "''")}', '${data.filePath.replace(/'/g, "''")}', ${data.fileType ? `'${data.fileType.replace(/'/g, "''")}'` : 'NULL'},
         ${data.chunkIndex || 0}, ${data.totalChunks || 1},
-        ${data.fileId ? `'${data.fileId}'` : 'NULL'}, ${data.bookId ? `'${data.bookId}'` : 'NULL'},
-        ${data.userId ? `'${data.userId}'` : 'NULL'}, ${data.userName ? `'${data.userName}'` : 'NULL'},
-        ${data.bookTitle ? `'${data.bookTitle}'` : 'NULL'}, ${data.bookAuthor ? `'${data.bookAuthor}'` : 'NULL'},
+        ${data.fileId ? `'${data.fileId}'` : 'NULL'}, ${data.bookId ? `'${data.bookId}'` : 'NULL'}, ${data.eventId ? `'${data.eventId}'` : 'NULL'},
+        ${data.userId ? `'${data.userId}'` : 'NULL'}, ${data.userName ? `'${data.userName.replace(/'/g, "''")}'` : 'NULL'},
+        ${data.bookTitle ? `'${data.bookTitle.replace(/'/g, "''")}'` : 'NULL'}, ${data.bookAuthor ? `'${data.bookAuthor.replace(/'/g, "''")}'` : 'NULL'},
         ${data.userRating || 'NULL'}, ${data.dateRead ? `'${data.dateRead}'` : 'NULL'},
         ${data.readDates ? `'${data.readDates}'` : 'NULL'}, ${data.readCount || 'NULL'},
-        ${data.shelves ? `'${data.shelves}'` : 'NULL'},
-        ${data.paperlessId || 'NULL'}, ${data.paperlessTitle ? `'${data.paperlessTitle}'` : 'NULL'},
-        ${data.paperlessTags ? `'${data.paperlessTags}'` : 'NULL'},
-        ${data.paperlessCorrespondent ? `'${data.paperlessCorrespondent}'` : 'NULL'},
+        ${data.shelves ? `'${data.shelves.replace(/'/g, "''")}'` : 'NULL'},
+        ${data.paperlessId || 'NULL'}, ${data.paperlessTitle ? `'${data.paperlessTitle.replace(/'/g, "''")}'` : 'NULL'},
+        ${data.paperlessTags ? `'${data.paperlessTags.replace(/'/g, "''")}'` : 'NULL'},
+        ${data.paperlessCorrespondent ? `'${data.paperlessCorrespondent.replace(/'/g, "''")}'` : 'NULL'},
         ${data.documentDate ? `'${data.documentDate}'` : 'NULL'},
+        ${data.eventTitle ? `'${data.eventTitle.replace(/'/g, "''")}'` : 'NULL'}, ${data.eventStartTime ? `'${data.eventStartTime}'` : 'NULL'},
+        ${data.eventEndTime ? `'${data.eventEndTime}'` : 'NULL'}, ${data.eventLocation ? `'${data.eventLocation.replace(/'/g, "''")}'` : 'NULL'},
+        ${data.eventAttendees ? `'${data.eventAttendees.replace(/'/g, "''")}'` : 'NULL'}, ${data.calendarName ? `'${data.calendarName.replace(/'/g, "''")}'` : 'NULL'},
         1, NOW(), NOW(), NOW()
       )
       ON CONFLICT (id) DO UPDATE SET

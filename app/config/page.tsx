@@ -6,6 +6,7 @@ import ModelConfiguration from "@/components/ModelConfiguration";
 import PaperlessConfiguration from "@/components/PaperlessConfiguration";
 import CustomOcrConfiguration from "@/components/CustomOcrConfiguration";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
+import GoogleCalendarConfig from "@/components/GoogleCalendarConfig";
 import PromptConfiguration from "@/components/PromptConfiguration";
 import UserProfile from "@/components/UserProfile";
 import ContextWindowSettings from "@/components/ContextWindowSettings";
@@ -466,6 +467,8 @@ export default function ConfigPage() {
             <PromptConfiguration />
 
             <ContextWindowSettings />
+
+            <GoogleCalendarConfig />
 
             {/* Goodreads - Admin only */}
             <GoodreadsIntegration

@@ -6,6 +6,10 @@
   background: #e8f5e9;
 }
 
+.calendarRow {
+  background: #e3f2fd;
+}
+
 @media (prefers-color-scheme: dark) {
   .paperlessRow {
     background: #3d2f1f;
@@ -13,6 +17,10 @@
 
   .goodreadsRow {
     background: #1f3d2f;
+  }
+
+  .calendarRow {
+    background: #1f2f3d;
   }
 }
 
@@ -51,6 +59,11 @@
   color: var(--custom-ocr-badge-color, #4a148c);
 }
 
+.sourceBadge.calendar {
+  background: var(--calendar-badge-bg, #bbdefb);
+  color: var(--calendar-badge-color, #0d47a1);
+}
+
 .pathCell {
   max-width: 400px;
 }
@@ -74,7 +87,10 @@
 
 .bookAuthor,
 .userName,
-.correspondent {
+.correspondent,
+.eventDate,
+.eventLocation,
+.calendarName {
   font-size: 0.75rem;
   color: var(--text-secondary, #666);
   margin-top: 0.25rem;

@@ -7,6 +7,7 @@ import { dataSourceRegistry } from "../dataSourceRegistry";
 import { goodreadsPlugin } from "./goodreadsPlugin";
 import { paperlessPlugin } from "./paperlessPlugin";
 import { filesPlugin } from "./filesPlugin";
+import { calendarPlugin } from "./calendarPlugin";
 
 /**
  * Initialize all plugins
@@ -19,6 +20,7 @@ export function initializePlugins(): void {
   dataSourceRegistry.register(goodreadsPlugin);
   dataSourceRegistry.register(paperlessPlugin);
   dataSourceRegistry.register(filesPlugin);
+  dataSourceRegistry.register(calendarPlugin);
 
   console.log(
     `[Plugins] Registered ${dataSourceRegistry.getAll().length} plugins:`,
@@ -44,4 +46,4 @@ export function getPlugin(name: string) {
 export { dataSourceRegistry };
 
 // Export individual plugins for direct import
-export { goodreadsPlugin, paperlessPlugin, filesPlugin };
+export { goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin };

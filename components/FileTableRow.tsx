@@ -23,6 +23,10 @@ interface IndexedFile {
   userName?: string;
   useCustomOcr?: boolean;
   customOcrStatus?: string;
+  eventTitle?: string;
+  eventStartTime?: string;
+  eventLocation?: string;
+  calendarName?: string;
 }
 
 interface FileTableRowProps {
@@ -43,11 +47,14 @@ export default function FileTableRow({
   const isPaperless = file.source === "paperless";
   const isCustomOcr = file.source === "custom_ocr" || file.useCustomOcr;
   const isGoodreads = file.source === "goodreads";
+  const isCalendar = file.source === "google-calendar";
   const displayName = isPaperless || isCustomOcr
     ? file.paperlessTitle || `Document ${file.paperlessId}`
     : isGoodreads
       ? file.goodreadsTitle || "Unknown Book"
-      : file.filePath.split("/").pop();
+      : isCalendar
+        ? file.eventTitle || "Calendar Event"
+        : file.filePath.split("/").pop();
 
   let tags: string[] = [];
   if (isPaperless && file.paperlessTags) {
@@ -65,7 +72,9 @@ export default function FileTableRow({
           ? styles.paperlessRow
           : isGoodreads
             ? styles.goodreadsRow
-            : ""
+            : isCalendar
+              ? styles.calendarRow
+              : ""
       }
     >
       <td>
@@ -77,9 +86,11 @@ export default function FileTableRow({
                 ? styles.paperless
                 : isGoodreads
                   ? styles.goodreads
-                  : file.source === "uploaded"
-                    ? styles.uploaded
-                    : styles.synced
+                  : isCalendar
+                    ? styles.calendar
+                    : file.source === "uploaded"
+                      ? styles.uploaded
+                      : styles.synced
           }`}
         >
           {isCustomOcr
@@ -88,13 +99,44 @@ export default function FileTableRow({
               ? "🗂️ Paperless"
               : isGoodreads
                 ? "📚 Goodreads"
-                : file.source === "uploaded"
-                  ? "📤 Uploaded"
-                  : "🔄 Synced"}
+                : isCalendar
+                  ? "📅 Calendar"
+                  : file.source === "uploaded"
+                    ? "📤 Uploaded"
+                    : "🔄 Synced"}
         </span>
       </td>
       <td className={styles.pathCell}>
-        {isGoodreads ? (
+        {isCalendar ? (
+          <div>
+            <Link
+              href={`/files/${encodeURIComponent(file.filePath)}`}
+              className={styles.fileLink}
+            >
+              {displayName}
+            </Link>
+            {file.eventStartTime && (
+              <div className={styles.eventDate}>
+                {new Date(file.eventStartTime).toLocaleString()}
+              </div>
+            )}
+            {file.eventLocation && (
+              <div className={styles.eventLocation}>📍 {file.eventLocation}</div>
+            )}
+            {file.calendarName && (
+              <div className={styles.calendarName}>{file.calendarName}</div>
+            )}
+            {file.tags && file.tags.length > 0 && (
+              <div className={styles.globalTags}>
+                {file.tags.map((tag, idx) => (
+                  <span key={idx} className={styles.globalTag}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : isGoodreads ? (
           <div>
             <Link
               href={`/files/${encodeURIComponent(file.filePath)}`}
@@ -229,7 +271,7 @@ export default function FileTableRow({
               <i className="fas fa-spinner fa-spin"></i> Processing...
             </span>
           )}
-          {!isGoodreads && (
+          {!isGoodreads && !isCalendar && (
             <button
               onClick={() => onDelete(file.filePath)}
               className={styles.deleteButton}

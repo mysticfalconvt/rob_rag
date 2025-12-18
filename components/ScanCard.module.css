@@ -7,9 +7,16 @@
 }
 
 .card h2 {
-  margin: 0 0 1.5rem 0;
+  margin: 0 0 0.5rem 0;
   font-size: 1.25rem;
   color: #1f2937;
+}
+
+.description {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.5;
 }
 
 .section {
@@ -92,6 +99,10 @@
 
   .card h2 {
     color: #ededed;
+  }
+
+  .description {
+    color: #9ca3af;
   }
 
   .section h3 {

@@ -459,3 +459,13 @@
     color: #ededed;
   }
 }
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 768px) {
+  .fullWidth {
+    grid-column: span 2;
+  }
+}

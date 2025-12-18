@@ -27,6 +27,10 @@ interface IndexedFile {
   goodreadsAuthor?: string;
   goodreadsRating?: number | null;
   userName?: string;
+  eventTitle?: string;
+  eventStartTime?: string;
+  eventLocation?: string;
+  calendarName?: string;
 }
 
 export default function FilesPage() {
@@ -39,6 +43,7 @@ export default function FilesPage() {
   const [showPaperless, setShowPaperless] = useState(true);
   const [showGoodreads, setShowGoodreads] = useState(true);
   const [showCustomOcr, setShowCustomOcr] = useState(true);
+  const [showCalendar, setShowCalendar] = useState(true);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [taggedFilter, setTaggedFilter] = useState<"all" | "tagged" | "untagged">("all");
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,7 +74,7 @@ export default function FilesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [showUploaded, showSynced, showPaperless, showGoodreads, showCustomOcr, searchQuery, selectedTags, taggedFilter]);
+  }, [showUploaded, showSynced, showPaperless, showGoodreads, showCustomOcr, showCalendar, searchQuery, selectedTags, taggedFilter]);
 
   const handleSort = (
     column: "source" | "fileName" | "chunkCount" | "status" | "lastIndexed",
@@ -240,12 +245,14 @@ export default function FilesPage() {
       const isPaperless = file.source === "paperless";
       const isGoodreads = file.source === "goodreads";
       const isCustomOcr = file.source === "custom_ocr";
+      const isCalendar = file.source === "google-calendar";
 
       if (isUploaded && !showUploaded) return false;
       if (isSynced && !showSynced) return false;
       if (isPaperless && !showPaperless) return false;
       if (isGoodreads && !showGoodreads) return false;
       if (isCustomOcr && !showCustomOcr) return false;
+      if (isCalendar && !showCalendar) return false;
 
       // Apply tagged/untagged filter
       if (taggedFilter === "tagged" && (!file.tags || file.tags.length === 0)) {
@@ -270,7 +277,8 @@ export default function FilesPage() {
         const matchesPath = file.filePath.toLowerCase().includes(query);
         const matchesTitle =
           file.paperlessTitle?.toLowerCase().includes(query) ||
-          file.goodreadsTitle?.toLowerCase().includes(query);
+          file.goodreadsTitle?.toLowerCase().includes(query) ||
+          file.eventTitle?.toLowerCase().includes(query);
         const matchesAuthor = file.goodreadsAuthor
           ?.toLowerCase()
           .includes(query);
@@ -279,6 +287,8 @@ export default function FilesPage() {
           ?.toLowerCase()
           .includes(query);
         const matchesUser = file.userName?.toLowerCase().includes(query);
+        const matchesLocation = file.eventLocation?.toLowerCase().includes(query);
+        const matchesCalendar = file.calendarName?.toLowerCase().includes(query);
 
         if (
           !matchesPath &&
@@ -286,7 +296,9 @@ export default function FilesPage() {
           !matchesAuthor &&
           !matchesTags &&
           !matchesCorrespondent &&
-          !matchesUser
+          !matchesUser &&
+          !matchesLocation &&
+          !matchesCalendar
         ) {
           return false;
         }
@@ -308,6 +320,7 @@ export default function FilesPage() {
           const getFileName = (file: IndexedFile) => {
             if (file.paperlessTitle) return file.paperlessTitle.toLowerCase();
             if (file.goodreadsTitle) return file.goodreadsTitle.toLowerCase();
+            if (file.eventTitle) return file.eventTitle.toLowerCase();
             // Extract filename from path
             const pathParts = file.filePath.split("/");
             return pathParts[pathParts.length - 1].toLowerCase();
@@ -348,13 +361,16 @@ export default function FilesPage() {
     const matchesPath = file.filePath.toLowerCase().includes(query);
     const matchesTitle =
       file.paperlessTitle?.toLowerCase().includes(query) ||
-      file.goodreadsTitle?.toLowerCase().includes(query);
+      file.goodreadsTitle?.toLowerCase().includes(query) ||
+      file.eventTitle?.toLowerCase().includes(query);
     const matchesAuthor = file.goodreadsAuthor?.toLowerCase().includes(query);
     const matchesTags = file.paperlessTags?.toLowerCase().includes(query);
     const matchesCorrespondent = file.paperlessCorrespondent
       ?.toLowerCase()
       .includes(query);
     const matchesUser = file.userName?.toLowerCase().includes(query);
+    const matchesLocation = file.eventLocation?.toLowerCase().includes(query);
+    const matchesCalendar = file.calendarName?.toLowerCase().includes(query);
 
     return (
       matchesPath ||
@@ -362,7 +378,9 @@ export default function FilesPage() {
       matchesAuthor ||
       matchesTags ||
       matchesCorrespondent ||
-      matchesUser
+      matchesUser ||
+      matchesLocation ||
+      matchesCalendar
     );
   };
 
@@ -383,6 +401,9 @@ export default function FilesPage() {
   ).length;
   const customOcrCount = files.filter(
     (f) => f.source === "custom_ocr" && matchesSearch(f),
+  ).length;
+  const calendarCount = files.filter(
+    (f) => f.source === "google-calendar" && matchesSearch(f),
   ).length;
 
   return (
@@ -409,15 +430,17 @@ export default function FilesPage() {
         showPaperless={showPaperless}
         showGoodreads={showGoodreads}
         showCustomOcr={showCustomOcr}
+        showCalendar={showCalendar}
         uploadedCount={uploadedCount}
         syncedCount={syncedCount}
         paperlessCount={paperlessCount}
         goodreadsCount={goodreadsCount}
         customOcrCount={customOcrCount}
+        calendarCount={calendarCount}
         filteredCount={paginatedFiles.length}
         totalCount={filteredFiles.length}
         onToggleUploaded={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
           if (allSelected) {
             // If all are selected, select only this one
             setShowUploaded(true);
@@ -425,9 +448,10 @@ export default function FilesPage() {
             setShowPaperless(false);
             setShowGoodreads(false);
             setShowCustomOcr(false);
+            setShowCalendar(false);
           } else {
             // Check if this is the last one selected
-            const isLastSelected = showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr;
+            const isLastSelected = showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar;
             if (isLastSelected) {
               // Select all instead of deselecting the last one
               setShowUploaded(true);
@@ -435,6 +459,7 @@ export default function FilesPage() {
               setShowPaperless(true);
               setShowGoodreads(true);
               setShowCustomOcr(true);
+              setShowCalendar(true);
             } else {
               // Otherwise, toggle this one
               setShowUploaded(!showUploaded);
@@ -442,86 +467,117 @@ export default function FilesPage() {
           }
         }}
         onToggleSynced={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
           if (allSelected) {
             setShowUploaded(false);
             setShowSynced(true);
             setShowPaperless(false);
             setShowGoodreads(false);
             setShowCustomOcr(false);
+            setShowCalendar(false);
           } else {
-            const isLastSelected = !showUploaded && showSynced && !showPaperless && !showGoodreads && !showCustomOcr;
+            const isLastSelected = !showUploaded && showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
               setShowPaperless(true);
               setShowGoodreads(true);
               setShowCustomOcr(true);
+              setShowCalendar(true);
             } else {
               setShowSynced(!showSynced);
             }
           }
         }}
         onTogglePaperless={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
           if (allSelected) {
             setShowUploaded(false);
             setShowSynced(false);
             setShowPaperless(true);
             setShowGoodreads(false);
             setShowCustomOcr(false);
+            setShowCalendar(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && showPaperless && !showGoodreads && !showCustomOcr;
+            const isLastSelected = !showUploaded && !showSynced && showPaperless && !showGoodreads && !showCustomOcr && !showCalendar;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
               setShowPaperless(true);
               setShowGoodreads(true);
               setShowCustomOcr(true);
+              setShowCalendar(true);
             } else {
               setShowPaperless(!showPaperless);
             }
           }
         }}
         onToggleGoodreads={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
           if (allSelected) {
             setShowUploaded(false);
             setShowSynced(false);
             setShowPaperless(false);
             setShowGoodreads(true);
             setShowCustomOcr(false);
+            setShowCalendar(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && !showPaperless && showGoodreads && !showCustomOcr;
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && showGoodreads && !showCustomOcr && !showCalendar;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
               setShowPaperless(true);
               setShowGoodreads(true);
               setShowCustomOcr(true);
+              setShowCalendar(true);
             } else {
               setShowGoodreads(!showGoodreads);
             }
           }
         }}
         onToggleCustomOcr={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
           if (allSelected) {
             setShowUploaded(false);
             setShowSynced(false);
             setShowPaperless(false);
             setShowGoodreads(false);
             setShowCustomOcr(true);
+            setShowCalendar(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && showCustomOcr;
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && showCustomOcr && !showCalendar;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
               setShowPaperless(true);
               setShowGoodreads(true);
               setShowCustomOcr(true);
+              setShowCalendar(true);
             } else {
               setShowCustomOcr(!showCustomOcr);
+            }
+          }
+        }}
+        onToggleCalendar={() => {
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
+          if (allSelected) {
+            setShowUploaded(false);
+            setShowSynced(false);
+            setShowPaperless(false);
+            setShowGoodreads(false);
+            setShowCustomOcr(false);
+            setShowCalendar(true);
+          } else {
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && showCalendar;
+            if (isLastSelected) {
+              setShowUploaded(true);
+              setShowSynced(true);
+              setShowPaperless(true);
+              setShowGoodreads(true);
+              setShowCustomOcr(true);
+              setShowCalendar(true);
+            } else {
+              setShowCalendar(!showCalendar);
             }
           }
         }}

@@ -205,7 +205,8 @@ function FileViewerPageContent() {
   const isMarkdown =
     fileData.fileType === "md" ||
     fileData.fileType === "markdown" ||
-    fileData.fileType === "goodreads";
+    fileData.fileType === "goodreads" ||
+    fileData.fileType === "google-calendar";
 
   return (
     <div className={styles.container}>

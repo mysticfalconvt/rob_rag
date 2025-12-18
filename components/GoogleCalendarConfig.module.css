@@ -1,0 +1,433 @@
+.instructionsBox {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.instructionsTitle {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.instructionsList {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.instructionsList li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.instructionsList li:last-child {
+  margin-bottom: 0;
+}
+
+.subList {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+}
+
+.subList li {
+  margin-bottom: 0.25rem;
+}
+
+.link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.redirectUriBox {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.redirectLabel {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.redirectUriRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.redirectInput {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #1f2937;
+  font-family: monospace;
+}
+
+.copyButton {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+  background: #3b82f6;
+  color: white;
+  white-space: nowrap;
+}
+
+.copyButton:hover {
+  background: #2563eb;
+}
+
+.copyButton:active {
+  background: #1d4ed8;
+}
+
+.formGroup {
+  margin-bottom: 1.5rem;
+}
+
+.formGroup label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #1f2937;
+}
+
+.input:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.helpText {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.message {
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+}
+
+.infoText {
+  margin: 0;
+  color: #1f2937;
+}
+
+.statusSection {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.statusRow:last-child {
+  margin-bottom: 0;
+}
+
+.statusLabel {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.statusConnected {
+  color: #10b981;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.statusValue {
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.statusActions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.editButton {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #6b7280;
+}
+
+.editButton:hover {
+  background: #f9fafb;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.calendarList {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: #fff;
+  margin-top: 0.5rem;
+}
+
+.calendarItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.calendarItem:hover {
+  background: #f9fafb;
+}
+
+.calendarItem input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.calendarItem span {
+  flex: 1;
+  font-size: 0.875rem;
+  color: #1f2937;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.saveButton,
+.connectButton,
+.syncButton,
+.secondaryButton,
+.dangerButton {
+  padding: 0.75rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+
+.saveButton {
+  flex: 1;
+  background: #3b82f6;
+  color: white;
+}
+
+.saveButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.connectButton {
+  flex: 1;
+  background: #10b981;
+  color: white;
+}
+
+.connectButton:hover:not(:disabled) {
+  background: #059669;
+}
+
+.syncButton {
+  flex: 1;
+  background: #8b5cf6;
+  color: white;
+}
+
+.syncButton:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+.secondaryButton {
+  flex: 1;
+  background: #6b7280;
+  color: white;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  background: #4b5563;
+}
+
+.dangerButton {
+  background: #ef4444;
+  color: white;
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.saveButton:disabled,
+.connectButton:disabled,
+.syncButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .instructionsBox {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .instructionsTitle {
+    color: #ededed;
+  }
+
+  .instructionsList {
+    color: #d1d5db;
+  }
+
+  .link {
+    color: #60a5fa;
+  }
+
+  .redirectUriBox {
+    border-top-color: #374151;
+  }
+
+  .redirectLabel {
+    color: #ededed;
+  }
+
+  .redirectInput {
+    background: #262626;
+    border-color: #333;
+    color: #ededed;
+  }
+
+  .formGroup label {
+    color: #ededed;
+  }
+
+  .input {
+    background: #262626;
+    border-color: #333;
+    color: #ededed;
+  }
+
+  .input:disabled {
+    background: #1a1a1a;
+  }
+
+  .input:focus {
+    border-color: #3b82f6;
+  }
+
+  .helpText {
+    color: #9ca3af;
+  }
+
+  .message {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .infoText {
+    color: #ededed;
+  }
+
+  .statusSection {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .statusLabel {
+    color: #9ca3af;
+  }
+
+  .statusValue {
+    color: #ededed;
+  }
+
+  .statusActions {
+    border-top-color: #374151;
+  }
+
+  .editButton {
+    background: #262626;
+    border-color: #333;
+    color: #9ca3af;
+  }
+
+  .editButton:hover {
+    background: #1f2937;
+    border-color: #3b82f6;
+    color: #3b82f6;
+  }
+
+  .calendarList {
+    background: #262626;
+    border-color: #333;
+  }
+
+  .calendarItem:hover {
+    background: #1f2937;
+  }
+
+  .calendarItem span {
+    color: #ededed;
+  }
+}

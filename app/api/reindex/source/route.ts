@@ -31,7 +31,8 @@ export async function POST(req: NextRequest) {
 
       let totalBooks = 0;
       for (const user of users) {
-        const count = await indexGoodreadsBooks(user.id);
+        // Force full reindex (onlyNew=false) since this is an explicit reindex request
+        const count = await indexGoodreadsBooks(user.id, false);
         totalBooks += count;
         console.log(`✅ Indexed ${count} books for ${user.name}`);
       }

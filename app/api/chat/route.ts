@@ -250,9 +250,9 @@ export async function POST(req: NextRequest) {
         const totalChunks = result.metadata.totalChunks || 100; // Default to high if missing
         const source = result.metadata.source;
 
-        // For Goodreads books and Paperless docs, always use chunk content (no file to read)
+        // For Goodreads books, Paperless docs, and Google Calendar events, always use chunk content (no file to read)
         const isVirtualSource =
-          source === "goodreads" || source === "paperless";
+          source === "goodreads" || source === "paperless" || source === "google-calendar";
 
         // Heuristic: Load full file if:
         // 1. File is small (<= 5 chunks)

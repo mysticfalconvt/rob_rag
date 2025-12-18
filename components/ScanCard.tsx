@@ -27,7 +27,10 @@ export default function ScanCard({
 }: ScanCardProps) {
   return (
     <div className={styles.card}>
-      <h2>Scan & Index</h2>
+      <h2>Scan & Index (Incremental)</h2>
+      <p className={styles.description}>
+        Scan checks for new/changed files and indexes only what's needed. This is fast and efficient.
+      </p>
 
       <div className={styles.section}>
         <h3>Scan All Sources</h3>

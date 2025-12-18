@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
       const users = await prisma.goodreadsUser.findMany();
 
       for (const user of users) {
-        const count = await indexGoodreadsBooks(user.id);
+        // Force full reindex (onlyNew=false) since this is an explicit reindex request
+        const count = await indexGoodreadsBooks(user.id, false);
         goodreadsCount += count;
         console.log(`✅ Indexed ${count} books for ${user.name}`);
       }

@@ -13,15 +13,98 @@ export async function GET(
     const decodedPath = path
       .map((segment) => decodeURIComponent(segment))
       .join("/");
-    // For Paperless, Goodreads, and Uploaded OCR paths, they come as a single encoded segment
+    // For Paperless, Goodreads, Calendar, and Uploaded OCR paths, they come as a single encoded segment
     // We need to handle both cases: already has leading slash or needs one
     const filePath =
       decodedPath.startsWith("/") ||
       decodedPath.startsWith("paperless:") ||
       decodedPath.startsWith("goodreads:") ||
-      decodedPath.startsWith("uploaded:")
+      decodedPath.startsWith("uploaded:") ||
+      decodedPath.startsWith("calendar/")
         ? decodedPath
         : `/${decodedPath}`;
+
+    // Check if this is a Google Calendar event
+    if (filePath.startsWith("calendar/")) {
+      // Extract calendarId and eventId from path: calendar/{calendarId}/{eventId}
+      const parts = filePath.replace("calendar/", "").split("/");
+      if (parts.length !== 2) {
+        return NextResponse.json(
+          { error: "Invalid calendar path format" },
+          { status: 400 },
+        );
+      }
+
+      const [calendarId, eventId] = parts;
+
+      // Fetch event from database
+      const event = await prisma.calendarEvent.findUnique({
+        where: { eventId },
+      });
+
+      if (!event) {
+        return NextResponse.json({ error: "Event not found" }, { status: 404 });
+      }
+
+      // Parse attendees
+      let attendeeList: string[] = [];
+      if (event.attendees) {
+        try {
+          const attendees = JSON.parse(event.attendees);
+          attendeeList = attendees.map((a: any) => a.email || a.displayName).filter(Boolean);
+        } catch (e) {
+          console.error("Error parsing attendees:", e);
+        }
+      }
+
+      // Format event content as markdown
+      const content = `# ${event.title}
+
+**Calendar:** ${event.calendarName || "Unknown"}
+
+**Start:** ${event.startTime.toLocaleString()}
+
+**End:** ${event.endTime.toLocaleString()}
+
+${event.location ? `**Location:** ${event.location}\n` : ""}
+${attendeeList.length > 0 ? `**Attendees:** ${attendeeList.join(", ")}\n` : ""}
+${event.description ? `\n## Description\n\n${event.description}` : ""}
+${event.htmlLink ? `\n---\n\n[View in Google Calendar](${event.htmlLink})` : ""}`;
+
+      // Get file ID and tags for this calendar event
+      const fileRecord = await prisma.indexedFile.findUnique({
+        where: { filePath },
+        include: {
+          documentTags: {
+            include: { tag: true },
+          },
+        },
+      });
+
+      return NextResponse.json({
+        fileId: fileRecord?.id,
+        fileName: event.title,
+        filePath,
+        fileType: "google-calendar",
+        content,
+        source: "google-calendar",
+        tags: fileRecord?.documentTags.map((dt) => ({
+          id: dt.tag.id,
+          name: dt.tag.name,
+          status: dt.tag.status,
+          color: dt.tag.color,
+        })) || [],
+        metadata: {
+          chunkCount: 1,
+          lastIndexed: event.lastEmbedded || event.updatedAt,
+          eventStartTime: event.startTime.toISOString(),
+          eventEndTime: event.endTime.toISOString(),
+          eventLocation: event.location,
+          eventAttendees: attendeeList.join(", "),
+          calendarName: event.calendarName,
+        },
+      });
+    }
 
     // Check if this is a Goodreads book
     if (filePath.startsWith("goodreads://")) {

@@ -6,6 +6,7 @@ import StatusConnections from "@/components/StatusConnections";
 import StatisticsCard from "@/components/StatisticsCard";
 import ReindexCard from "@/components/ReindexCard";
 import ScanCard from "@/components/ScanCard";
+import AutoSyncCard from "@/components/AutoSyncCard";
 import styles from "./page.module.css";
 
 interface GoodreadsUserStatus {
@@ -43,6 +44,7 @@ export default function StatusPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isReindexing, setIsReindexing] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const fetchStatus = async () => {
     try {
@@ -168,6 +170,45 @@ export default function StatusPage() {
     }
   };
 
+  const handleSyncAll = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/webhooks/sync-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        let message = "✅ Sync complete!\n\n";
+
+        if (data.sources?.["google-calendar"]) {
+          const cal = data.sources["google-calendar"];
+          message += `Calendar: ${cal.indexed || 0} indexed\n`;
+        }
+        if (data.sources?.goodreads) {
+          const gr = data.sources.goodreads;
+          message += `Goodreads: ${gr.indexed || 0} indexed\n`;
+        }
+        if (data.sources?.paperless) {
+          const pl = data.sources.paperless;
+          message += `Paperless: ${pl.indexed || 0} indexed\n`;
+        }
+
+        alert(message);
+        await fetchStatus();
+      } else {
+        const error = await res.json();
+        alert(`❌ Sync failed: ${error.details || error.error}`);
+      }
+    } catch (error) {
+      console.error("Error syncing:", error);
+      alert("❌ Failed to sync");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   if (isLoading) return <div className={styles.loading}>Loading status...</div>;
   if (!status)
     return <div className={styles.error}>Failed to load status.</div>;
@@ -218,6 +259,13 @@ export default function StatusPage() {
               isReindexing={isReindexing}
               onReindexSource={handleReindexSource}
             />
+
+            <div className={styles.fullWidth}>
+              <AutoSyncCard
+                onSyncAll={handleSyncAll}
+                isSyncing={isSyncing}
+              />
+            </div>
           </>
         )}
       </div>

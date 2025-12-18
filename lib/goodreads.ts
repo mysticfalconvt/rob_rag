@@ -211,9 +211,11 @@ export async function importBooksForUser(
 }
 
 /**
- * Index all books for a user into RAG system (PostgreSQL with pgvector)
+ * Index books for a user into RAG system (PostgreSQL with pgvector)
+ * @param userId - User ID to index books for
+ * @param onlyNew - If true, only index books that haven't been indexed or have been updated (incremental)
  */
-export async function indexGoodreadsBooks(userId: string): Promise<number> {
+export async function indexGoodreadsBooks(userId: string, onlyNew: boolean = true): Promise<number> {
   const { generateEmbedding } = await import("./ai");
 
   // Get user with books
@@ -232,25 +234,40 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
     `[indexGoodreadsBooks] User ${user.name} has ${user.goodreadsBooks.length} books`,
   );
 
-  // Delete old DocumentChunks for this user's books
-  const deleteResult = await prisma.documentChunk.deleteMany({
-    where: {
-      source: "goodreads",
-      userId: userId,
-    },
-  });
-  console.log(
-    `[indexGoodreadsBooks] Deleted ${deleteResult.count} old chunks for user ${user.name}`,
-  );
-
-  // Generate chunks and embeddings
+  // Generate chunks and embeddings (incremental mode by default)
   let indexed = 0;
+  let skipped = 0;
+
   for (const book of user.goodreadsBooks) {
+    const filePath = `goodreads://${userId}/${book.id}`;
+
+    // Check if book needs indexing (incremental mode)
+    if (onlyNew) {
+      const existingFile = await prisma.indexedFile.findUnique({
+        where: { filePath },
+      });
+
+      // Skip if already indexed and book hasn't been updated since last index
+      if (existingFile && existingFile.lastIndexed && book.updatedAt) {
+        if (book.updatedAt <= existingFile.lastIndexed) {
+          skipped++;
+          continue; // Skip this book, already up-to-date
+        }
+      }
+    }
+
+    // Book needs indexing - delete old chunk for THIS book only
+    await prisma.documentChunk.deleteMany({
+      where: {
+        bookId: book.id,
+        userId: userId,
+      },
+    });
+
     const chunkText = generateBookChunk(user.name, book);
     const embedding = await generateEmbedding(chunkText);
 
     const shelves = book.shelves ? JSON.parse(book.shelves) : [];
-    const filePath = `goodreads://${userId}/${book.id}`;
 
     // Parse read dates for storage
     let readDates: string[] = [];
@@ -263,13 +280,13 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
     }
 
     // Create or update IndexedFile entry for this book
-    // Use book ID as fileHash for consistency
     const now = new Date();
     await prisma.indexedFile.upsert({
       where: { filePath },
       update: {
         chunkCount: 1,
         lastIndexed: now,
+        lastModified: book.updatedAt || now,
         status: "indexed",
       },
       create: {
@@ -277,14 +294,13 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
         fileHash: book.id, // Use book ID as hash
         chunkCount: 1,
         lastIndexed: now,
-        lastModified: book.updatedAt || now, // Use book's last update time
+        lastModified: book.updatedAt || now,
         status: "indexed",
         source: "goodreads",
       },
     });
 
     // Create DocumentChunk with pgvector embedding using raw SQL
-    // Prisma doesn't support vector types directly yet
     const { v4: uuidv4 } = await import("uuid");
     const chunkId = uuidv4();
     const embeddingStr = `[${embedding.join(",")}]`;
@@ -308,7 +324,7 @@ export async function indexGoodreadsBooks(userId: string): Promise<number> {
   }
 
   console.log(
-    `[indexGoodreadsBooks] Successfully indexed ${indexed} books for user ${user.name}`,
+    `[indexGoodreadsBooks] Successfully indexed ${indexed} books for user ${user.name}${onlyNew ? ` (skipped ${skipped} unchanged)` : ""}`,
   );
 
   return indexed;

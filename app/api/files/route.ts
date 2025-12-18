@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
     // For Goodreads files, enrich with book metadata
     const filesWithStatus = await Promise.all(
       files.map(async (file) => {
-        // Skip file system check for Paperless-ngx, Custom OCR, and Goodreads documents
-        if (file.source === "paperless" || file.source === "custom_ocr" || file.source === "goodreads") {
+        // Skip file system check for Paperless-ngx, Custom OCR, Goodreads, and Google Calendar
+        if (file.source === "paperless" || file.source === "custom_ocr" || file.source === "goodreads" || file.source === "google-calendar") {
           const result: any = {
             ...file,
             needsReindexing: false,
@@ -50,6 +50,25 @@ export async function GET(req: NextRequest) {
                 result.goodreadsRating = book.userRating;
                 result.userName = book.user.name;
               }
+            }
+          }
+
+          // Enrich Google Calendar files with event metadata from DocumentChunk
+          if (file.source === "google-calendar") {
+            const chunk = await prisma.documentChunk.findFirst({
+              where: { filePath: file.filePath },
+              select: {
+                eventTitle: true,
+                eventStartTime: true,
+                eventLocation: true,
+                calendarName: true,
+              },
+            });
+            if (chunk) {
+              result.eventTitle = chunk.eventTitle;
+              result.eventStartTime = chunk.eventStartTime;
+              result.eventLocation = chunk.eventLocation;
+              result.calendarName = chunk.calendarName;
             }
           }
 
