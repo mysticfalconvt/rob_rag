@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    await handleAuthCallback(code);
+    // Get origin from request to construct correct redirect URI
+    const origin = new URL(req.url).origin;
+    await handleAuthCallback(code, origin);
 
     // Redirect back to status page with success message
     return NextResponse.redirect(

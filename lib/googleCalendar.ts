@@ -3,12 +3,24 @@ import prisma from "./prisma";
 import { generateEmbedding } from "./ai";
 import { insertChunk } from "./pgvector";
 
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/google/auth/callback";
+/**
+ * Get redirect URI from environment or construct from request origin
+ */
+function getRedirectUri(origin?: string): string {
+  // If GOOGLE_REDIRECT_URI is set, use it
+  if (process.env.GOOGLE_REDIRECT_URI) {
+    return process.env.GOOGLE_REDIRECT_URI;
+  }
+
+  // Otherwise, construct from origin or default to localhost
+  const baseUrl = origin || "http://localhost:3000";
+  return `${baseUrl}/api/google/auth/callback`;
+}
 
 /**
  * Create OAuth2 client from settings
  */
-export async function getOAuthClient() {
+export async function getOAuthClient(origin?: string) {
   const settings = await prisma.settings.findUnique({
     where: { id: "singleton" },
   });
@@ -17,10 +29,12 @@ export async function getOAuthClient() {
     throw new Error("Google Calendar not configured. Please add Client ID and Secret in settings.");
   }
 
+  const redirectUri = getRedirectUri(origin);
+
   const oauth2Client = new google.auth.OAuth2(
     settings.googleClientId,
     settings.googleClientSecret,
-    REDIRECT_URI
+    redirectUri
   );
 
   // Set credentials if we have tokens
@@ -38,8 +52,8 @@ export async function getOAuthClient() {
 /**
  * Generate OAuth URL for initial authentication
  */
-export async function getAuthUrl(): Promise<string> {
-  const oauth2Client = await getOAuthClient();
+export async function getAuthUrl(origin?: string): Promise<string> {
+  const oauth2Client = await getOAuthClient(origin);
 
   const scopes = [
     "https://www.googleapis.com/auth/calendar.readonly",
@@ -55,8 +69,8 @@ export async function getAuthUrl(): Promise<string> {
 /**
  * Exchange authorization code for tokens and save to settings
  */
-export async function handleAuthCallback(code: string) {
-  const oauth2Client = await getOAuthClient();
+export async function handleAuthCallback(code: string, origin?: string) {
+  const oauth2Client = await getOAuthClient(origin);
   const { tokens } = await oauth2Client.getToken(code);
 
   // Save tokens to settings

@@ -10,7 +10,9 @@ export async function GET(req: NextRequest) {
     // Require authentication (admin only could be enforced here)
     await requireAuth(req);
 
-    const authUrl = await getAuthUrl();
+    // Get origin from request to construct correct redirect URI
+    const origin = req.headers.get("origin") || new URL(req.url).origin;
+    const authUrl = await getAuthUrl(origin);
 
     return NextResponse.json({ authUrl });
   } catch (error) {
