@@ -10,8 +10,21 @@ export async function GET(req: NextRequest) {
     // Require authentication (admin only could be enforced here)
     await requireAuth(req);
 
-    // Get origin from request to construct correct redirect URI
-    const origin = req.headers.get("origin") || new URL(req.url).origin;
+    // Get origin from request - check multiple headers for production environments
+    const forwardedHost = req.headers.get("x-forwarded-host");
+    const forwardedProto = req.headers.get("x-forwarded-proto") || "https";
+    const host = req.headers.get("host");
+
+    let origin: string;
+    if (forwardedHost) {
+      origin = `${forwardedProto}://${forwardedHost}`;
+    } else if (host) {
+      origin = `${forwardedProto}://${host}`;
+    } else {
+      origin = new URL(req.url).origin;
+    }
+
+    console.log("[GoogleAuth] Initiating OAuth with origin:", origin);
     const authUrl = await getAuthUrl(origin);
 
     return NextResponse.json({ authUrl });

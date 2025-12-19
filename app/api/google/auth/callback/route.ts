@@ -22,14 +22,28 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get origin from request to construct correct redirect URI
-    const origin = new URL(req.url).origin;
+    // Get origin from request - check multiple headers for production environments
+    const forwardedHost = req.headers.get("x-forwarded-host");
+    const forwardedProto = req.headers.get("x-forwarded-proto") || "https";
+    const host = req.headers.get("host");
+    const urlOrigin = new URL(req.url).origin;
+
+    let origin: string;
+    if (forwardedHost) {
+      origin = `${forwardedProto}://${forwardedHost}`;
+    } else if (host) {
+      origin = `${forwardedProto}://${host}`;
+    } else {
+      origin = urlOrigin;
+    }
+
+    console.log("[GoogleAuth] Callback received - origin:", origin, "url:", req.url);
     await handleAuthCallback(code, origin);
 
-    // Redirect back to status page with success message
-    return NextResponse.redirect(
-      new URL("/status?google_auth=success", req.url)
-    );
+    // Redirect back to status page with success message using the detected origin
+    const redirectUrl = `${origin}/status?google_auth=success`;
+    console.log("[GoogleAuth] Redirecting to:", redirectUrl);
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error("[GoogleAuth] Error handling callback:", error);
     const errorMessage = error instanceof Error ? error.message : "Authentication failed";

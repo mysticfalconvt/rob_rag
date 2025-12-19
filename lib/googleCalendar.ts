@@ -9,12 +9,15 @@ import { insertChunk } from "./pgvector";
 function getRedirectUri(origin?: string): string {
   // If GOOGLE_REDIRECT_URI is set, use it
   if (process.env.GOOGLE_REDIRECT_URI) {
+    console.log("[GoogleCalendar] Using GOOGLE_REDIRECT_URI from env:", process.env.GOOGLE_REDIRECT_URI);
     return process.env.GOOGLE_REDIRECT_URI;
   }
 
   // Otherwise, construct from origin or default to localhost
   const baseUrl = origin || "http://localhost:3000";
-  return `${baseUrl}/api/google/auth/callback`;
+  const redirectUri = `${baseUrl}/api/google/auth/callback`;
+  console.log("[GoogleCalendar] Constructed redirect URI:", redirectUri, "from origin:", origin);
+  return redirectUri;
 }
 
 /**
