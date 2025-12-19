@@ -31,6 +31,7 @@ interface SystemStatus {
   paperlessDocuments?: number;
   goodreadsUserCount?: number;
   goodreadsBooks?: number;
+  calendarEvents?: number;
   averageChunksPerFile?: number;
   config: {
     embeddingModel: string;
@@ -256,6 +257,7 @@ export default function StatusPage() {
             <ReindexCard
               paperlessDocuments={status.paperlessDocuments}
               goodreadsBooks={status.goodreadsBooks}
+              calendarEvents={status.calendarEvents}
               isReindexing={isReindexing}
               onReindexSource={handleReindexSource}
             />

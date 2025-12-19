@@ -5,6 +5,7 @@ import styles from "./ReindexCard.module.css";
 interface ReindexCardProps {
   paperlessDocuments?: number;
   goodreadsBooks?: number;
+  calendarEvents?: number;
   isReindexing: string | null;
   onReindexSource: (source: string, label: string) => void;
 }
@@ -12,6 +13,7 @@ interface ReindexCardProps {
 export default function ReindexCard({
   paperlessDocuments,
   goodreadsBooks,
+  calendarEvents,
   isReindexing,
   onReindexSource,
 }: ReindexCardProps) {
@@ -19,7 +21,7 @@ export default function ReindexCard({
     <div className={styles.card}>
       <h2>Reindex by Source (Full Regeneration)</h2>
       <p className={styles.description}>
-        Reindex regenerates ALL embeddings for the selected source. Use this if embeddings need to be rebuilt from scratch (e.g., after model changes).
+        Reindex regenerates ALL embeddings for the selected source. Use this if embeddings need to be rebuilt from scratch (e.g., after model changes). For Calendar, this also removes all existing events and re-syncs from Google (useful to exclude birthday events).
       </p>
       <div className={styles.reindexButtons}>
         <button
@@ -68,6 +70,20 @@ export default function ReindexCard({
             {isReindexing === "goodreads"
               ? "Reindexing..."
               : `Reindex Goodreads (${goodreadsBooks})`}
+          </button>
+        )}
+        {calendarEvents !== undefined && calendarEvents > 0 && (
+          <button
+            onClick={() => onReindexSource("google-calendar", "Google Calendar")}
+            disabled={isReindexing !== null}
+            className={styles.reindexButton}
+          >
+            <i
+              className={`fas fa-calendar ${isReindexing === "google-calendar" ? "fa-spin" : ""}`}
+            ></i>
+            {isReindexing === "google-calendar"
+              ? "Reindexing..."
+              : `Reindex Calendar (${calendarEvents})`}
           </button>
         )}
       </div>

@@ -11,12 +11,12 @@ export async function POST(req: NextRequest) {
 
     if (
       !source ||
-      !["uploaded", "synced", "paperless", "goodreads"].includes(source)
+      !["uploaded", "synced", "paperless", "goodreads", "google-calendar"].includes(source)
     ) {
       return NextResponse.json(
         {
           error:
-            "Invalid source. Must be: uploaded, synced, paperless, or goodreads",
+            "Invalid source. Must be: uploaded, synced, paperless, goodreads, or google-calendar",
         },
         { status: 400 },
       );
@@ -24,7 +24,40 @@ export async function POST(req: NextRequest) {
 
     console.log(`🔄 Reindexing ${source} documents...`);
 
-    if (source === "goodreads") {
+    if (source === "google-calendar") {
+      // Clean reindex: Delete all calendar data and re-sync from scratch
+      console.log("🗑️  Deleting all calendar data...");
+
+      // Delete document chunks for calendar events
+      const deletedChunks = await prisma.documentChunk.deleteMany({
+        where: { source: "google-calendar" },
+      });
+      console.log(`Deleted ${deletedChunks.count} document chunks`);
+
+      // Delete indexed files for calendar events
+      const deletedIndexedFiles = await prisma.indexedFile.deleteMany({
+        where: { source: "google-calendar" },
+      });
+      console.log(`Deleted ${deletedIndexedFiles.count} indexed files`);
+
+      // Delete all calendar events
+      const deletedEvents = await prisma.calendarEvent.deleteMany();
+      console.log(`Deleted ${deletedEvents.count} calendar events`);
+
+      // Re-sync from Google Calendar (will exclude birthdays with our new filters)
+      console.log("📅 Re-syncing calendar events from Google...");
+      const { syncCalendarEvents, indexCalendarEvents } = await import("@/lib/googleCalendar");
+
+      const syncResult = await syncCalendarEvents();
+      const indexed = await indexCalendarEvents();
+
+      return NextResponse.json({
+        success: true,
+        message: `Cleaned and reindexed ${indexed} calendar events (excluded birthdays)`,
+        synced: syncResult,
+        indexed,
+      });
+    } else if (source === "goodreads") {
       // Reindex Goodreads books
       const { indexGoodreadsBooks } = await import("@/lib/goodreads");
       const users = await prisma.goodreadsUser.findMany();

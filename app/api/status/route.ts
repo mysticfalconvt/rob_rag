@@ -105,7 +105,15 @@ export async function GET(req: NextRequest) {
       console.error("Goodreads check failed:", e);
     }
 
-    // 5. Get Stats
+    // 5. Check Google Calendar
+    let calendarEventCount = 0;
+    try {
+      calendarEventCount = await prisma.calendarEvent.count();
+    } catch (e) {
+      console.error("Calendar event count failed:", e);
+    }
+
+    // 6. Get Stats
     const fileCount = await prisma.indexedFile.count();
     const chunkStats = await prisma.indexedFile.aggregate({
       _sum: { chunkCount: true },
@@ -136,6 +144,7 @@ export async function GET(req: NextRequest) {
       paperlessDocuments: paperlessDocCount,
       goodreadsUserCount,
       goodreadsBooks: goodreadsBookCount,
+      calendarEvents: calendarEventCount,
       averageChunksPerFile,
       config: {
         embeddingModel: config.EMBEDDING_MODEL_NAME,

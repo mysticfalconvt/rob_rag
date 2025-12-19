@@ -163,6 +163,16 @@ export async function fetchCalendarEvents(
       const calendarName = calendarInfo.data.summary || calendarId;
 
       for (const event of events) {
+        // Skip birthday events at fetch time
+        if (event.eventType === "birthday") {
+          console.log(`[GoogleCalendar] Skipping birthday event during fetch: ${event.summary}`);
+          continue;
+        }
+        if (event.source?.title === "Birthdays" || event.source?.title?.includes("Contacts")) {
+          console.log(`[GoogleCalendar] Skipping contacts/birthday event during fetch: ${event.summary}`);
+          continue;
+        }
+
         allEvents.push({
           ...event,
           calendarId,
@@ -204,6 +214,19 @@ export async function syncCalendarEvents() {
 
     // Skip cancelled events
     if (event.status === "cancelled") continue;
+
+    // Skip birthday events (from Google Contacts)
+    // Birthday events typically have eventType: "birthday" or source.title includes "Birthdays"
+    if (event.eventType === "birthday") {
+      console.log(`[GoogleCalendar] Skipping birthday event: ${event.summary}`);
+      continue;
+    }
+
+    // Also check if the event source indicates it's from contacts/birthdays
+    if (event.source?.title === "Birthdays" || event.source?.title?.includes("Contacts")) {
+      console.log(`[GoogleCalendar] Skipping contacts/birthday event: ${event.summary}`);
+      continue;
+    }
 
     const startTime = event.start.dateTime || event.start.date;
     const endTime = event.end?.dateTime || event.end?.date || startTime;
@@ -287,6 +310,16 @@ export async function indexCalendarEvents(onlyNew: boolean = false) {
 
   for (const event of events) {
     try {
+      // Verify the event still exists (in case it was deleted during processing)
+      const eventExists = await prisma.calendarEvent.findUnique({
+        where: { id: event.id },
+      });
+
+      if (!eventExists) {
+        console.log(`[GoogleCalendar] Event ${event.id} no longer exists, skipping indexing`);
+        continue;
+      }
+
       // Create searchable content from event
       const attendeeList = event.attendees
         ? JSON.parse(event.attendees).map((a: any) => a.email || a.displayName).join(", ")
@@ -333,22 +366,32 @@ ${event.description ? `Description: ${event.description}` : ""}
       });
 
       // Create chunk using insertChunk from pgvector
-      await insertChunk({
-        content,
-        embedding,
-        source: "google-calendar",
-        fileName: event.title,
-        filePath,
-        eventId: event.id,
-        eventTitle: event.title,
-        eventStartTime: event.startTime.toISOString(),
-        eventEndTime: event.endTime.toISOString(),
-        eventLocation: event.location || undefined,
-        eventAttendees: attendeeList || undefined,
-        calendarName: event.calendarName || undefined,
-        chunkIndex: 0,
-        totalChunks: 1,
-      });
+      // Wrap in try-catch to handle foreign key constraint errors gracefully
+      try {
+        await insertChunk({
+          content,
+          embedding,
+          source: "google-calendar",
+          fileName: event.title,
+          filePath,
+          eventId: event.id,
+          eventTitle: event.title,
+          eventStartTime: event.startTime.toISOString(),
+          eventEndTime: event.endTime.toISOString(),
+          eventLocation: event.location || undefined,
+          eventAttendees: attendeeList || undefined,
+          calendarName: event.calendarName || undefined,
+          chunkIndex: 0,
+          totalChunks: 1,
+        });
+      } catch (insertError: any) {
+        // If foreign key constraint error, the event was likely deleted during processing
+        if (insertError.code === 'P2010' || insertError.message?.includes('foreign key constraint')) {
+          console.log(`[GoogleCalendar] Event ${event.id} was deleted during indexing, skipping`);
+          continue;
+        }
+        throw insertError;
+      }
 
       // Update event embedding metadata
       await prisma.calendarEvent.update({
@@ -357,6 +400,9 @@ ${event.description ? `Description: ${event.description}` : ""}
           embeddingVersion: 1,
           lastEmbedded: new Date(),
         },
+      }).catch((updateError) => {
+        // Event might have been deleted during processing
+        console.log(`[GoogleCalendar] Could not update event ${event.id} metadata, may have been deleted`);
       });
 
       indexed++;

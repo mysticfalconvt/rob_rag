@@ -31,6 +31,8 @@ export interface ToolDefinition {
     required: boolean;
     description: string;
   }[];
+  /** If true, this tool has custom execution logic in executeTool() */
+  hasCustomExecution?: boolean;
 }
 
 /**
@@ -83,6 +85,12 @@ export interface DataSourcePlugin {
    * Returns tool definitions that can be auto-generated for function calling
    */
   getAvailableTools(): ToolDefinition[];
+
+  /**
+   * Execute a tool with custom logic (optional)
+   * Only called for tools with hasCustomExecution=true
+   */
+  executeTool?(toolName: string, params: QueryParams): Promise<any>;
 
   /**
    * Scan and index data from this source
