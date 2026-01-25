@@ -15,13 +15,23 @@
   overflow: hidden;
 }
 
-.inputWrapper input {
+.inputWrapper input,
+.inputWrapper textarea {
   flex: 1;
   min-width: 0;
   border: none;
   padding: 0.75rem;
   font-size: 1rem;
   outline: none;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+.inputWrapper textarea {
+  min-height: 1.5rem;
 }
 
 .inputWrapper > button {
@@ -70,8 +80,8 @@
   cursor: not-allowed;
 }
 
-.directLLMButton {
-  background-color: #f59e0b;
+.stopButton {
+  background-color: #ef4444;
   color: #fff;
   border: none;
   width: 3rem;
@@ -84,13 +94,95 @@
   justify-content: center;
 }
 
-.directLLMButton:hover:not(:disabled) {
-  background-color: #d97706;
+.stopButton:hover {
+  background-color: #dc2626;
 }
 
-.directLLMButton:disabled {
-  background-color: #9ca3af;
-  cursor: not-allowed;
+.toggleContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggleButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 3rem;
+  height: 3rem;
+  background-color: #f3f4f6;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.5rem;
+  padding: 0.375rem;
+  box-sizing: border-box;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.toggleButton:hover {
+  background-color: #e5e7eb;
+}
+
+.toggleIconContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  font-size: 1rem;
+  transition: color 0.3s;
+}
+
+.toggleButtonActive .toggleIconContainer {
+  color: #10b981;
+}
+
+.toggleLabel {
+  position: relative;
+  display: inline-block;
+  width: 1.75rem;
+  height: 1rem;
+  cursor: pointer;
+  margin: 0;
+}
+
+.toggleInput {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggleSwitch {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #3b82f6;
+  transition: background-color 0.3s;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.toggleSwitch::before {
+  content: "";
+  position: absolute;
+  height: 0.75rem;
+  width: 0.75rem;
+  left: 0.125rem;
+  top: 0.125rem;
+  background-color: #fff;
+  transition: transform 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.toggleInput:checked + .toggleSwitch {
+  background-color: #10b981;
+}
+
+.toggleInput:checked + .toggleSwitch::before {
+  transform: translateX(0.75rem);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -99,9 +191,19 @@
     border-color: #333;
   }
 
-  .inputWrapper input {
+  .inputWrapper input,
+  .inputWrapper textarea {
     background: transparent;
     color: #ededed;
+  }
+
+  .toggleButton {
+    background-color: #262626;
+    border-color: #404040;
+  }
+
+  .toggleButton:hover {
+    background-color: #2d2d2d;
   }
 }
 
@@ -121,7 +223,8 @@
     box-sizing: border-box;
   }
 
-  .inputWrapper input {
+  .inputWrapper input,
+  .inputWrapper textarea {
     padding: 0.5rem;
     font-size: 0.9375rem;
     min-width: 0;
@@ -141,10 +244,34 @@
     min-width: 2.5rem;
   }
 
-  .directLLMButton {
+  .stopButton {
     width: 2.5rem;
     height: 2.5rem;
     flex-shrink: 0;
     min-width: 2.5rem;
+  }
+
+  .toggleButton {
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0.25rem;
+  }
+
+  .toggleIconContainer {
+    font-size: 0.875rem;
+  }
+
+  .toggleLabel {
+    width: 1.5rem;
+    height: 0.875rem;
+  }
+
+  .toggleSwitch::before {
+    height: 0.625rem;
+    width: 0.625rem;
+  }
+
+  .toggleInput:checked + .toggleSwitch::before {
+    transform: translateX(0.625rem);
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Source } from "@/types/source";
 
@@ -17,6 +17,8 @@ export function useChat(conversationId: string | null) {
   const [currentConversationId, setCurrentConversationId] = useState<
     string | null
   >(conversationId);
+  const [abortControllerRef, setAbortController] = useState<AbortController | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   useEffect(() => {
     const loadConversation = async () => {
@@ -62,6 +64,9 @@ export function useChat(conversationId: string | null) {
   ) => {
     if (!input.trim() || isLoading) return;
 
+    const abortController = new AbortController();
+    setAbortController(abortController);
+
     const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
@@ -70,6 +75,7 @@ export function useChat(conversationId: string | null) {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           messages: [...messages, userMessage],
           conversationId: currentConversationId,
@@ -81,6 +87,7 @@ export function useChat(conversationId: string | null) {
 
       const reader = response.body?.getReader();
       if (!reader) return;
+      readerRef.current = reader;
 
       const assistantMessage: Message = { role: "assistant", content: "" };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -177,19 +184,36 @@ export function useChat(conversationId: string | null) {
           });
         }
       }
-    } catch (error) {
-      console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, something went wrong." },
-      ]);
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        // Request was cancelled - remove the incomplete assistant message
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          if (newMessages[newMessages.length - 1]?.role === "assistant" && 
+              newMessages[newMessages.length - 1]?.content === "") {
+            newMessages.pop();
+          }
+          return newMessages;
+        });
+      } else {
+        console.error("Error:", error);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Sorry, something went wrong." },
+        ]);
+      }
     } finally {
       setIsLoading(false);
+      setAbortController(null);
+      readerRef.current = null;
     }
   };
 
   const sendDirectLLM = async (input: string) => {
     if (!input.trim() || isLoading) return;
+
+    const abortController = new AbortController();
+    setAbortController(abortController);
 
     const userMessage: Message = { role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
@@ -199,6 +223,7 @@ export function useChat(conversationId: string | null) {
       const response = await fetch("/api/chat-direct", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           messages: [...messages, userMessage],
           conversationId: currentConversationId,
@@ -209,6 +234,7 @@ export function useChat(conversationId: string | null) {
 
       const reader = response.body?.getReader();
       if (!reader) return;
+      readerRef.current = reader;
 
       const assistantMessage: Message = { role: "assistant", content: "" };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -279,14 +305,42 @@ export function useChat(conversationId: string | null) {
           });
         }
       }
-    } catch (error) {
-      console.error("Error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Sorry, something went wrong." },
-      ]);
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        // Request was cancelled - remove the incomplete assistant message
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          if (newMessages[newMessages.length - 1]?.role === "assistant" && 
+              newMessages[newMessages.length - 1]?.content === "") {
+            newMessages.pop();
+          }
+          return newMessages;
+        });
+      } else {
+        console.error("Error:", error);
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: "Sorry, something went wrong." },
+        ]);
+      }
     } finally {
       setIsLoading(false);
+      setAbortController(null);
+      readerRef.current = null;
+    }
+  };
+
+  const cancelRequest = () => {
+    if (abortControllerRef) {
+      abortControllerRef.abort();
+      setAbortController(null);
+      setIsLoading(false);
+    }
+    if (readerRef.current) {
+      readerRef.current.cancel().catch(() => {
+        // Ignore cancellation errors
+      });
+      readerRef.current = null;
     }
   };
 
@@ -296,5 +350,6 @@ export function useChat(conversationId: string | null) {
     currentConversationId,
     sendMessage,
     sendDirectLLM,
+    cancelRequest,
   };
 }

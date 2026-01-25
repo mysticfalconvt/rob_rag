@@ -16,7 +16,7 @@ function ChatPageContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams.get("conversation");
 
-  const { messages, isLoading, currentConversationId, sendMessage, sendDirectLLM } =
+  const { messages, isLoading, currentConversationId, sendMessage, sendDirectLLM, cancelRequest } =
     useChat(conversationId);
   const { isSaving, saveConversation, deleteConversation } =
     useConversationActions(currentConversationId);
@@ -214,6 +214,7 @@ function ChatPageContent() {
           onChange={setInput}
           onSubmit={handleSubmit}
           onDirectLLMSubmit={handleDirectLLMSubmit}
+          onCancel={cancelRequest}
           onToggleSettings={() => setShowSettings(!showSettings)}
           onToggleUploaded={() => setUseUploaded(!useUploaded)}
           onToggleSynced={() => setUseSynced(!useSynced)}
