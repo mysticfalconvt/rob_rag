@@ -108,10 +108,40 @@ export async function processFile(filePath: string): Promise<ProcessedChunk[]> {
   }));
 }
 
+interface SyncedFilesConfig {
+  excludeDirs: string[];
+  includeExtensions: string[];
+  excludeExtensions: string[];
+  maxFileSizeBytes: number;
+  excludePathPatterns?: string[]; // New: patterns to match in full path
+}
+
+async function getSyncedFilesConfig(): Promise<SyncedFilesConfig | null> {
+  try {
+    const prisma = (await import("./prisma")).default;
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: { syncedFilesConfig: true },
+    });
+
+    if (settings?.syncedFilesConfig) {
+      return JSON.parse(settings.syncedFilesConfig);
+    }
+  } catch (e) {
+    console.error("Failed to load synced files config:", e);
+  }
+  return null;
+}
+
 export async function getAllFiles(dirPath: string): Promise<string[]> {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
   const files: string[] = [];
-  const supportedExtensions = [
+
+  // Load config
+  const config = await getSyncedFilesConfig();
+
+  // Default supported extensions
+  let supportedExtensions = [
     ".txt",
     ".md",
     ".markdown",
@@ -126,18 +156,66 @@ export async function getAllFiles(dirPath: string): Promise<string[]> {
     ".docx",
   ];
 
+  // Apply include filter if configured
+  if (config?.includeExtensions && config.includeExtensions.length > 0) {
+    supportedExtensions = config.includeExtensions;
+  }
+
+  const excludeDirs = config?.excludeDirs || [];
+  const excludeExtensions = config?.excludeExtensions || [];
+  const excludePathPatterns = config?.excludePathPatterns || [];
+  const maxFileSize = config?.maxFileSizeBytes || Number.MAX_SAFE_INTEGER;
+
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
+
+    // Check if path contains any exclude patterns (case-insensitive)
+    const shouldExcludePath = excludePathPatterns.some(pattern =>
+      fullPath.toLowerCase().includes(pattern.toLowerCase())
+    );
+
+    if (shouldExcludePath) {
+      console.log(`Skipping path matching pattern: ${fullPath}`);
+      continue;
+    }
+
     if (entry.isDirectory()) {
       if (entry.name.startsWith(".")) continue; // Skip dot folders
+
+      // Check if directory is in exclude list
+      if (excludeDirs.includes(entry.name)) {
+        console.log(`Skipping excluded directory: ${entry.name}`);
+        continue;
+      }
+
       files.push(...(await getAllFiles(fullPath)));
     } else {
       if (entry.name.startsWith(".")) continue; // Skip dot files
 
       const ext = path.extname(entry.name).toLowerCase();
-      if (supportedExtensions.includes(ext)) {
-        files.push(fullPath);
+
+      // Check exclude extensions (takes priority)
+      if (excludeExtensions.includes(ext)) {
+        continue;
       }
+
+      // Check include extensions
+      if (!supportedExtensions.includes(ext)) {
+        continue;
+      }
+
+      // Check file size
+      try {
+        const stats = await fs.stat(fullPath);
+        if (stats.size > maxFileSize) {
+          console.log(`Skipping large file (${Math.round(stats.size / 1024 / 1024)}MB): ${fullPath}`);
+          continue;
+        }
+      } catch (e) {
+        console.error(`Failed to check file size for ${fullPath}:`, e);
+      }
+
+      files.push(fullPath);
     }
   }
 

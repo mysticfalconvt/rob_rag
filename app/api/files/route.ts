@@ -9,8 +9,19 @@ export async function GET(req: NextRequest) {
   try {
     // Require authentication to view files
     await requireAuth(req);
+
+    // Parse pagination params
+    const { searchParams } = new URL(req.url);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const limit = parseInt(searchParams.get("limit") || "100", 10);
+
+    // Limit max to prevent abuse
+    const safeLimit = Math.min(limit, 500);
+
     const files = await prisma.indexedFile.findMany({
       orderBy: { lastIndexed: "desc" },
+      skip: offset,
+      take: safeLimit,
       include: {
         documentTags: {
           include: {

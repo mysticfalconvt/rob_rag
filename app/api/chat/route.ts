@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       conversationId,
       sourceFilter,
       sourceCount = 35, // Default to max, smart retrieval will adjust down based on complexity
+      documentPath, // Optional: chat in context of this single document only
     } = await req.json();
     const lastMessage = messages[messages.length - 1];
     const query = lastMessage.content;
@@ -147,7 +148,95 @@ export async function POST(req: NextRequest) {
     const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
     const skipRagForTools = isCountingQuery && sourceFilter !== "none";
 
-    if (sourceFilter !== "none" && !skipRagForTools) {
+    // Single-document chat: use only this doc as context (full content or chunked vector search)
+    const singleDocPath =
+      typeof documentPath === "string" ? documentPath.trim() : null;
+    if (singleDocPath) {
+      const fileRecord = await prisma.indexedFile.findUnique({
+        where: { filePath: singleDocPath },
+        select: { chunkCount: true, source: true, paperlessTitle: true },
+      });
+
+      if (fileRecord) {
+        const docDisplayName =
+          fileRecord.paperlessTitle ??
+          singleDocPath.split("/").filter(Boolean).pop() ??
+          "document";
+        const isVirtualSource =
+          fileRecord.source === "goodreads" ||
+          fileRecord.source === "paperless" ||
+          fileRecord.source === "google-calendar";
+        const fullContentMaxChars = 12000; // ~3k tokens
+        const fullContentMaxChunks = 20;
+
+        if (
+          !isVirtualSource &&
+          fileRecord.chunkCount <= fullContentMaxChunks
+        ) {
+          try {
+            const { content: fullContent } = await readFileContent(singleDocPath);
+            if (fullContent.length <= fullContentMaxChars) {
+              context = `Document: ${docDisplayName}\n(Full content - single document chat)\n${fullContent}`;
+              console.log(
+                "[Chat] Single-doc mode: using full document content",
+                singleDocPath,
+              );
+            } else {
+              // Too long: use vector search for this doc only
+              searchResults = await search(
+                searchQuery,
+                25,
+                undefined,
+                (m) => llmTracker.trackCall("embedding", { ...m, callPayload: "single_doc_search" }),
+                singleDocPath,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[Chat] Single-doc full content failed, falling back to chunk search:",
+              e,
+            );
+            searchResults = await search(
+              searchQuery,
+              25,
+              undefined,
+              (m) => llmTracker.trackCall("embedding", { ...m, callPayload: "single_doc_search" }),
+              singleDocPath,
+            );
+          }
+        } else {
+          // Virtual source or many chunks: use vector search restricted to this doc
+          searchResults = await search(
+            searchQuery,
+            25,
+            undefined,
+            (m) => llmTracker.trackCall("embedding", { ...m, callPayload: "single_doc_search" }),
+            singleDocPath,
+          );
+        }
+
+        if (searchResults.length > 0 && !context) {
+          const processedFiles = new Set<string>();
+          for (const result of searchResults) {
+            const filePath = result.metadata.filePath;
+            if (!filePath || processedFiles.has(filePath)) continue;
+            processedFiles.add(filePath);
+            contextParts.push(
+              `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
+            );
+          }
+          context = contextParts.join("\n\n");
+        }
+      } else {
+        console.warn("[Chat] Single-doc path not found in index:", singleDocPath);
+      }
+    }
+
+    if (
+      !singleDocPath &&
+      sourceFilter !== "none" &&
+      !skipRagForTools
+    ) {
       // Enhance search query based on context
       if (isFirstMessage) {
         // First message: Add user context
@@ -557,11 +646,11 @@ export async function POST(req: NextRequest) {
           // Add guidance about tool usage
           const toolGuidanceMessage = new SystemMessage(
             `You have access to tools that query databases directly for ACCURATE counts and metadata. ` +
-              `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
-              `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
-              `The context documents are just a semantic search sample (limited to ~20 items). ` +
-              `The tools query the FULL database and return the ACCURATE total count. ` +
-              `ALWAYS report the count from the tool result, not from the context.`,
+            `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
+            `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
+            `The context documents are just a semantic search sample (limited to ~20 items). ` +
+            `The tools query the FULL database and return the ACCURATE total count. ` +
+            `ALWAYS report the count from the tool result, not from the context.`,
           );
           const messagesWithGuidance = [
             ...langchainMessages,

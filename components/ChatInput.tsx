@@ -20,6 +20,8 @@ interface ChatInputProps {
   goodreadsUsers: GoodreadsUser[];
   conversationId: string | null;
   isSaving: boolean;
+  /** When true (e.g. single-doc chat), default RAG mode on so the first message uses document context */
+  defaultUseRag?: boolean;
   onChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onDirectLLMSubmit: (e: React.FormEvent) => void;
@@ -43,6 +45,7 @@ export default function ChatInput({
   goodreadsUsers,
   conversationId,
   isSaving,
+  defaultUseRag = false,
   onChange,
   onSubmit,
   onDirectLLMSubmit,
@@ -55,7 +58,7 @@ export default function ChatInput({
   onSaveConversation,
   onDeleteConversation,
 }: ChatInputProps) {
-  const [useRAG, setUseRAG] = useState(false);
+  const [useRAG, setUseRAG] = useState(defaultUseRag);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {

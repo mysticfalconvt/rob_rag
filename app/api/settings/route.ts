@@ -42,6 +42,12 @@ export async function GET(req: NextRequest) {
       paperlessEnabled: settings.paperlessEnabled,
       paperlessConfigured: !!settings.paperlessApiToken,
       customOcrEnabled: settings.customOcrEnabled,
+      syncedFilesConfig: settings.syncedFilesConfig,
+      paperlessSyncEnabled: settings.paperlessSyncEnabled,
+      paperlessSyncInterval: settings.paperlessSyncInterval,
+      paperlessSyncLastRun: settings.paperlessSyncLastRun,
+      paperlessSyncFilters: settings.paperlessSyncFilters,
+      paperlessAutoOcr: settings.paperlessAutoOcr,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -70,6 +76,11 @@ export async function POST(req: NextRequest) {
       paperlessApiToken,
       paperlessEnabled,
       customOcrEnabled,
+      paperlessSyncEnabled,
+      paperlessSyncInterval,
+      paperlessSyncFilters,
+      paperlessAutoOcr,
+      syncedFilesConfig,
     } = await req.json();
 
     // Validate Paperless URL if provided
@@ -96,14 +107,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Prepare update data
-    const updateData: any = {
-      embeddingModel,
-      chatModel,
-      fastChatModel: fastChatModel || null,
-      visionModel: visionModel || null,
-      embeddingModelDimension: embeddingModelDimension || 1024,
-    };
+    // Check if settings exist
+    const existingSettings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+    });
+
+    // Prepare update data - only include fields that are provided
+    const updateData: any = {};
+
+    if (embeddingModel !== undefined) {
+      updateData.embeddingModel = embeddingModel;
+    }
+    if (chatModel !== undefined) {
+      updateData.chatModel = chatModel;
+    }
+    if (fastChatModel !== undefined) {
+      updateData.fastChatModel = fastChatModel || null;
+    }
+    if (visionModel !== undefined) {
+      updateData.visionModel = visionModel || null;
+    }
+    if (embeddingModelDimension !== undefined) {
+      updateData.embeddingModelDimension = embeddingModelDimension;
+    }
 
     // Only update Paperless fields if they are provided
     if (paperlessUrl !== undefined) {
@@ -118,32 +144,58 @@ export async function POST(req: NextRequest) {
     if (paperlessEnabled !== undefined) {
       updateData.paperlessEnabled = paperlessEnabled;
     }
-
-    // Update custom OCR fields if provided
-    if (visionModel !== undefined) {
-      updateData.visionModel = visionModel || null;
-    }
     if (customOcrEnabled !== undefined) {
       updateData.customOcrEnabled = customOcrEnabled;
     }
 
-    const settings = await prisma.settings.upsert({
-      where: { id: "singleton" },
-      update: updateData,
-      create: {
-        id: "singleton",
-        embeddingModel,
-        chatModel,
-        fastChatModel: fastChatModel || null,
-        visionModel: visionModel || null,
-        embeddingModelDimension: embeddingModelDimension || 1024,
-        paperlessUrl: paperlessUrl || null,
-        paperlessExternalUrl: paperlessExternalUrl || null,
-        paperlessApiToken: paperlessApiToken || null,
-        paperlessEnabled: paperlessEnabled || false,
-        customOcrEnabled: customOcrEnabled || false,
-      },
-    });
+    // Handle Paperless sync settings
+    if (paperlessSyncEnabled !== undefined) {
+      updateData.paperlessSyncEnabled = paperlessSyncEnabled;
+    }
+    if (paperlessSyncInterval !== undefined) {
+      updateData.paperlessSyncInterval = paperlessSyncInterval;
+    }
+    if (paperlessSyncFilters !== undefined) {
+      updateData.paperlessSyncFilters = paperlessSyncFilters;
+    }
+    if (paperlessAutoOcr !== undefined) {
+      updateData.paperlessAutoOcr = paperlessAutoOcr;
+    }
+    if (syncedFilesConfig !== undefined) {
+      updateData.syncedFilesConfig = syncedFilesConfig;
+    }
+
+    let settings;
+    if (existingSettings) {
+      // Update existing settings
+      settings = await prisma.settings.update({
+        where: { id: "singleton" },
+        data: updateData,
+      });
+    } else {
+      // Create new settings - require embeddingModel and chatModel
+      if (!embeddingModel || !chatModel) {
+        return NextResponse.json(
+          { error: "embeddingModel and chatModel are required for initial setup" },
+          { status: 400 }
+        );
+      }
+      settings = await prisma.settings.create({
+        data: {
+          id: "singleton",
+          embeddingModel,
+          chatModel,
+          fastChatModel: fastChatModel || null,
+          visionModel: visionModel || null,
+          embeddingModelDimension: embeddingModelDimension || 1024,
+          paperlessUrl: paperlessUrl || null,
+          paperlessExternalUrl: paperlessExternalUrl || null,
+          paperlessApiToken: paperlessApiToken || null,
+          paperlessEnabled: paperlessEnabled || false,
+          customOcrEnabled: customOcrEnabled || false,
+        },
+      });
+    }
 
     return NextResponse.json({
       embeddingModel: settings.embeddingModel,
@@ -156,6 +208,12 @@ export async function POST(req: NextRequest) {
       paperlessEnabled: settings.paperlessEnabled,
       paperlessConfigured: !!settings.paperlessApiToken,
       customOcrEnabled: settings.customOcrEnabled,
+      syncedFilesConfig: settings.syncedFilesConfig,
+      paperlessSyncEnabled: settings.paperlessSyncEnabled,
+      paperlessSyncInterval: settings.paperlessSyncInterval,
+      paperlessSyncLastRun: settings.paperlessSyncLastRun,
+      paperlessSyncFilters: settings.paperlessSyncFilters,
+      paperlessAutoOcr: settings.paperlessAutoOcr,
     });
   } catch (error) {
     if (error instanceof Error) {

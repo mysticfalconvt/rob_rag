@@ -20,6 +20,7 @@ export function embeddingToSql(embedding: number[]): string {
  * Build WHERE clause that respects custom OCR overrides
  * When a paperless doc has custom OCR, we want to exclude the paperless version
  * and only show the custom_ocr version
+ * @param filePathFilter - Optional: restrict results to this document path only
  */
 function buildSourceWhereClause(sourceFilter?:
   | 'all'
@@ -29,9 +30,16 @@ function buildSourceWhereClause(sourceFilter?:
   | 'goodreads'
   | 'custom_ocr'
   | 'none'
-  | string[]
+  | string[],
+  filePathFilter?: string
 ): string {
   const conditions: string[] = [];
+
+  // Restrict to a single document (single-doc chat)
+  if (filePathFilter && filePathFilter.trim()) {
+    const escaped = filePathFilter.replace(/'/g, "''");
+    conditions.push(`"filePath" = '${escaped}'`);
+  }
 
   // Handle source filtering
   if (sourceFilter && sourceFilter !== 'all' && sourceFilter !== 'none') {
@@ -65,6 +73,7 @@ function buildSourceWhereClause(sourceFilter?:
  * @param queryEmbedding - The query vector
  * @param limit - Maximum number of results
  * @param sourceFilter - Optional source filter
+ * @param filePathFilter - Optional: restrict to this document path only (single-doc chat)
  * @returns Array of search results
  */
 export async function searchWithPgVector(
@@ -79,11 +88,12 @@ export async function searchWithPgVector(
     | 'custom_ocr'
     | 'none'
     | string[],
+  filePathFilter?: string,
 ): Promise<SearchResult[]> {
   const vectorStr = embeddingToSql(queryEmbedding);
 
-  // Build WHERE clause for source filtering with custom OCR respect
-  const whereClause = buildSourceWhereClause(sourceFilter);
+  // Build WHERE clause for source filtering and optional single-doc filter
+  const whereClause = buildSourceWhereClause(sourceFilter, filePathFilter);
 
   try {
     // Use cosine distance operator: <=>

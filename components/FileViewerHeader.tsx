@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import styles from "./FileViewerHeader.module.css";
 
 interface FileViewerHeaderProps {
   fileName: string;
+  filePath: string;
   source: string;
   paperlessUrl?: string;
   originalDocPath?: string;
@@ -13,6 +15,7 @@ interface FileViewerHeaderProps {
 
 export default function FileViewerHeader({
   fileName,
+  filePath,
   source,
   paperlessUrl,
   originalDocPath,
@@ -24,6 +27,8 @@ export default function FileViewerHeader({
   const isCustomOcr = source === "custom_ocr";
   const isUploaded = source === "uploaded";
 
+  const chatAboutDocHref = `/?document=${encodeURIComponent(filePath)}`;
+
   return (
     <div className={styles.header}>
       <div className={styles.titleSection}>
@@ -32,8 +37,7 @@ export default function FileViewerHeader({
         ></i>
         <h1>{fileName}</h1>
         <span
-          className={`${styles.sourceBadge} ${
-            isGoodreads
+          className={`${styles.sourceBadge} ${isGoodreads
               ? styles.goodreads
               : isCustomOcr
                 ? styles.customOcr
@@ -42,7 +46,7 @@ export default function FileViewerHeader({
                   : isUploaded
                     ? styles.uploaded
                     : styles.synced
-          }`}
+            }`}
         >
           {isGoodreads ? (
             <>
@@ -69,6 +73,13 @@ export default function FileViewerHeader({
       </div>
 
       <div className={styles.actions}>
+        <Link
+          href={chatAboutDocHref}
+          className={styles.chatAboutDoc}
+          title="Start a chat using only this document as context"
+        >
+          <i className="fas fa-comments"></i> Chat about this doc
+        </Link>
         {isCustomOcr && originalDocPath && paperlessId && (
           <>
             <a

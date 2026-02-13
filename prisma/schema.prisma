@@ -161,6 +161,12 @@ model Settings {
   googleCalendarIds       String?
   googleLastSynced        DateTime?
   googleSyncEnabled       Boolean   @default(false)
+  syncedFilesConfig       String?   // JSON config for synced files filtering
+  paperlessSyncEnabled    Boolean   @default(false)
+  paperlessSyncInterval   Int       @default(60) // minutes
+  paperlessSyncLastRun    DateTime?
+  paperlessSyncFilters    String?   // JSON: tags, dateRange, etc.
+  paperlessAutoOcr        Boolean   @default(false)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 }
@@ -187,6 +193,23 @@ model GoodreadsSource {
   user         GoodreadsUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model OcrJob {
+  id            String   @id @default(uuid())
+  paperlessId   Int
+  status        String   // pending, processing, completed, failed
+  progress      Int      @default(0)
+  error         String?
+  visionModel   String
+  createdAt     DateTime @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  updatedAt     DateTime @updatedAt
+
+  @@index([paperlessId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model GoodreadsBook {

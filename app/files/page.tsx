@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import FilesHeader from "@/components/FilesHeader";
 import FileFilterBar from "@/components/FileFilterBar";
 import TagFilter from "@/components/TagFilter";
 import BulkTagGeneration from "@/components/BulkTagGeneration";
 import FileTableRow from "@/components/FileTableRow";
-import Pagination from "@/components/Pagination";
 import styles from "./page.module.css";
 
 interface IndexedFile {
@@ -36,6 +36,8 @@ interface IndexedFile {
 export default function FilesPage() {
   const [files, setFiles] = useState<IndexedFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
 
   const [showUploaded, setShowUploaded] = useState(true);
@@ -46,35 +48,196 @@ export default function FilesPage() {
   const [showCalendar, setShowCalendar] = useState(true);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [taggedFilter, setTaggedFilter] = useState<"all" | "tagged" | "untagged">("all");
-  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortColumn, setSortColumn] = useState<
     "source" | "fileName" | "chunkCount" | "status" | "lastIndexed"
   >("lastIndexed");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const itemsPerPage = 20;
 
-  const fetchFiles = async () => {
+  const tableParentRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef(0);
+  const hasInitialized = useRef(false);
+
+  // Cache key for localStorage
+  const CACHE_KEY = 'files-cache';
+  const CACHE_TIMESTAMP_KEY = 'files-cache-timestamp';
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  const MAX_CACHE_SIZE = 3 * 1024 * 1024; // 3MB max cache size
+
+  // Helper to safely save to localStorage with size check
+  const saveToCache = useCallback((data: IndexedFile[]) => {
     try {
-      const res = await fetch("/api/files");
-      if (res.ok) {
-        const data = await res.json();
-        setFiles(data);
+      const jsonStr = JSON.stringify(data);
+      // Check size before saving (rough estimate)
+      if (jsonStr.length > MAX_CACHE_SIZE) {
+        console.warn('Cache too large, storing only first 500 files');
+        // Store only first 500 files if too large
+        const truncated = data.slice(0, 500);
+        const truncatedStr = JSON.stringify(truncated);
+        localStorage.setItem(CACHE_KEY, truncatedStr);
+      } else {
+        localStorage.setItem(CACHE_KEY, jsonStr);
       }
-    } catch (error) {
-      console.error("Error fetching files:", error);
-    } finally {
-      setIsLoading(false);
+      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        console.warn('localStorage quota exceeded, clearing old cache');
+        // Clear cache and try again with smaller dataset
+        localStorage.removeItem(CACHE_KEY);
+        try {
+          const truncated = data.slice(0, 300);
+          localStorage.setItem(CACHE_KEY, JSON.stringify(truncated));
+          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+        } catch (e2) {
+          console.error('Failed to cache even truncated data:', e2);
+        }
+      } else {
+        console.error('Failed to save to cache:', e);
+      }
     }
-  };
+  }, [CACHE_KEY, CACHE_TIMESTAMP_KEY, MAX_CACHE_SIZE]);
 
+  // Load from cache on mount
   useEffect(() => {
+    // Prevent double initialization (React 19 strict mode)
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+
+    const cached = localStorage.getItem(CACHE_KEY);
+    const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+    if (cached && timestamp) {
+      const age = Date.now() - parseInt(timestamp);
+      if (age < CACHE_DURATION) {
+        try {
+          const cachedFiles = JSON.parse(cached);
+          setFiles(cachedFiles);
+          setIsLoading(false);
+
+          // Restore scroll position after a short delay
+          const savedScroll = sessionStorage.getItem('files-scroll');
+          if (savedScroll && tableParentRef.current) {
+            setTimeout(() => {
+              if (tableParentRef.current) {
+                tableParentRef.current.scrollTop = parseInt(savedScroll);
+              }
+            }, 50);
+          }
+
+          // Check if cache might be incomplete and load more in background
+          // If we have exactly a multiple of 100, there might be more files
+          if (cachedFiles.length % 100 === 0 && cachedFiles.length > 0) {
+            setHasMore(true);
+            // Start loading from where cache left off
+            setTimeout(() => loadRemainingChunks(cachedFiles.length), 100);
+          } else {
+            setHasMore(false);
+          }
+          return;
+        } catch (e) {
+          console.error('Failed to parse cached files:', e);
+        }
+      }
+    }
+
+    // If no valid cache, fetch normally
     fetchFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Save scroll position when navigating away
+  useEffect(() => {
+    const saveScroll = () => {
+      if (tableParentRef.current) {
+        sessionStorage.setItem('files-scroll', tableParentRef.current.scrollTop.toString());
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        saveScroll();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', saveScroll);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', saveScroll);
+      saveScroll();
+    };
   }, []);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [showUploaded, showSynced, showPaperless, showGoodreads, showCustomOcr, showCalendar, searchQuery, selectedTags, taggedFilter]);
+  // Fetch a chunk of files
+  const fetchFilesChunk = useCallback(async (offset: number, limit: number) => {
+    try {
+      const res = await fetch(`/api/files?offset=${offset}&limit=${limit}`);
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching files chunk:", error);
+      return [];
+    }
+  }, []);
+
+  // Initial load - fetch first chunk immediately
+  const fetchFiles = useCallback(async () => {
+    setIsLoading(true);
+    const initialChunk = await fetchFilesChunk(0, 100);
+    setFiles(initialChunk);
+    setIsLoading(false);
+    setHasMore(initialChunk.length === 100);
+
+    // Continue loading remaining chunks in background
+    if (initialChunk.length === 100) {
+      loadRemainingChunks(100);
+    }
+  }, [fetchFilesChunk]);
+
+  // Load remaining chunks in background
+  const loadRemainingChunks = useCallback(async (startOffset: number) => {
+    setIsLoadingMore(true);
+    let offset = startOffset;
+    const chunkSize = 100;
+    let hasMoreChunks = true;
+    const allChunks: IndexedFile[] = [];
+
+    while (hasMoreChunks) {
+      const chunk = await fetchFilesChunk(offset, chunkSize);
+      if (chunk.length > 0) {
+        allChunks.push(...chunk);
+        setFiles((prev) => {
+          const updated = [...prev, ...chunk];
+          // Save to cache periodically (every 200 files)
+          if (allChunks.length % 200 === 0) {
+            saveToCache(updated);
+          }
+          return updated;
+        });
+        offset += chunk.length;
+        hasMoreChunks = chunk.length === chunkSize;
+
+        // Small delay to avoid blocking UI
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } else {
+        hasMoreChunks = false;
+      }
+    }
+
+    setHasMore(false);
+    setIsLoadingMore(false);
+
+    // Final cache save
+    setFiles((prev) => {
+      saveToCache(prev);
+      return prev;
+    });
+  }, [fetchFilesChunk, saveToCache]);
+
 
   const handleSort = (
     column: "source" | "fileName" | "chunkCount" | "status" | "lastIndexed",
@@ -98,6 +261,9 @@ export default function FilesPage() {
         body: JSON.stringify({ filePath }),
       });
       if (res.ok) {
+        // Invalidate cache
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
         await fetchFiles();
       }
     } catch (error) {
@@ -143,6 +309,9 @@ export default function FilesPage() {
         if (data.ocrProcessed) {
           alert(`✅ File uploaded and OCR processed successfully!\n\n${data.message || ''}`);
         }
+        // Invalidate cache
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
         await fetchFiles();
       } else {
         const error = await res.json();
@@ -191,6 +360,9 @@ export default function FilesPage() {
         },
       );
       if (res.ok) {
+        // Invalidate cache
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
         await fetchFiles();
       }
     } catch (error) {
@@ -223,7 +395,9 @@ export default function FilesPage() {
       if (res.ok) {
         const data = await res.json();
         alert(`✅ OCR processing started! Job ID: ${data.jobId}\n\nThe document will be re-indexed when processing completes.`);
-        // Refresh file list to show processing status
+        // Invalidate cache and refresh file list to show processing status
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
         await fetchFiles();
       } else {
         const error = await res.json();
@@ -349,10 +523,13 @@ export default function FilesPage() {
       return 0;
     });
 
-  const totalPages = Math.ceil(filteredFiles.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+  // Virtual scrolling setup
+  const rowVirtualizer = useVirtualizer({
+    count: filteredFiles.length,
+    getScrollElement: () => tableParentRef.current,
+    estimateSize: () => 60, // Estimated row height in pixels
+    overscan: 10, // Render 10 extra rows above/below viewport
+  });
 
   // Helper function to check if a file matches the search query
   const matchesSearch = (file: IndexedFile) => {
@@ -437,8 +614,8 @@ export default function FilesPage() {
         goodreadsCount={goodreadsCount}
         customOcrCount={customOcrCount}
         calendarCount={calendarCount}
-        filteredCount={paginatedFiles.length}
-        totalCount={filteredFiles.length}
+        filteredCount={filteredFiles.length}
+        totalCount={files.length}
         onToggleUploaded={() => {
           const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
           if (allSelected) {
@@ -583,9 +760,16 @@ export default function FilesPage() {
         }}
       />
 
-      <div className={styles.tableWrapper}>
+      <div
+        ref={tableParentRef}
+        className={styles.tableWrapper}
+        style={{
+          height: '600px',
+          overflow: 'auto',
+        }}
+      >
         <table className={styles.table}>
-          <thead>
+          <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--background)', zIndex: 1 }}>
             <tr>
               <th
                 onClick={() => handleSort("source")}
@@ -649,7 +833,7 @@ export default function FilesPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={6} className={styles.loading}>
-                  Loading...
+                  Loading first batch...
                 </td>
               </tr>
             ) : filteredFiles.length === 0 ? (
@@ -661,26 +845,28 @@ export default function FilesPage() {
                 </td>
               </tr>
             ) : (
-              paginatedFiles.map((file) => (
-                <FileTableRow
-                  key={file.id}
-                  file={file}
-                  isScanning={isScanning}
-                  onReindex={handleReindex}
-                  onDelete={handleDelete}
-                  onUseCustomOcr={handleUseCustomOcr}
-                />
-              ))
+              rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const file = filteredFiles[virtualRow.index];
+                return (
+                  <FileTableRow
+                    key={virtualRow.key}
+                    file={file}
+                    isScanning={isScanning}
+                    onReindex={handleReindex}
+                    onDelete={handleDelete}
+                    onUseCustomOcr={handleUseCustomOcr}
+                  />
+                );
+              })
             )}
           </tbody>
         </table>
+        {isLoadingMore && (
+          <div className={styles.loadingMore}>
+            <i className="fas fa-spinner fa-spin"></i> Loading more files in background...
+          </div>
+        )}
       </div>
-
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-      />
     </div>
   );
 }

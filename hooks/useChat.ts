@@ -10,7 +10,10 @@ interface Message {
   sources?: Source[];
 }
 
-export function useChat(conversationId: string | null) {
+export function useChat(
+  conversationId: string | null,
+  documentPath: string | null = null,
+) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +64,7 @@ export function useChat(conversationId: string | null) {
       | "custom_ocr"
       | "none"
       | string[],
+    documentPath?: string | null,
   ) => {
     if (!input.trim() || isLoading) return;
 
@@ -72,15 +76,18 @@ export function useChat(conversationId: string | null) {
     setIsLoading(true);
 
     try {
+      const body: Record<string, unknown> = {
+        messages: [...messages, userMessage],
+        conversationId: currentConversationId,
+        sourceFilter,
+      };
+      if (documentPath) body.documentPath = documentPath;
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: abortController.signal,
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          conversationId: currentConversationId,
-          sourceFilter,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) throw new Error("Failed to send message");
@@ -140,7 +147,10 @@ export function useChat(conversationId: string | null) {
 
               if (sourcesData.conversationId && !currentConversationId) {
                 setCurrentConversationId(sourcesData.conversationId);
-                router.push(`/?conversation=${sourcesData.conversationId}`);
+                const params = new URLSearchParams();
+                params.set("conversation", sourcesData.conversationId);
+                if (documentPath) params.set("document", documentPath);
+                router.push(`/?${params.toString()}`);
               }
             } catch (e) {
               console.error("Failed to parse sources:", e);
@@ -189,8 +199,8 @@ export function useChat(conversationId: string | null) {
         // Request was cancelled - remove the incomplete assistant message
         setMessages((prev) => {
           const newMessages = [...prev];
-          if (newMessages[newMessages.length - 1]?.role === "assistant" && 
-              newMessages[newMessages.length - 1]?.content === "") {
+          if (newMessages[newMessages.length - 1]?.role === "assistant" &&
+            newMessages[newMessages.length - 1]?.content === "") {
             newMessages.pop();
           }
           return newMessages;
@@ -263,7 +273,10 @@ export function useChat(conversationId: string | null) {
               const metadata = JSON.parse(metadataPart);
               if (metadata.conversationId && !currentConversationId) {
                 setCurrentConversationId(metadata.conversationId);
-                router.push(`/?conversation=${metadata.conversationId}`);
+                const params = new URLSearchParams();
+                params.set("conversation", metadata.conversationId);
+                if (documentPath) params.set("document", documentPath);
+                router.push(`/?${params.toString()}`);
               }
             } catch (e) {
               console.error("Failed to parse metadata:", e);
@@ -310,8 +323,8 @@ export function useChat(conversationId: string | null) {
         // Request was cancelled - remove the incomplete assistant message
         setMessages((prev) => {
           const newMessages = [...prev];
-          if (newMessages[newMessages.length - 1]?.role === "assistant" && 
-              newMessages[newMessages.length - 1]?.content === "") {
+          if (newMessages[newMessages.length - 1]?.role === "assistant" &&
+            newMessages[newMessages.length - 1]?.content === "") {
             newMessages.pop();
           }
           return newMessages;

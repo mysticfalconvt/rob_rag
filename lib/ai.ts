@@ -77,7 +77,15 @@ export async function generateEmbedding(
     });
 
     if (!response.ok) {
-      const errorMsg = `Embedding API returned ${response.status}: ${response.statusText}`;
+      let errorDetails = response.statusText;
+      try {
+        const errorBody = await response.json();
+        errorDetails = JSON.stringify(errorBody);
+        console.error("Embedding API error details:", errorBody);
+      } catch (e) {
+        // Could not parse error body
+      }
+      const errorMsg = `Embedding API returned ${response.status}: ${errorDetails}`;
       const duration = Date.now() - startTime;
 
       if (onMetrics) {

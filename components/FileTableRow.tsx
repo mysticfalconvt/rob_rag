@@ -266,6 +266,17 @@ export default function FileTableRow({
               <i className="fas fa-eye"></i>
             </button>
           )}
+          {isCustomOcr && file.paperlessId && (
+            <a
+              href={`/api/files/original/${file.paperlessId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.viewOriginalButton}
+              title="View original PDF"
+            >
+              <i className="fas fa-file-pdf"></i>
+            </a>
+          )}
           {file.customOcrStatus === "processing" && (
             <span className={styles.processingBadge} title="OCR in progress">
               <i className="fas fa-spinner fa-spin"></i> Processing...

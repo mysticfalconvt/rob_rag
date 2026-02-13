@@ -4,6 +4,7 @@
  */
 
 import { initializePlugins } from "./plugins";
+import { backgroundScheduler } from "./scheduler";
 
 let initialized = false;
 
@@ -20,6 +21,12 @@ export function initializeApp(): void {
 
   // Initialize data source plugins
   initializePlugins();
+
+  // Start background scheduler
+  if (typeof window === 'undefined') {
+    // Server-side only
+    backgroundScheduler.start();
+  }
 
   initialized = true;
   console.log("[Init] Application initialization complete");

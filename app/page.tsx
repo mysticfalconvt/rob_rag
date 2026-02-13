@@ -15,9 +15,13 @@ import styles from "./page.module.css";
 function ChatPageContent() {
   const searchParams = useSearchParams();
   const conversationId = searchParams.get("conversation");
+  const documentPath = searchParams.get("document");
+  const documentDisplayName = documentPath
+    ? decodeURIComponent(documentPath).split("/").filter(Boolean).pop() || "document"
+    : null;
 
   const { messages, isLoading, currentConversationId, sendMessage, sendDirectLLM, cancelRequest } =
-    useChat(conversationId);
+    useChat(conversationId, documentPath);
   const { isSaving, saveConversation, deleteConversation } =
     useConversationActions(currentConversationId);
 
@@ -117,7 +121,7 @@ function ChatPageContent() {
     if (!input.trim() || isLoading) return;
 
     const sourceFilter = getSourceFilter();
-    await sendMessage(input, sourceFilter);
+    await sendMessage(input, sourceFilter, documentPath || undefined);
     setInput("");
   };
 
@@ -160,10 +164,21 @@ function ChatPageContent() {
         showMenu={false}
         isSaving={false}
         appName={config.APP_NAME}
-        onToggleMenu={() => {}}
-        onSaveConversation={() => {}}
-        onDeleteConversation={() => {}}
+        onToggleMenu={() => { }}
+        onSaveConversation={() => { }}
+        onDeleteConversation={() => { }}
       />
+
+      {documentPath && (
+        <div className={styles.documentBanner}>
+          <span className={styles.documentBannerText}>
+            <i className="fas fa-file-alt"></i> Chatting about: {documentDisplayName}
+          </span>
+          <a href="/" className={styles.documentBannerClear} title="Start a normal chat">
+            <i className="fas fa-times"></i> Clear
+          </a>
+        </div>
+      )}
 
       <div className={styles.messages}>
         {messages.length === 0 && (
@@ -211,6 +226,7 @@ function ChatPageContent() {
           goodreadsUsers={goodreadsUsers}
           conversationId={currentConversationId}
           isSaving={isSaving}
+          defaultUseRag={!!documentPath}
           onChange={setInput}
           onSubmit={handleSubmit}
           onDirectLLMSubmit={handleDirectLLMSubmit}

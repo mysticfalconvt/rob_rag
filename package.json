@@ -16,6 +16,7 @@
     "@langchain/openai": "^1.2.0",
     "@langchain/textsplitters": "^1.0.1",
     "@prisma/client": "^6.19.0",
+    "@tanstack/react-virtual": "^3.13.18",
     "bcrypt": "^6.0.0",
     "chokidar": "^5.0.0",
     "googleapis": "^169.0.0",

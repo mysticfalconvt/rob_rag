@@ -10,6 +10,7 @@ export interface SearchResult {
 
 /**
  * Search function using PostgreSQL with pgvector
+ * @param documentPath - Optional: restrict results to this document only (single-doc chat)
  */
 export async function search(
   query: string,
@@ -22,12 +23,13 @@ export async function search(
     | "goodreads"
     | "none"
     | string[], // Support array of sources
-  onEmbeddingMetrics?: (metrics: LLMCallMetrics) => void | Promise<void>
+  onEmbeddingMetrics?: (metrics: LLMCallMetrics) => void | Promise<void>,
+  documentPath?: string,
 ): Promise<SearchResult[]> {
   try {
     const queryEmbedding = await generateEmbedding(query, onEmbeddingMetrics);
     console.log("[Retrieval] Using PostgreSQL pgvector for search");
-    const results = await searchWithPgVector(queryEmbedding, limit, sourceFilter);
+    const results = await searchWithPgVector(queryEmbedding, limit, sourceFilter, documentPath);
 
     // Apply tag-based score boosting
     return await boostScoresByTags(results, query);

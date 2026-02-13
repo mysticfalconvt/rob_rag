@@ -168,11 +168,11 @@ function FileViewerPageContent() {
     if (
       !confirm(
         "Are you sure you want to revert to Paperless OCR?\n\n" +
-          "This will:\n" +
-          "- Delete the custom OCR output\n" +
-          "- Delete the original PDF copy\n" +
-          "- Re-index with Paperless OCR content\n\n" +
-          "This action cannot be undone.",
+        "This will:\n" +
+        "- Delete the custom OCR output\n" +
+        "- Delete the original PDF copy\n" +
+        "- Re-index with Paperless OCR content\n\n" +
+        "This action cannot be undone.",
       )
     ) {
       return;
@@ -212,6 +212,7 @@ function FileViewerPageContent() {
     <div className={styles.container}>
       <FileViewerHeader
         fileName={fileData.fileName}
+        filePath={fileData.filePath}
         source={fileData.source || ""}
         paperlessUrl={fileData.paperlessUrl}
         originalDocPath={fileData.metadata.originalDocPath}

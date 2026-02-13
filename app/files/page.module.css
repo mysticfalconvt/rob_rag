@@ -785,3 +785,20 @@
     font-size: 0.8125rem;
   }
 }
+
+.loadingMore {
+  text-align: center;
+  padding: 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .loadingMore {
+    color: #9ca3af;
+  }
+}

@@ -23,29 +23,28 @@ export interface OcrProcessingJob {
   result?: VisionOcrResult;
 }
 
-// In-memory job tracking (in production, use Redis or DB)
-const jobs = new Map<string, OcrProcessingJob>();
-
 /**
  * Convert PDF pages to base64 encoded images
  * Returns an array of base64 strings, one per page
  */
 export async function pdfToImages(pdfPath: string): Promise<string[]> {
-  const outputDir = path.join(path.dirname(pdfPath), 'temp_images');
+  // Create unique temp directory for this job using timestamp + random string
+  const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  const outputDir = path.join(path.dirname(pdfPath), `temp_images_${uniqueId}`);
 
   // Create temp directory for images
   await fs.mkdir(outputDir, { recursive: true });
 
   try {
-    // Configure pdf2pic converter
+    // Configure pdf2pic converter with optimized settings
     const options = {
-      density: 150, // Lower DPI to reduce token usage
+      density: 120, // Reduced DPI to decrease image size
       saveFilename: "page",
       savePath: outputDir,
       format: "jpg",
-      width: 1200, // Reduced from 2000 to fit in context window
-      height: 1200, // Reduced from 2000 to fit in context window
-      quality: 75, // JPEG quality 0-100, lower = smaller file
+      width: 1000, // Further reduced to prevent "failed to process image" errors
+      height: 1000, // Further reduced
+      quality: 60, // Lower quality = smaller file size
     };
 
     const converter = fromPath(pdfPath, options);
@@ -173,42 +172,86 @@ Focus on accuracy and completeness. If handwriting is unclear, indicate with [un
     console.log(`Sending vision request to model: ${visionModel}`);
     console.log(`Data URL prefix: data:image/jpeg;base64,[${imageData.length} chars]`);
 
-    const response = await fetch(`${config.LM_STUDIO_API_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(config.LM_STUDIO_API_KEY && {
-          Authorization: `Bearer ${config.LM_STUDIO_API_KEY}`,
-        }),
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(`Vision LLM API error details:`, errorBody);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await fetch(`${config.LM_STUDIO_API_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(config.LM_STUDIO_API_KEY && {
+              Authorization: `Bearer ${config.LM_STUDIO_API_KEY}`,
+            }),
+          },
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(120000), // 2 minute timeout
+        });
 
-      let errorMsg = `Vision LLM API error: ${response.statusText}`;
-      if (errorBody) {
-        errorMsg += ` - ${errorBody}`;
+        if (!response.ok) {
+          const errorBody = await response.text();
+
+          // If it's a "failed to process image" error, don't retry
+          if (errorBody.includes("failed to process image")) {
+            console.error(`Vision model cannot process this image (too large or invalid format)`);
+            throw new Error(`Image processing failed - image may be too large or corrupted`);
+          }
+
+          console.error(`Vision LLM API error details (attempt ${attempt}/${maxRetries}):`, errorBody);
+
+          let errorMsg = `Vision LLM API error: ${response.statusText}`;
+          if (errorBody) {
+            errorMsg += ` - ${errorBody}`;
+          }
+
+          lastError = new Error(errorMsg);
+
+          // Wait before retry (exponential backoff: 2s, 4s, 8s)
+          if (attempt < maxRetries) {
+            const delayMs = Math.pow(2, attempt) * 1000;
+            console.log(`Retrying in ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+          }
+
+          throw lastError;
+        }
+
+        // Success - break retry loop
+        const result = await response.json();
+
+        if (!result.choices || !result.choices[0] || !result.choices[0].message) {
+          console.error('Unexpected API response:', result);
+          throw new Error('Invalid response from vision LLM');
+        }
+
+        let content = result.choices[0].message.content;
+
+        // Strip markdown code fences if present
+        content = content.replace(/^```(?:markdown)?\s*\n/i, '').replace(/\n```\s*$/i, '');
+
+        return content;
+
+      } catch (error: any) {
+        lastError = error;
+
+        // If it's a non-retryable error, throw immediately
+        if (error.message.includes('Image processing failed') || error.name === 'AbortError') {
+          throw error;
+        }
+
+        if (attempt < maxRetries) {
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.log(`Request failed (attempt ${attempt}/${maxRetries}), retrying in ${delayMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
       }
-
-      throw new Error(errorMsg);
     }
 
-    const result = await response.json();
-
-    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
-      console.error('Unexpected API response:', result);
-      throw new Error('Invalid response from vision LLM');
-    }
-
-    let content = result.choices[0].message.content;
-
-    // Strip markdown code fences if present (LLMs often wrap output in ```markdown...```)
-    content = content.replace(/^```(?:markdown)?\s*\n/i, '').replace(/\n```\s*$/i, '');
-
-    return content;
+    // All retries failed
+    throw lastError || new Error('Vision processing failed after all retries');
   } catch (error) {
     console.error(`Error processing page ${pageNumber}:`, error);
     throw error;
@@ -429,6 +472,7 @@ export async function processDocumentWithVision(
 
 /**
  * Start an OCR processing job for a paperless document
+ * Jobs are queued and processed with concurrency control
  */
 export async function startOcrJob(
   paperlessId: number,
@@ -437,41 +481,56 @@ export async function startOcrJob(
   const { v4: uuidv4 } = await import("uuid");
   const jobId = uuidv4();
 
-  const job: OcrProcessingJob = {
-    id: jobId,
-    status: "pending",
-    progress: 0,
-  };
-
-  jobs.set(jobId, job);
-
-  // Start processing asynchronously
-  processOcrJobAsync(jobId, paperlessId, visionModel).catch((error) => {
-    console.error(`OCR job ${jobId} failed:`, error);
-    const job = jobs.get(jobId);
-    if (job) {
-      job.status = "error";
-      job.error = error.message;
-    }
+  // Create job in database
+  await prisma.ocrJob.create({
+    data: {
+      id: jobId,
+      paperlessId,
+      visionModel,
+      status: "pending",
+      progress: 0,
+    },
   });
+
+  // Add to queue instead of starting immediately
+  const { ocrQueue } = await import("./ocrQueue");
+  ocrQueue.enqueue(jobId, paperlessId, visionModel);
 
   return jobId;
 }
 
 /**
+ * Helper to update OCR job progress
+ */
+async function updateJobProgress(jobId: string, progress: number): Promise<void> {
+  try {
+    await prisma.ocrJob.update({
+      where: { id: jobId },
+      data: { progress },
+    });
+  } catch (e) {
+    console.error(`Failed to update job ${jobId} progress:`, e);
+  }
+}
+
+/**
  * Process OCR job asynchronously
  */
-async function processOcrJobAsync(
+export async function processOcrJobAsync(
   jobId: string,
   paperlessId: number,
   visionModel: string,
 ): Promise<void> {
-  const job = jobs.get(jobId);
-  if (!job) return;
-
   try {
-    job.status = "processing";
-    job.progress = 10;
+    // Update job status to processing
+    await prisma.ocrJob.update({
+      where: { id: jobId },
+      data: {
+        status: "processing",
+        startedAt: new Date(),
+        progress: 10,
+      },
+    });
 
     // Get paperless client and download document
     const { getPaperlessClient } = await import("./paperless");
@@ -480,7 +539,7 @@ async function processOcrJobAsync(
       throw new Error("Paperless client not configured");
     }
 
-    job.progress = 20;
+    await updateJobProgress(jobId, 20);
 
     // Download the document
     const url = `${client["config"].url}/api/documents/${paperlessId}/download/`;
@@ -494,7 +553,7 @@ async function processOcrJobAsync(
       throw new Error(`Failed to download document: ${response.statusText}`);
     }
 
-    job.progress = 30;
+    await updateJobProgress(jobId, 30);
 
     // Save to originals folder
     const customDocsPath = path.join(
@@ -512,7 +571,7 @@ async function processOcrJobAsync(
     const originalFilePath = path.join(originalsPath, `${paperlessId}.pdf`);
     await fs.writeFile(originalFilePath, buffer);
 
-    job.progress = 40;
+    await updateJobProgress(jobId, 40);
 
     // Process with vision LLM
     const result = await processDocumentWithVision(
@@ -520,13 +579,13 @@ async function processOcrJobAsync(
       visionModel,
     );
 
-    job.progress = 70;
+    await updateJobProgress(jobId, 70);
 
     // Save markdown output
     const markdownFilePath = path.join(markdownPath, `${paperlessId}.md`);
     await fs.writeFile(markdownFilePath, result.markdown);
 
-    job.progress = 80;
+    await updateJobProgress(jobId, 80);
 
     // Update tags in Paperless-ngx with extracted tags
     if (result.metadata.extractedTags.length > 0) {
@@ -613,13 +672,13 @@ async function processOcrJobAsync(
       },
     });
 
-    job.progress = 90;
+    await updateJobProgress(jobId, 90);
 
     // Trigger re-indexing with the new markdown
     const { indexCustomOcrDocument } = await import("./indexer");
     await indexCustomOcrDocument(paperlessId, result);
 
-    job.progress = 95;
+    await updateJobProgress(jobId, 95);
 
     // Auto-tag the document with our global tag system using smart tag generation
     try {
@@ -759,17 +818,30 @@ Return ONLY a JSON array of tag names, like: ["tag1", "tag2", "tag3"]`;
       // Don't fail the whole job if tagging fails
     }
 
-    job.progress = 100;
-    job.status = "completed";
-    job.result = result;
+    // Mark job as completed
+    await prisma.ocrJob.update({
+      where: { id: jobId },
+      data: {
+        status: "completed",
+        progress: 100,
+        completedAt: new Date(),
+      },
+    });
 
     console.log(`OCR job ${jobId} completed successfully`);
   } catch (error: any) {
     console.error(`OCR job ${jobId} failed:`, error);
-    job.status = "error";
-    job.error = error.message;
 
-    // Update database status
+    // Update job status in database
+    await prisma.ocrJob.update({
+      where: { id: jobId },
+      data: {
+        status: "failed",
+        error: error.message,
+      },
+    });
+
+    // Update file status
     const filePath = `paperless://${paperlessId}`;
     await prisma.indexedFile.update({
       where: { filePath },
@@ -783,20 +855,54 @@ Return ONLY a JSON array of tag names, like: ["tag1", "tag2", "tag3"]`;
 /**
  * Get OCR job status
  */
-export function getOcrJobStatus(jobId: string): OcrProcessingJob | null {
-  return jobs.get(jobId) || null;
+export async function getOcrJobStatus(jobId: string): Promise<OcrProcessingJob | null> {
+  try {
+    const job = await prisma.ocrJob.findUnique({
+      where: { id: jobId },
+    });
+
+    if (!job) return null;
+
+    return {
+      id: job.id,
+      status: job.status as "pending" | "processing" | "completed" | "error",
+      progress: job.progress,
+      error: job.error || undefined,
+    };
+  } catch (e) {
+    console.error(`Failed to get job status for ${jobId}:`, e);
+    return null;
+  }
 }
 
 /**
  * Clean up old completed jobs (call periodically)
  */
-export function cleanupOldJobs(maxAgeMs: number = 3600000): void {
-  // Remove jobs older than 1 hour by default
-  const now = Date.now();
-  for (const [jobId, job] of jobs.entries()) {
-    if (job.status === "completed" || job.status === "error") {
-      // In production, you'd track creation time
-      jobs.delete(jobId);
-    }
+export async function cleanupOldJobs(maxAgeMs: number = 3600000): Promise<void> {
+  try {
+    const cutoffDate = new Date(Date.now() - maxAgeMs);
+
+    // Delete old completed or failed jobs
+    await prisma.ocrJob.deleteMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { status: "completed" },
+              { status: "failed" },
+            ],
+          },
+          {
+            createdAt: {
+              lt: cutoffDate,
+            },
+          },
+        ],
+      },
+    });
+
+    console.log(`Cleaned up OCR jobs older than ${maxAgeMs}ms`);
+  } catch (e) {
+    console.error("Failed to cleanup old OCR jobs:", e);
   }
 }
