@@ -174,16 +174,19 @@ export const createReminderTool = new DynamicStructuredTool({
 Use this when the user asks to be reminded about something, or wants to schedule a recurring query.
 This tool creates the reminder immediately.
 
+IMPORTANT: For reminders that involve knowledge retrieval (books, documents, calendar, emails, etc.),
+write the query as a question or search request so the RAG system can find relevant information.
+
 Examples:
-- "Remind me tomorrow at 8am to check my email"
-- "Every morning at 7am, tell me what's on my calendar"
-- "Remind me every Friday at 5pm to review my week"
-- "Every weekday at 9am, show me unread Paperless documents"
-- "Remind me in 15 minutes to call someone"`,
+- "Remind me tomorrow at 8am to check my email" → query: "check email" (simple reminder)
+- "Every morning at 7am, tell me what's on my calendar" → query: "what's on my calendar today?" (uses RAG)
+- "Remind me about books I've read" → query: "show me some interesting books from my reading history" (uses RAG with Goodreads)
+- "Every Friday at 5pm to review my week" → query: "what happened this week?" (uses RAG with calendar/documents)
+- "Every weekday at 9am, show me unread Paperless documents" → query: "what are my recent unread documents?" (uses RAG)`,
   schema: z.object({
     time_expression: z.string().describe("When to send the reminder (e.g., 'tomorrow at 8am', 'in 15 minutes', 'every morning at 7am', 'every Friday at 5pm')"),
-    query: z.string().describe("The question or query to run when the reminder triggers (e.g., 'check the mail', 'what's on my calendar today')"),
-    name: z.string().optional().describe("Optional short name for the reminder (e.g., 'Daily calendar check')"),
+    query: z.string().describe("The question or query to run when the reminder triggers. For knowledge retrieval (books, documents, calendar), phrase as a search question. For simple tasks, use an imperative (e.g., 'call mom', 'take out trash')."),
+    name: z.string().optional().describe("Optional short name for the reminder (e.g., 'Daily calendar check', 'Book reflection')"),
   }),
   func: async ({ time_expression, query, name }, config) => {
     try {
@@ -221,9 +224,16 @@ Please try rephrasing, for example:
       // The LLM can explain what it's doing in its response
 
       // Determine if this is a simple notification or a query
-      // Simple notifications are action reminders like "take chicken out"
-      // Queries ask for information like "what's on my calendar"
-      const isQuery = query.toLowerCase().match(/\b(what|how many|list|show|tell me|give me|find|search)\b/);
+      // Simple notifications are action reminders like "take chicken out", "call mom"
+      // Queries should use RAG to pull from knowledge base
+      const lowerQuery = query.toLowerCase();
+
+      // Check if query asks for information or references knowledge
+      const asksForInfo = lowerQuery.match(/\b(what|how many|list|show|tell me|give me|find|search|remind me about|think about|remember)\b/);
+      const referencesKnowledge = lowerQuery.match(/\b(books?|documents?|calendar|email|papers?|read|wrote|goodreads|files?)\b/);
+
+      // Use RAG flow if it asks for info OR references stored knowledge
+      const isQuery = asksForInfo || referencesKnowledge;
 
       // For simple reminders, prepend with a notification marker
       const finalQuery = isQuery ? query : `SIMPLE_REMINDER: ${query}`;

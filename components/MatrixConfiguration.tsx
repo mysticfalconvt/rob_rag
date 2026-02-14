@@ -10,6 +10,7 @@ interface MatrixRoom {
   name: string;
   description?: string;
   enabled: boolean;
+  useRag?: boolean;
   memberCount?: number;
   alias?: string;
   isJoined?: boolean;
@@ -138,6 +139,27 @@ export default function MatrixConfiguration() {
       }
     } catch (error) {
       alert("Failed to toggle room");
+    }
+  };
+
+  const handleToggleRag = async (roomId: string, currentUseRag: boolean) => {
+    try {
+      const res = await fetch("/api/matrix/rooms", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId,
+          useRag: !currentUseRag,
+        }),
+      });
+
+      if (res.ok) {
+        await fetchRooms();
+      } else {
+        alert("Failed to toggle RAG");
+      }
+    } catch (error) {
+      alert("Failed to toggle RAG");
     }
   };
 
@@ -382,65 +404,66 @@ export default function MatrixConfiguration() {
             <p>No rooms yet. Invite the bot to a room or click "Sync Rooms" to discover existing rooms.</p>
           </div>
         ) : (
-          <table style={{ width: "100%", marginTop: "16px" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left" }}>Room Name</th>
-                <th style={{ textAlign: "left" }}>Room ID / Alias</th>
-                <th style={{ textAlign: "center" }}>Members</th>
-                <th style={{ textAlign: "center" }}>Status</th>
-                <th style={{ textAlign: "center" }}>Enabled</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rooms.map((room) => (
-                <tr key={room.id} style={{ borderTop: "1px solid #ddd" }}>
-                  <td style={{ padding: "8px" }}>{room.name}</td>
-                  <td style={{ padding: "8px", fontSize: "0.9em", color: "#666" }}>
-                    {room.alias || room.roomId}
-                  </td>
-                  <td style={{ padding: "8px", textAlign: "center" }}>
-                    {room.memberCount || "-"}
-                  </td>
-                  <td style={{ padding: "8px", textAlign: "center" }}>
-                    {room.isJoined ? (
-                      <span style={{ color: "green" }}>✓</span>
-                    ) : (
-                      <span style={{ color: "red" }}>✗</span>
+          <div className={styles.roomsGrid}>
+            {rooms.map((room) => (
+              <div key={room.id} className={styles.roomCard}>
+                <div className={styles.roomCardHeader}>
+                  <div className={styles.roomCardInfo}>
+                    <div className={styles.roomCardTitle}>
+                      <h4>{room.name}</h4>
+                      {room.isJoined ? (
+                        <span className={styles.statusJoined}>✓ Joined</span>
+                      ) : (
+                        <span className={styles.statusNotJoined}>✗ Not joined</span>
+                      )}
+                    </div>
+                    <p className={styles.roomCardId}>
+                      {room.alias || room.roomId}
+                    </p>
+                    {room.memberCount !== undefined && (
+                      <p className={styles.roomCardMembers}>
+                        {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                      </p>
                     )}
-                  </td>
-                  <td style={{ padding: "8px", textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={room.enabled}
-                      onChange={() => handleToggleRoom(room.roomId, room.enabled)}
-                    />
-                  </td>
-                  <td style={{ padding: "8px", textAlign: "right" }}>
+                  </div>
+                  <div className={styles.roomCardActions}>
                     <button
                       onClick={() => handleSendTestMessage(room.roomId)}
-                      style={{ fontSize: "0.9em", padding: "4px 8px", marginRight: "4px" }}
+                      className={styles.testButton}
                       disabled={!room.isJoined}
                     >
                       Test
                     </button>
                     <button
                       onClick={() => handleRemoveRoom(room.roomId)}
-                      style={{
-                        fontSize: "0.9em",
-                        padding: "4px 8px",
-                        background: "#dc3545",
-                        color: "white",
-                      }}
+                      className={styles.removeButton}
                     >
                       Remove
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+                <div className={styles.roomCardToggles}>
+                  <label className={styles.toggleLabel}>
+                    <input
+                      type="checkbox"
+                      checked={room.enabled}
+                      onChange={() => handleToggleRoom(room.roomId, room.enabled)}
+                    />
+                    <span>Enabled</span>
+                  </label>
+                  <label className={styles.toggleLabel}>
+                    <input
+                      type="checkbox"
+                      checked={room.useRag ?? true}
+                      onChange={() => handleToggleRag(room.roomId, room.useRag ?? true)}
+                      title="Enable RAG for document search"
+                    />
+                    <span>RAG</span>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
 
         <div style={{ marginTop: "16px", fontSize: "0.9em", color: "#666" }}>
@@ -450,6 +473,9 @@ export default function MatrixConfiguration() {
           </p>
           <p>
             <strong>Enabled rooms:</strong> The bot will respond to messages in enabled rooms.
+          </p>
+          <p>
+            <strong>RAG toggle:</strong> When enabled, the bot searches your documents for context. When disabled, the bot uses only the LLM without document search. Like in-app chat, #clear clears conversation context.
           </p>
           <p style={{ color: "#d63031" }}>
             <strong>⚠️ Encryption:</strong> Encrypted rooms are not currently supported. Please use

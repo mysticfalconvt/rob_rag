@@ -480,11 +480,17 @@ export async function POST(req: NextRequest) {
       userProfile.userBio,
     );
 
+    // Add Matrix-specific formatting instructions
+    const matrixFormattingNote = (triggerSource === "matrix" || triggerSource === "scheduled")
+      ? `\n\nIMPORTANT: You are responding in a Matrix chat. DO NOT use markdown tables - they don't render correctly. Use bullet lists, numbered lists, or simple text formatting instead. Bold and italic markdown work fine.`
+      : "";
+
     if (sourceFilter === "none") {
       systemPrompt = prompts.noSourcesSystemPrompt;
       if (userContextString) {
         systemPrompt += `\n\n${userContextString}`;
       }
+      systemPrompt += matrixFormattingNote;
     } else if (skipRagForTools) {
       // For counting queries, use a special prompt that emphasizes tool usage
       systemPrompt =
@@ -494,11 +500,13 @@ export async function POST(req: NextRequest) {
       if (userContextString) {
         systemPrompt += `\n\n${userContextString}`;
       }
+      systemPrompt += matrixFormattingNote;
     } else {
       systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, { context });
       if (userContextString) {
         systemPrompt += `\n\n${userContextString}`;
       }
+      systemPrompt += matrixFormattingNote;
     }
 
     // 3. Apply context window management to prevent token overflow
@@ -695,6 +703,7 @@ export async function POST(req: NextRequest) {
               if (userContextString) {
                 systemPrompt += `\n\n${userContextString}`;
               }
+              systemPrompt += matrixFormattingNote;
 
               // Update messages with new system prompt
               langchainMessages[0] = new SystemMessage(systemPrompt);
@@ -916,6 +925,7 @@ export async function POST(req: NextRequest) {
                 if (userContextString) {
                   systemPrompt += `\n\n${userContextString}`;
                 }
+                systemPrompt += matrixFormattingNote;
                 langchainMessages[0] = new SystemMessage(systemPrompt);
 
                 // Add a note about the fallback

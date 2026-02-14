@@ -222,15 +222,28 @@ export class CalendarPlugin implements DataSourcePlugin {
       {
         name: "get_upcoming_events",
         description:
-          "Get upcoming events in the next N days (REAL-TIME from Google Calendar API, not indexed database). Use this for 'what's on my calendar' type queries. Always returns fresh data.",
+          "Get upcoming events from Google Calendar (REAL-TIME from API, not indexed database). Use this for 'what's on my calendar today/this week' type queries. Supports flexible date ranges. Always returns fresh data.",
         parameters: [
+          {
+            name: "startDate",
+            type: "string",
+            required: false,
+            description: "Start date in ISO format (YYYY-MM-DD). Defaults to current date/time.",
+          },
+          {
+            name: "endDate",
+            type: "string",
+            required: false,
+            description: "End date in ISO format (YYYY-MM-DD). If not provided, uses 'days' parameter instead.",
+          },
           {
             name: "days",
             type: "number",
             required: false,
-            description: "Number of days to look ahead (default: 7)",
+            description: "Number of days to look ahead from start date (default: 7). Only used if endDate is not provided.",
           },
         ],
+        hasCustomExecution: true,
       },
     ];
   }
@@ -279,12 +292,79 @@ export class CalendarPlugin implements DataSourcePlugin {
   }
 
   /**
+   * Custom tool execution for tools with special handling
+   */
+  async executeTool(toolName: string, params: QueryParams): Promise<string> {
+    if (toolName === "get_upcoming_events") {
+      try {
+        const events = await this.getUpcomingEventsRealtime(params);
+
+        if (events.length === 0) {
+          return "No upcoming events found in the specified time range.";
+        }
+
+        // Format events for LLM consumption
+        const formattedEvents = events
+          .map((event, index) => {
+            let entry = `${index + 1}. **${event.title}**`;
+            entry += `\n   📅 ${new Date(event.start).toLocaleString("en-US", {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            })}`;
+
+            if (event.end) {
+              const endDate = new Date(event.end);
+              const startDate = new Date(event.start);
+              // Only show end time if it's different from start
+              if (endDate.getTime() !== startDate.getTime()) {
+                entry += ` - ${endDate.toLocaleString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}`;
+              }
+            }
+
+            if (event.location) {
+              entry += `\n   📍 ${event.location}`;
+            }
+
+            if (event.attendees) {
+              entry += `\n   👥 ${event.attendees}`;
+            }
+
+            if (event.calendarName) {
+              entry += `\n   📆 ${event.calendarName}`;
+            }
+
+            return entry;
+          })
+          .join("\n\n");
+
+        return `Found ${events.length} upcoming event${events.length > 1 ? "s" : ""}:\n\n${formattedEvents}`;
+      } catch (error) {
+        console.error("[CalendarPlugin] Error executing get_upcoming_events:", error);
+        return `Error fetching upcoming events: ${error instanceof Error ? error.message : "Unknown error"}`;
+      }
+    }
+
+    throw new Error(`Unknown tool: ${toolName}`);
+  }
+
+  /**
    * Special method to handle real-time upcoming events query
    * This bypasses the indexed database and queries Google API directly
    */
-  async getUpcomingEventsRealtime(days: number = 7) {
+  async getUpcomingEventsRealtime(params: { startDate?: string; endDate?: string; days?: number } = {}) {
     try {
-      const events = await getUpcomingEvents(days);
+      const { startDate, endDate, days = 7 } = params;
+
+      const events = await getUpcomingEvents(days, startDate, endDate);
 
       // Format for LLM consumption
       return events.map((event) => {

@@ -66,6 +66,11 @@ function generateToolsForPlugin(
       schema,
       func: async (params) => {
         try {
+          // Check if this tool has custom execution
+          if (toolDef.hasCustomExecution && plugin.executeTool) {
+            return await plugin.executeTool(toolDef.name, params);
+          }
+
           // Call the plugin's queryByMetadata method
           const results = await plugin.queryByMetadata(params);
 

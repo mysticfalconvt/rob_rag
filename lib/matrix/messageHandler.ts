@@ -45,6 +45,12 @@ function isRateLimited(roomId: string): boolean {
 }
 
 /**
+ * Track processed events to prevent duplicates
+ */
+const processedEvents = new Set<string>();
+const EVENT_CACHE_SIZE = 1000; // Keep track of last 1000 events
+
+/**
  * Process an incoming Matrix message
  */
 async function handleMessage(event: MatrixEvent): Promise<void> {
@@ -52,6 +58,25 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
     const client = matrixClient.getClient();
     if (!client) {
       return;
+    }
+
+    const eventId = event.getId();
+    if (!eventId) {
+      return;
+    }
+
+    // Check if we've already processed this event
+    if (processedEvents.has(eventId)) {
+      console.log(`[Matrix] Skipping duplicate event ${eventId}`);
+      return;
+    }
+
+    // Add to processed events (with size limit)
+    processedEvents.add(eventId);
+    if (processedEvents.size > EVENT_CACHE_SIZE) {
+      // Remove oldest entries
+      const toRemove = Array.from(processedEvents).slice(0, processedEvents.size - EVENT_CACHE_SIZE);
+      toRemove.forEach(id => processedEvents.delete(id));
     }
 
     const roomId = event.getRoomId();
@@ -93,6 +118,9 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       return;
     }
 
+    const useRag = room.useRag ?? true; // Default to true if not set
+    console.log(`[Matrix] Room ${roomId} useRag setting: ${useRag}`);
+
     // Check rate limiting
     if (isRateLimited(roomId)) {
       console.log(`[Matrix] Room ${roomId} is rate limited, skipping`);
@@ -133,7 +161,7 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       roomConversations.set(roomId, history);
 
       // Call the RAG flow with conversation context
-      const response = await callRagFlow(messageText, roomId, sender, displayName);
+      const response = await callRagFlow(messageText, roomId, sender, displayName, useRag);
 
       // Add assistant response to conversation history
       const assistantMessage: ConversationMessage = {
@@ -213,6 +241,7 @@ async function callRagFlow(
   roomId: string,
   sender: string,
   displayName: string,
+  useRag: boolean,
 ): Promise<{ text: string; sources?: any[] }> {
   try {
     const internalServiceKey = process.env.INTERNAL_SERVICE_KEY;
@@ -236,6 +265,7 @@ async function callRagFlow(
         matrixSender: sender,
         matrixDisplayName: displayName,
         internalServiceKey,
+        sourceFilter: useRag ? undefined : "none", // Disable RAG if useRag is false
       }),
     });
 
@@ -289,21 +319,34 @@ async function callRagFlow(
 }
 
 let handlerInitialized = false;
+let registeredClient: any = null; // Track which client has the listener
 
 /**
  * Initialize message handler
  * This should be called after the Matrix client is ready
  */
 export function initializeMessageHandler(): void {
-  if (handlerInitialized) {
-    console.log("[Matrix] Message handler already initialized, skipping");
-    return;
-  }
-
   const client = matrixClient.getClient();
+
   if (!client) {
     console.error("[Matrix] Cannot initialize message handler: client not ready");
     return;
+  }
+
+  // Check if already initialized for this specific client instance
+  if (handlerInitialized && registeredClient === client) {
+    console.log("[Matrix] Message handler already initialized for this client, skipping");
+    return;
+  }
+
+  // Remove old listener if client changed
+  if (registeredClient && registeredClient !== client) {
+    console.log("[Matrix] Client changed, removing old listener");
+    try {
+      registeredClient.removeAllListeners(RoomEvent.Timeline);
+    } catch (error) {
+      console.error("[Matrix] Failed to remove old listeners:", error);
+    }
   }
 
   console.log("[Matrix] Initializing message handler...");
@@ -326,5 +369,6 @@ export function initializeMessageHandler(): void {
   });
 
   handlerInitialized = true;
+  registeredClient = client;
   console.log("[Matrix] Message handler initialized");
 }

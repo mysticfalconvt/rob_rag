@@ -546,7 +546,11 @@ export async function isGoogleCalendarConfigured(): Promise<boolean> {
 /**
  * Get upcoming events (real-time API query, not from database)
  */
-export async function getUpcomingEvents(days: number = 7) {
+export async function getUpcomingEvents(
+  days: number = 7,
+  startDate?: string,
+  endDate?: string
+) {
   try {
     const oauth2Client = await getOAuthClient();
     await refreshTokenIfNeeded(oauth2Client);
@@ -560,10 +564,32 @@ export async function getUpcomingEvents(days: number = 7) {
     }
 
     const calendarIds = JSON.parse(settings.googleCalendarIds) as string[];
-    const now = new Date();
-    const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
 
-    const events = await fetchCalendarEvents(calendarIds, now, future);
+    // Determine time range
+    let timeMin: Date;
+    let timeMax: Date;
+
+    if (startDate) {
+      // If startDate is provided, parse it
+      timeMin = new Date(startDate);
+      // Set to start of day in local timezone
+      timeMin.setHours(0, 0, 0, 0);
+    } else {
+      // Default to now
+      timeMin = new Date();
+    }
+
+    if (endDate) {
+      // If endDate is provided, parse it
+      timeMax = new Date(endDate);
+      // Set to end of day in local timezone
+      timeMax.setHours(23, 59, 59, 999);
+    } else {
+      // Use days parameter to calculate end date from start
+      timeMax = new Date(timeMin.getTime() + days * 24 * 60 * 60 * 1000);
+    }
+
+    const events = await fetchCalendarEvents(calendarIds, timeMin, timeMax);
 
     return events.filter((e) => e.status !== "cancelled");
   } catch (error) {

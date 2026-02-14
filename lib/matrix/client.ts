@@ -156,8 +156,21 @@ class MatrixClientManager {
               update: {},
             });
           }
-        } catch (error) {
-          console.error(`[Matrix] Failed to join room ${member.roomId}:`, error);
+        } catch (error: any) {
+          // Handle specific Matrix errors
+          if (error?.errcode === 'M_UNKNOWN' && error?.httpStatus === 404) {
+            console.warn(`[Matrix] Room ${member.roomId} is unreachable (404) - removing from database if exists`);
+            // Try to clean up database entry for unreachable room
+            try {
+              await prisma.matrixRoom.deleteMany({
+                where: { roomId: member.roomId }
+              });
+            } catch (dbError) {
+              console.error(`[Matrix] Failed to clean up unreachable room:`, dbError);
+            }
+          } else {
+            console.error(`[Matrix] Failed to join room ${member.roomId}:`, error);
+          }
         }
       }
     });
@@ -320,6 +333,9 @@ class MatrixClientManager {
     const rooms = this.getRooms();
     console.log(`[Matrix] Syncing ${rooms.length} rooms to database...`);
 
+    // Get list of room IDs we're currently in
+    const joinedRoomIds = new Set<string>();
+
     for (const room of rooms) {
       try {
         const roomId = room.roomId;
@@ -329,6 +345,8 @@ class MatrixClientManager {
         if (myMembership !== "join") {
           continue;
         }
+
+        joinedRoomIds.add(roomId);
 
         await prisma.matrixRoom.upsert({
           where: { roomId },
@@ -347,6 +365,24 @@ class MatrixClientManager {
       } catch (error) {
         console.error(`[Matrix] Failed to sync room ${room.roomId}:`, error);
       }
+    }
+
+    // Clean up database entries for rooms we're no longer in
+    try {
+      const dbRooms = await prisma.matrixRoom.findMany({
+        select: { roomId: true }
+      });
+
+      for (const dbRoom of dbRooms) {
+        if (!joinedRoomIds.has(dbRoom.roomId)) {
+          console.log(`[Matrix] Removing stale room from database: ${dbRoom.roomId}`);
+          await prisma.matrixRoom.delete({
+            where: { roomId: dbRoom.roomId }
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[Matrix] Failed to clean up stale rooms:`, error);
     }
 
     console.log(`[Matrix] Room sync complete`);

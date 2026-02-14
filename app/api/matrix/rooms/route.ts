@@ -130,7 +130,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { roomId, name, description, enabled } = body;
+    const { roomId, name, description, enabled, useRag } = body;
 
     if (!roomId) {
       return NextResponse.json(
@@ -146,6 +146,7 @@ export async function PATCH(req: NextRequest) {
         name: name || undefined,
         description: description !== undefined ? description : undefined,
         enabled: enabled !== undefined ? enabled : undefined,
+        useRag: useRag !== undefined ? useRag : undefined,
       },
     });
 

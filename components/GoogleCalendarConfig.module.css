@@ -326,6 +326,145 @@
   cursor: not-allowed;
 }
 
+/* Room Cards */
+.roomsGrid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.roomCard {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  min-width: 0;
+}
+
+.roomCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.roomCardInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.roomCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.roomCardTitle h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.statusJoined {
+  color: #10b981;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.statusNotJoined {
+  color: #ef4444;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.roomCardId {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roomCardMembers {
+  margin: 4px 0 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.roomCardActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.testButton {
+  font-size: 0.875rem;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.testButton:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.testButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.removeButton {
+  font-size: 0.875rem;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #ef4444;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.removeButton:hover {
+  background: #dc2626;
+}
+
+.roomCardToggles {
+  display: flex;
+  gap: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.toggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  color: #374151;
+}
+
+.toggleLabel input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.toggleLabel span {
+  font-weight: 500;
+}
+
 @media (prefers-color-scheme: dark) {
   .instructionsBox {
     background: #1f2937;
@@ -429,5 +568,40 @@
 
   .calendarItem span {
     color: #ededed;
+  }
+
+  /* Room Cards Dark Mode */
+  .roomCard {
+    background: #1f2937;
+    border-color: #374151;
+  }
+
+  .roomCardTitle h4 {
+    color: #ededed;
+  }
+
+  .roomCardId,
+  .roomCardMembers {
+    color: #9ca3af;
+  }
+
+  .testButton {
+    background: #262626;
+    border-color: #374151;
+    color: #d1d5db;
+  }
+
+  .testButton:hover:not(:disabled) {
+    background: #374151;
+    border-color: #3b82f6;
+    color: #60a5fa;
+  }
+
+  .roomCardToggles {
+    border-top-color: #374151;
+  }
+
+  .toggleLabel {
+    color: #d1d5db;
   }
 }

@@ -5,6 +5,8 @@
   box-shadow:
     0 1px 3px 0 rgba(0, 0, 0, 0.1),
     0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  min-width: 0;
 }
 
 .header {
@@ -35,7 +37,8 @@
 }
 
 .content {
-  /* Content wrapper - no styles needed as children will handle their own spacing */
+  overflow-x: auto;
+  min-width: 0;
 }
 
 @media (prefers-color-scheme: dark) {

@@ -393,6 +393,7 @@ model MatrixRoom {
   name        String
   description String?
   enabled     Boolean  @default(true)
+  useRag      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
