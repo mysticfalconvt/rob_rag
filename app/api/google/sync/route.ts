@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
-import { syncCalendarEvents, indexCalendarEvents } from "@/lib/googleCalendar";
+import { syncCalendarEvents, indexCalendarEvents, GoogleAuthError } from "@/lib/googleCalendar";
 
 /**
  * POST: Sync and index calendar events
@@ -27,6 +27,18 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[GoogleSync] Error syncing calendar:", error);
+
+    // Handle authentication errors specifically
+    if (error instanceof GoogleAuthError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          authError: true,
+        },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to sync calendar",

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
+import { validateConnection } from "@/lib/googleCalendar";
 import prisma from "@/lib/prisma";
 
 /**
@@ -23,14 +24,31 @@ export async function GET(req: NextRequest) {
     });
 
     const configured = !!(settings?.googleClientId && settings?.googleClientSecret);
-    const authenticated = !!(settings?.googleAccessToken);
     const calendarIds = settings?.googleCalendarIds
       ? JSON.parse(settings.googleCalendarIds)
       : [];
 
+    // Validate the connection if we have tokens
+    let authenticated = false;
+    let connectionValid = false;
+    let connectionError = null;
+
+    if (settings?.googleAccessToken) {
+      const validation = await validateConnection();
+      connectionValid = validation.valid;
+      authenticated = validation.valid; // Only consider authenticated if validation passes
+      connectionError = validation.error || null;
+
+      if (!validation.valid) {
+        console.log(`[GoogleStatus] Connection validation failed: ${validation.error}`);
+      }
+    }
+
     return NextResponse.json({
       configured,
       authenticated,
+      connectionValid,
+      connectionError,
       calendarIds,
       lastSynced: settings?.googleLastSynced?.toISOString() || null,
       syncEnabled: settings?.googleSyncEnabled || false,

@@ -91,6 +91,53 @@ export async function handleAuthCallback(code: string, origin?: string) {
 }
 
 /**
+ * Custom error class for Google Calendar authentication errors
+ */
+export class GoogleAuthError extends Error {
+  constructor(message: string, public originalError?: any) {
+    super(message);
+    this.name = "GoogleAuthError";
+  }
+}
+
+/**
+ * Check if an error is an authentication error that requires re-authentication
+ */
+function isAuthError(error: any): boolean {
+  if (!error) return false;
+
+  const errorMessage = error.message?.toLowerCase() || "";
+  const errorCode = error.code?.toLowerCase() || "";
+
+  // Check for common auth error patterns
+  return (
+    errorMessage.includes("invalid_grant") ||
+    errorMessage.includes("invalid credentials") ||
+    errorMessage.includes("token has been expired or revoked") ||
+    errorCode === "401" ||
+    errorCode === "403" ||
+    error.response?.status === 401 ||
+    error.response?.status === 403
+  );
+}
+
+/**
+ * Clear invalid Google tokens from database
+ */
+async function clearGoogleTokens() {
+  console.log("[GoogleCalendar] Clearing invalid tokens...");
+  await prisma.settings.update({
+    where: { id: "singleton" },
+    data: {
+      googleAccessToken: null,
+      googleRefreshToken: null,
+      googleTokenExpiresAt: null,
+      googleSyncEnabled: false,
+    },
+  });
+}
+
+/**
  * Refresh access token if expired
  */
 async function refreshTokenIfNeeded(oauth2Client: any) {
@@ -106,15 +153,28 @@ async function refreshTokenIfNeeded(oauth2Client: any) {
   // Refresh if expired or expiring within 5 minutes
   if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) {
     console.log("[GoogleCalendar] Refreshing access token...");
-    const { credentials } = await oauth2Client.refreshAccessToken();
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
 
-    await prisma.settings.update({
-      where: { id: "singleton" },
-      data: {
-        googleAccessToken: credentials.access_token || null,
-        googleTokenExpiresAt: credentials.expiry_date ? new Date(credentials.expiry_date) : null,
-      },
-    });
+      await prisma.settings.update({
+        where: { id: "singleton" },
+        data: {
+          googleAccessToken: credentials.access_token || null,
+          googleTokenExpiresAt: credentials.expiry_date ? new Date(credentials.expiry_date) : null,
+        },
+      });
+    } catch (error) {
+      // If refresh fails due to auth error, clear tokens and throw
+      if (isAuthError(error)) {
+        await clearGoogleTokens();
+        throw new GoogleAuthError(
+          "Google Calendar connection expired. Please reconnect.",
+          error
+        );
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 }
 
@@ -122,13 +182,25 @@ async function refreshTokenIfNeeded(oauth2Client: any) {
  * List all available calendars
  */
 export async function listCalendars() {
-  const oauth2Client = await getOAuthClient();
-  await refreshTokenIfNeeded(oauth2Client);
+  try {
+    const oauth2Client = await getOAuthClient();
+    await refreshTokenIfNeeded(oauth2Client);
 
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-  const response = await calendar.calendarList.list();
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+    const response = await calendar.calendarList.list();
 
-  return response.data.items || [];
+    return response.data.items || [];
+  } catch (error) {
+    // If auth error, clear tokens and throw GoogleAuthError
+    if (isAuthError(error)) {
+      await clearGoogleTokens();
+      throw new GoogleAuthError(
+        "Google Calendar connection expired. Please reconnect.",
+        error
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -139,52 +211,72 @@ export async function fetchCalendarEvents(
   timeMin?: Date,
   timeMax?: Date
 ) {
-  const oauth2Client = await getOAuthClient();
-  await refreshTokenIfNeeded(oauth2Client);
+  try {
+    const oauth2Client = await getOAuthClient();
+    await refreshTokenIfNeeded(oauth2Client);
 
-  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-  const allEvents: any[] = [];
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+    const allEvents: any[] = [];
 
-  for (const calendarId of calendarIds) {
-    try {
-      const response = await calendar.events.list({
-        calendarId,
-        timeMin: timeMin?.toISOString() || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), // Default: 1 year ago
-        timeMax: timeMax?.toISOString(),
-        singleEvents: true,
-        orderBy: "startTime",
-        maxResults: 2500,
-      });
-
-      const events = response.data.items || [];
-
-      // Get calendar name
-      const calendarInfo = await calendar.calendars.get({ calendarId });
-      const calendarName = calendarInfo.data.summary || calendarId;
-
-      for (const event of events) {
-        // Skip birthday events at fetch time
-        if (event.eventType === "birthday") {
-          console.log(`[GoogleCalendar] Skipping birthday event during fetch: ${event.summary}`);
-          continue;
-        }
-        if (event.source?.title === "Birthdays" || event.source?.title?.includes("Contacts")) {
-          console.log(`[GoogleCalendar] Skipping contacts/birthday event during fetch: ${event.summary}`);
-          continue;
-        }
-
-        allEvents.push({
-          ...event,
+    for (const calendarId of calendarIds) {
+      try {
+        const response = await calendar.events.list({
           calendarId,
-          calendarName,
+          timeMin: timeMin?.toISOString() || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), // Default: 1 year ago
+          timeMax: timeMax?.toISOString(),
+          singleEvents: true,
+          orderBy: "startTime",
+          maxResults: 2500,
         });
-      }
-    } catch (error) {
-      console.error(`[GoogleCalendar] Error fetching events from ${calendarId}:`, error);
-    }
-  }
 
-  return allEvents;
+        const events = response.data.items || [];
+
+        // Get calendar name
+        const calendarInfo = await calendar.calendars.get({ calendarId });
+        const calendarName = calendarInfo.data.summary || calendarId;
+
+        for (const event of events) {
+          // Skip birthday events at fetch time
+          if (event.eventType === "birthday") {
+            console.log(`[GoogleCalendar] Skipping birthday event during fetch: ${event.summary}`);
+            continue;
+          }
+          if (event.source?.title === "Birthdays" || event.source?.title?.includes("Contacts")) {
+            console.log(`[GoogleCalendar] Skipping contacts/birthday event during fetch: ${event.summary}`);
+            continue;
+          }
+
+          allEvents.push({
+            ...event,
+            calendarId,
+            calendarName,
+          });
+        }
+      } catch (error) {
+        // Check if this is an auth error
+        if (isAuthError(error)) {
+          await clearGoogleTokens();
+          throw new GoogleAuthError(
+            "Google Calendar connection expired. Please reconnect.",
+            error
+          );
+        }
+        console.error(`[GoogleCalendar] Error fetching events from ${calendarId}:`, error);
+      }
+    }
+
+    return allEvents;
+  } catch (error) {
+    // If auth error at the top level, clear tokens and throw
+    if (isAuthError(error)) {
+      await clearGoogleTokens();
+      throw new GoogleAuthError(
+        "Google Calendar connection expired. Please reconnect.",
+        error
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -455,22 +547,78 @@ export async function isGoogleCalendarConfigured(): Promise<boolean> {
  * Get upcoming events (real-time API query, not from database)
  */
 export async function getUpcomingEvents(days: number = 7) {
-  const oauth2Client = await getOAuthClient();
-  await refreshTokenIfNeeded(oauth2Client);
+  try {
+    const oauth2Client = await getOAuthClient();
+    await refreshTokenIfNeeded(oauth2Client);
 
-  const settings = await prisma.settings.findUnique({
-    where: { id: "singleton" },
-  });
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+    });
 
-  if (!settings?.googleCalendarIds) {
-    throw new Error("No calendars selected");
+    if (!settings?.googleCalendarIds) {
+      throw new Error("No calendars selected");
+    }
+
+    const calendarIds = JSON.parse(settings.googleCalendarIds) as string[];
+    const now = new Date();
+    const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+
+    const events = await fetchCalendarEvents(calendarIds, now, future);
+
+    return events.filter((e) => e.status !== "cancelled");
+  } catch (error) {
+    // If auth error, clear tokens and throw
+    if (isAuthError(error)) {
+      await clearGoogleTokens();
+      throw new GoogleAuthError(
+        "Google Calendar connection expired. Please reconnect.",
+        error
+      );
+    }
+    throw error;
   }
+}
 
-  const calendarIds = JSON.parse(settings.googleCalendarIds) as string[];
-  const now = new Date();
-  const future = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+/**
+ * Validate that the current Google Calendar connection is working
+ * Returns true if connected and working, false otherwise
+ */
+export async function validateConnection(): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+    });
 
-  const events = await fetchCalendarEvents(calendarIds, now, future);
+    // Check if we have credentials configured
+    if (!settings?.googleClientId || !settings?.googleClientSecret) {
+      return { valid: false, error: "not_configured" };
+    }
 
-  return events.filter((e) => e.status !== "cancelled");
+    // Check if we have tokens
+    if (!settings?.googleAccessToken) {
+      return { valid: false, error: "not_authenticated" };
+    }
+
+    // Try to make a simple API call to validate the tokens
+    const oauth2Client = await getOAuthClient();
+    await refreshTokenIfNeeded(oauth2Client);
+
+    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+
+    // Make a lightweight API call to test the connection
+    await calendar.calendarList.list({ maxResults: 1 });
+
+    return { valid: true };
+  } catch (error) {
+    console.error("[GoogleCalendar] Connection validation failed:", error);
+
+    // If it's an auth error, clear tokens
+    if (isAuthError(error)) {
+      await clearGoogleTokens();
+      return { valid: false, error: "auth_expired" };
+    }
+
+    // Other errors might be temporary (network issues, etc.)
+    return { valid: false, error: error instanceof Error ? error.message : "unknown_error" };
+  }
 }

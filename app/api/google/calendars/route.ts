@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
-import { listCalendars } from "@/lib/googleCalendar";
+import { listCalendars, GoogleAuthError } from "@/lib/googleCalendar";
 import prisma from "@/lib/prisma";
 
 /**
@@ -15,6 +15,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ calendars });
   } catch (error) {
     console.error("[GoogleCalendars] Error listing calendars:", error);
+
+    // Handle authentication errors specifically
+    if (error instanceof GoogleAuthError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          authError: true,
+        },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to list calendars",

@@ -41,6 +41,11 @@ export default function GoogleCalendarConfig({ onSync }: GoogleCalendarConfigPro
         if (data.calendarIds) {
           setSelectedCalendars(data.calendarIds);
         }
+
+        // If connection validation failed, show appropriate message
+        if (data.configured && !data.authenticated && data.connectionError === "auth_expired") {
+          setMessage("⚠️ Google Calendar connection expired. Please reconnect.");
+        }
       }
     } catch (error) {
       console.error("Error fetching Google Calendar status:", error);
@@ -98,7 +103,14 @@ export default function GoogleCalendarConfig({ onSync }: GoogleCalendarConfigPro
         setMessage(`✅ Loaded ${data.calendars.length} calendars`);
       } else {
         const error = await res.json();
-        setMessage(`❌ ${error.error || "Failed to load calendars"}`);
+
+        // Handle authentication errors specifically
+        if (error.authError) {
+          setIsAuthenticated(false);
+          setMessage(`❌ ${error.error} Click "Reconnect" below.`);
+        } else {
+          setMessage(`❌ ${error.error || "Failed to load calendars"}`);
+        }
       }
     } catch (error) {
       setMessage("❌ Failed to load calendars");
@@ -154,7 +166,14 @@ export default function GoogleCalendarConfig({ onSync }: GoogleCalendarConfigPro
         if (onSync) onSync();
       } else {
         const error = await res.json();
-        setMessage(`❌ ${error.error || "Sync failed"}`);
+
+        // Handle authentication errors specifically
+        if (error.authError) {
+          setIsAuthenticated(false);
+          setMessage(`❌ ${error.error} Click "Reconnect" below.`);
+        } else {
+          setMessage(`❌ ${error.error || "Sync failed"}`);
+        }
       }
     } catch (error) {
       setMessage("❌ Sync failed");
@@ -297,12 +316,12 @@ export default function GoogleCalendarConfig({ onSync }: GoogleCalendarConfigPro
         <>
           <div className={styles.formGroup}>
             <p className={styles.infoText}>
-              ✓ Credentials configured. Click below to authenticate with Google:
+              ✓ Credentials configured. Click below to {message.includes("expired") ? "reconnect" : "authenticate"} with Google:
             </p>
           </div>
           <div className={styles.buttonGroup}>
             <button onClick={handleConnectToGoogle} className={styles.connectButton}>
-              Connect to Google Calendar
+              {message.includes("expired") ? "Reconnect to Google Calendar" : "Connect to Google Calendar"}
             </button>
             <button onClick={handleEditCredentials} className={styles.secondaryButton}>
               Edit Credentials
