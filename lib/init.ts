@@ -5,11 +5,15 @@
 
 import { initializePlugins } from "./plugins";
 import { backgroundScheduler } from "./scheduler";
+import { matrixClient } from "./matrix/client";
+import { initializeMessageHandler } from "./matrix/messageHandler";
 
 let initialized = false;
+let matrixInitialized = false;
+let matrixInitializing = false;
 
 /**
- * Initialize the application
+ * Initialize the application (core services only)
  * Safe to call multiple times - will only run once
  */
 export function initializeApp(): void {
@@ -29,7 +33,41 @@ export function initializeApp(): void {
   }
 
   initialized = true;
-  console.log("[Init] Application initialization complete");
+  console.log("[Init] Application initialization complete (Matrix will initialize on first use)");
+}
+
+/**
+ * Initialize Matrix client
+ * Safe to call multiple times - will only run once
+ */
+export function initializeMatrix(): void {
+  if (matrixInitialized || matrixInitializing || typeof window !== 'undefined') {
+    if (matrixInitializing) {
+      console.log("[Init] Matrix initialization already in progress, skipping");
+    }
+    return;
+  }
+
+  matrixInitializing = true;
+  console.log("[Init] Initializing Matrix client...");
+
+  // Initialize Matrix client (with delay for database readiness)
+  setTimeout(async () => {
+    try {
+      await matrixClient.initialize();
+
+      // Initialize message handler when client reaches PREPARED state
+      matrixClient.onReady(() => {
+        console.log("[Init] Matrix client is ready, initializing message handler...");
+        initializeMessageHandler();
+        matrixInitialized = true;
+        matrixInitializing = false;
+      });
+    } catch (error) {
+      console.error("[Init] Failed to initialize Matrix client:", error);
+      matrixInitializing = false; // Allow retry
+    }
+  }, 5000); // 5 second delay
 }
 
 /**

@@ -14,6 +14,8 @@ export type LLMCallType =
 
 export type LLMRequestType =
   | "user_chat"
+  | "matrix_chat"
+  | "scheduled_task"
   | "direct_llm"
   | "background_processing"
   | "system_task";

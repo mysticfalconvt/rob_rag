@@ -9,6 +9,7 @@ import SyncedFilesConfiguration from "@/components/SyncedFilesConfiguration";
 import PaperlessSyncConfig from "@/components/PaperlessSyncConfig";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
 import GoogleCalendarConfig from "@/components/GoogleCalendarConfig";
+import MatrixConfiguration from "@/components/MatrixConfiguration";
 import PromptConfiguration from "@/components/PromptConfiguration";
 import UserProfile from "@/components/UserProfile";
 import ContextWindowSettings from "@/components/ContextWindowSettings";
@@ -621,6 +622,8 @@ export default function ConfigPage() {
             <ContextWindowSettings />
 
             <GoogleCalendarConfig />
+
+            <MatrixConfiguration />
 
             {/* Goodreads - Admin only */}
             <GoodreadsIntegration

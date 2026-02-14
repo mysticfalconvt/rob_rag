@@ -24,7 +24,7 @@ import {
 import { manageContext } from "@/lib/contextWindow";
 import { requireAuth } from "@/lib/session";
 import { analyzeReferencedSources } from "@/lib/sourceAnalysis";
-import { initializeApp } from "@/lib/init";
+import { initializeApp, initializeMatrix } from "@/lib/init";
 import { generateToolsForConfiguredPlugins } from "@/lib/toolGenerator";
 import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 import { generateUtilityTools } from "@/lib/utilityTools";
@@ -33,39 +33,122 @@ import { LLMRequestTracker } from "@/lib/llmTracking";
 
 export async function POST(req: NextRequest) {
   try {
-    // Initialize plugins on first request
+    // Initialize app and Matrix on first request
     initializeApp();
+    initializeMatrix();
 
-    // Require authentication
-    const session = await requireAuth(req);
-
+    const body = await req.json();
     const {
       messages,
       conversationId,
       sourceFilter,
       sourceCount = 35, // Default to max, smart retrieval will adjust down based on complexity
       documentPath, // Optional: chat in context of this single document only
-    } = await req.json();
+      triggerSource, // 'user', 'matrix', 'scheduled'
+      internalServiceKey,
+      matrixRoomId,
+      matrixSender,
+      matrixDisplayName,
+    } = body;
+
+    // Check for internal service authentication (Matrix/Scheduler)
+    let userId: string;
+    let userProfile: { userName: string | null; userBio: string | null; userPreferences: any };
+
+    if (triggerSource === "matrix" || triggerSource === "scheduled") {
+      // Internal request - validate service key
+      const expectedKey = process.env.INTERNAL_SERVICE_KEY;
+      if (!expectedKey || internalServiceKey !== expectedKey) {
+        console.error("[Chat API] Invalid internal service key");
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      // Check if Matrix sender is in allowed users list
+      let useAdminProfile = false;
+      if (triggerSource === "matrix" && matrixSender) {
+        const settings = await prisma.settings.findUnique({
+          where: { id: "singleton" },
+          select: { matrixAllowedUsers: true },
+        });
+
+        if (settings?.matrixAllowedUsers) {
+          try {
+            const allowedUsers = JSON.parse(settings.matrixAllowedUsers);
+            useAdminProfile = allowedUsers.includes(matrixSender);
+          } catch (e) {
+            console.error("[Chat API] Failed to parse matrixAllowedUsers:", e);
+          }
+        }
+      }
+
+      if (useAdminProfile || triggerSource === "scheduled") {
+        // Use admin's RobRAG profile for allowed users or scheduled tasks
+        const adminUser = await prisma.authUser.findFirst({
+          where: { role: "admin" },
+          select: {
+            id: true,
+            userName: true,
+            userBio: true,
+            userPreferences: true,
+          },
+        });
+
+        if (adminUser) {
+          userId = adminUser.id;
+          userProfile = {
+            userName: adminUser.userName || null,
+            userBio: adminUser.userBio || null,
+            userPreferences: adminUser.userPreferences
+              ? JSON.parse(adminUser.userPreferences)
+              : null,
+          };
+          console.log(`[Chat API] Internal request from ${triggerSource} using admin profile: ${userProfile.userName || 'admin'}`);
+        } else {
+          // Fallback if no admin found
+          userId = "system";
+          userProfile = {
+            userName: null,
+            userBio: null,
+            userPreferences: null,
+          };
+          console.log(`[Chat API] Internal request from ${triggerSource} using system profile (no admin found)`);
+        }
+      } else {
+        // Not in allowed list - use Matrix display name as generic profile
+        userId = "system";
+        userProfile = {
+          userName: matrixDisplayName || "Matrix User",
+          userBio: matrixSender ? `Matrix ID: ${matrixSender}` : null,
+          userPreferences: null,
+        };
+        console.log(`[Chat API] Internal request from ${triggerSource} using Matrix profile: ${userProfile.userName} (not in allowed list)`);
+      }
+    } else {
+      // Regular user request - require authentication
+      const session = await requireAuth(req);
+      userId = session.user.id;
+
+      // Get user profile from authenticated user
+      const user = await prisma.authUser.findUnique({
+        where: { id: userId },
+        select: {
+          userName: true,
+          userBio: true,
+          userPreferences: true,
+        },
+      });
+
+      userProfile = {
+        userName: user?.userName || null,
+        userBio: user?.userBio || null,
+        userPreferences: user?.userPreferences
+          ? JSON.parse(user.userPreferences)
+          : null,
+      };
+    }
+
     const lastMessage = messages[messages.length - 1];
     const query = lastMessage.content;
-
-    // Get user profile from authenticated user
-    const user = await prisma.authUser.findUnique({
-      where: { id: session.user.id },
-      select: {
-        userName: true,
-        userBio: true,
-        userPreferences: true,
-      },
-    });
-
-    const userProfile = {
-      userName: user?.userName || null,
-      userBio: user?.userBio || null,
-      userPreferences: user?.userPreferences
-        ? JSON.parse(user.userPreferences)
-        : null,
-    };
 
     // Fetch prompts and context settings from database
     const [prompts, contextSettings] = await Promise.all([
@@ -88,15 +171,19 @@ export async function POST(req: NextRequest) {
     const queryRoute = routeQuery(query, isFirstMessage, messages.slice(0, -1));
     console.log(`[QueryRouter] ${queryRoute.reason}`);
 
-    // Create or get conversation
+    // Create or get conversation (skip for internal requests without conversationId)
     let convId = conversationId;
-    if (!convId) {
+
+    if (triggerSource === "matrix" || triggerSource === "scheduled") {
+      // Internal requests don't need conversation tracking
+      convId = null;
+    } else if (!convId) {
       // Create new conversation with title from first message, associated with user
       const title = query.substring(0, 50) + (query.length > 50 ? "..." : "");
       const conversation = await prisma.conversation.create({
         data: {
           title,
-          userId: session.user.id,
+          userId,
         },
       });
       convId = conversation.id;
@@ -107,7 +194,7 @@ export async function POST(req: NextRequest) {
         select: { userId: true },
       });
 
-      if (!conversation || conversation.userId !== session.user.id) {
+      if (!conversation || conversation.userId !== userId) {
         return NextResponse.json(
           { error: "Conversation not found or access denied" },
           { status: 403 },
@@ -115,26 +202,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Save user message
-    const userMessage = await prisma.message.create({
-      data: {
-        conversationId: convId,
-        role: "user",
-        content: query,
-      },
-    });
+    // Save user message (only if we have a conversation)
+    let userMessage: any = null;
+    if (convId) {
+      userMessage = await prisma.message.create({
+        data: {
+          conversationId: convId,
+          role: "user",
+          content: query,
+        },
+      });
+    }
 
     // Initialize LLM request tracker
     const llmTracker = new LLMRequestTracker({
-      conversationId: convId,
-      messageId: userMessage.id,
-      userId: session.user.id,
-      requestType: "user_chat",
+      conversationId: convId || undefined,
+      messageId: userMessage?.id,
+      userId,
+      requestType: triggerSource === "matrix" ? "matrix_chat" : triggerSource === "scheduled" ? "scheduled_task" : "user_chat",
       requestPayload: JSON.stringify({
         query: query.substring(0, 200),
         sourceFilter,
         sourceCount,
         isFirstMessage: messages.length === 1,
+        triggerSource,
+        matrixRoomId,
       }),
     });
 
@@ -144,9 +236,11 @@ export async function POST(req: NextRequest) {
     let searchQuery = query;
     let contextParts: string[] = []; // Declare outside for iterative retrieval access
 
-    // Detect if this is a counting/metadata query that should skip RAG and use tools only
+    // Detect if this is a counting/metadata/tool-only query that should skip RAG
     const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
-    const skipRagForTools = isCountingQuery && sourceFilter !== "none";
+    const isReminderQuery = /\b(remind me|reminder|set a reminder|schedule|create reminder)\b/i.test(query);
+    const isListQuery = /\b(list (my )?reminders?|show (my )?reminders?|what reminders)\b/i.test(query);
+    const skipRagForTools = (isCountingQuery || isReminderQuery || isListQuery) && sourceFilter !== "none";
 
     // Single-document chat: use only this doc as context (full content or chunked vector search)
     const singleDocPath =
@@ -657,34 +751,45 @@ export async function POST(req: NextRequest) {
             toolGuidanceMessage,
           ];
 
-          // First, check if LLM wants to use any tools
+          // OPTIMIZATION: Use single-pass tool calling instead of separate tool check
+          // Modern LLMs can decide to use tools and generate response in one call
+          // This eliminates the extra LLM call for tool checking
+
           const modelWithTools = chatModel.bindTools(tools);
+          let toolResults: string[] = [];
+          let toolCheckResponse: any = null;
+
+          // For streaming responses, we need to collect tool calls first
+          // This is unavoidable - we must check for tools before streaming the final response
           const toolCheckStart = Date.now();
-          const toolCheckResponse =
-            await modelWithTools.invoke(messagesWithGuidance);
+          toolCheckResponse = await modelWithTools.invoke(messagesWithGuidance);
           const toolCheckDuration = Date.now() - toolCheckStart;
 
           // Track tool check call
           const toolCheckResponseText = typeof toolCheckResponse.content === "string" ? toolCheckResponse.content : "";
           const toolModelName = (chatModel as any).modelName || (chatModel as any).model || (chatModel as any).kwargs?.model || "unknown";
-          await llmTracker.trackCall("tool_execution", {
-            model: toolModelName,
-            promptTokens: (toolCheckResponse as any).usage_metadata?.input_tokens || estimateMessageTokens(messagesWithGuidance),
-            completionTokens: (toolCheckResponse as any).usage_metadata?.output_tokens || Math.ceil(toolCheckResponseText.length / 4),
-            duration: toolCheckDuration,
-            callPayload: JSON.stringify({
-              type: "tool_check",
-              toolsAvailable: tools.length,
-              toolsCalled: toolCheckResponse.tool_calls?.length || 0,
-              availableTools: tools.map(t => t.name),
-              selectedTools: toolCheckResponse.tool_calls?.map(tc => tc.name) || [],
-              request: messagesWithGuidance.map(m => ({
-                role: m._getType(),
-                content: typeof m.content === "string" ? m.content.substring(0, 500) : "non-string"
-              })),
-              response: toolCheckResponseText.substring(0, 1000)
-            }),
-          });
+
+          // Only track if tools were actually called (to reduce noise in logs)
+          if (toolCheckResponse.tool_calls && toolCheckResponse.tool_calls.length > 0) {
+            await llmTracker.trackCall("tool_execution", {
+              model: toolModelName,
+              promptTokens: (toolCheckResponse as any).usage_metadata?.input_tokens || estimateMessageTokens(messagesWithGuidance),
+              completionTokens: (toolCheckResponse as any).usage_metadata?.output_tokens || Math.ceil(toolCheckResponseText.length / 4),
+              duration: toolCheckDuration,
+              callPayload: JSON.stringify({
+                type: "tool_check",
+                toolsAvailable: tools.length,
+                toolsCalled: toolCheckResponse.tool_calls?.length || 0,
+                availableTools: tools.map(t => t.name),
+                selectedTools: toolCheckResponse.tool_calls?.map((tc: any) => tc.name) || [],
+                request: messagesWithGuidance.map(m => ({
+                  role: m._getType(),
+                  content: typeof m.content === "string" ? m.content.substring(0, 500) : "non-string"
+                })),
+                response: toolCheckResponseText.substring(0, 1000)
+              }),
+            });
+          }
 
           // Check if the response contains tool calls
           if (
@@ -697,7 +802,11 @@ export async function POST(req: NextRequest) {
               if (tool) {
                 const toolStartTime = Date.now();
                 try {
-                  const result = await tool.func(toolCall.args);
+                  // Pass config with matrixRoomId for reminder tools
+                  const toolConfig = matrixRoomId ? {
+                    configurable: { matrixRoomId }
+                  } : undefined;
+                  const result = await tool.func(toolCall.args, toolConfig);
                   const toolDuration = Date.now() - toolStartTime;
 
                   toolResults.push(
@@ -816,11 +925,27 @@ export async function POST(req: NextRequest) {
                   ),
                 );
               } else {
-                langchainMessages.push(
-                  new SystemMessage(
-                    `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
-                  ),
+                // Check if reminder tool was used
+                const usedReminderTool = toolCheckResponse.tool_calls?.some((tc: any) =>
+                  tc.name === 'create_reminder' || tc.name === 'list_reminders' || tc.name === 'cancel_reminder'
                 );
+
+                if (usedReminderTool) {
+                  langchainMessages.push(
+                    new SystemMessage(
+                      `Tool execution results:\n\n${toolResultsText}\n\n` +
+                      `IMPORTANT: The reminder tool has already completed the user's request. ` +
+                      `Simply relay the tool's response to the user. Do NOT search for or provide calendar data - ` +
+                      `the reminder will do that automatically when it runs.`
+                    ),
+                  );
+                } else {
+                  langchainMessages.push(
+                    new SystemMessage(
+                      `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
+                    ),
+                  );
+                }
               }
             }
           }
@@ -847,12 +972,16 @@ export async function POST(req: NextRequest) {
       isReferenced?: boolean;
     }
 
+    // Only include sources if we actually used RAG context
+    // For tool-only queries (reminders, counting, etc.) skip sources to reduce noise
+    const shouldIncludeSources = !skipRagForTools && searchResults.length > 0;
+
     const sourcesData: {
       type: string;
       sources: SourceData[];
     } = {
       type: "sources",
-      sources: [
+      sources: shouldIncludeSources ? [
         ...searchResults.map((r) => ({
           fileName: r.metadata.fileName,
           filePath: r.metadata.filePath,
@@ -861,18 +990,21 @@ export async function POST(req: NextRequest) {
           source: r.metadata.source || "synced",
         })),
         ...additionalSources, // Add any sources from iterative retrieval
-      ],
+      ] : [],
     };
 
-    // Create assistant message record early so it's saved even if client disconnects
-    const assistantMessage = await prisma.message.create({
-      data: {
-        conversationId: convId,
-        role: "assistant",
-        content: "", // Will be updated as content streams
-        sources: JSON.stringify(sourcesData.sources),
-      },
-    });
+    // Create assistant message record early so it's saved even if client disconnects (skip for internal requests)
+    let assistantMessage: any = null;
+    if (convId) {
+      assistantMessage = await prisma.message.create({
+        data: {
+          conversationId: convId,
+          role: "assistant",
+          content: "", // Will be updated as content streams
+          sources: JSON.stringify(sourcesData.sources),
+        },
+      });
+    }
 
     // Collect response for saving
     let fullResponse = "";
@@ -882,15 +1014,18 @@ export async function POST(req: NextRequest) {
 
     // Helper function to save message incrementally
     const saveMessage = async (content: string) => {
+      if (!assistantMessage) return; // Skip if no conversation
       try {
         await prisma.message.update({
           where: { id: assistantMessage.id },
           data: { content },
         });
-        await prisma.conversation.update({
-          where: { id: convId },
-          data: { updatedAt: new Date() },
-        });
+        if (convId) {
+          await prisma.conversation.update({
+            where: { id: convId },
+            data: { updatedAt: new Date() },
+          });
+        }
       } catch (error) {
         console.error("Error saving message incrementally:", error);
       }
@@ -906,8 +1041,8 @@ export async function POST(req: NextRequest) {
             // Final save with complete content
             await saveMessage(fullResponse);
 
-            // Generate title if this is the first message
-            if (messages.length === 1) {
+            // Generate title if this is the first message (skip for internal requests)
+            if (messages.length === 1 && convId) {
               try {
                 const titlePrompt = interpolatePrompt(
                   prompts.titleGenerationPrompt,
@@ -954,10 +1089,12 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // Update conversation topics (async, don't wait)
-            updateConversationTopics(convId, fullResponse).catch((err) =>
-              console.error("Failed to update topics:", err),
-            );
+            // Update conversation topics (async, don't wait) - skip for internal requests
+            if (convId) {
+              updateConversationTopics(convId, fullResponse).catch((err) =>
+                console.error("Failed to update topics:", err),
+              );
+            }
 
             // Track LLM usage for this request
             const streamDuration = Date.now() - streamStartTime;
@@ -993,11 +1130,13 @@ export async function POST(req: NextRequest) {
                   sourcesData.sources,
                 );
 
-                // Update the stored message with analyzed sources
-                await prisma.message.update({
-                  where: { id: assistantMessage.id },
-                  data: { sources: JSON.stringify(analyzedSources) },
-                });
+                // Update the stored message with analyzed sources (skip for internal requests)
+                if (assistantMessage) {
+                  await prisma.message.update({
+                    where: { id: assistantMessage.id },
+                    data: { sources: JSON.stringify(analyzedSources) },
+                  });
+                }
               } catch (error) {
                 console.error(
                   "[SourceAnalysis] Failed to analyze sources:",

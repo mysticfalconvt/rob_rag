@@ -178,6 +178,14 @@ function SidebarContent({ appName }: SidebarContentProps) {
           {user?.role === "admin" && (
             <>
               <Link
+                href="/scheduled"
+                className={`${styles.link} ${isActive("/scheduled") ? styles.active : ""}`}
+                onClick={closeMobileMenu}
+              >
+                <i className="fas fa-clock"></i>
+                <span>Scheduled Tasks</span>
+              </Link>
+              <Link
                 href="/admin/dashboard"
                 className={`${styles.link} ${isActive("/admin/dashboard") ? styles.active : ""}`}
                 onClick={closeMobileMenu}

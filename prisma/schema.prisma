@@ -167,6 +167,16 @@ model Settings {
   paperlessSyncLastRun    DateTime?
   paperlessSyncFilters    String?   // JSON: tags, dateRange, etc.
   paperlessAutoOcr        Boolean   @default(false)
+  // Matrix configuration
+  matrixHomeserver        String?
+  matrixAccessToken       String?
+  matrixUserId            String?
+  matrixEnabled           Boolean   @default(false)
+  matrixAllowedUsers      String?   // JSON array of allowed Matrix user IDs
+  // Sync schedules (cron expressions)
+  googleCalendarSyncSchedule String? @default("0 0 * * *")  // Midnight daily
+  paperlessSyncSchedule      String? @default("0 * * * *")  // Hourly
+  goodreadsSyncSchedule      String? @default("0 2 * * *")  // 2am daily
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 }
@@ -375,4 +385,56 @@ model CalendarEvent {
   @@index([startTime])
   @@index([endTime])
   @@index([embedding])
+}
+
+model MatrixRoom {
+  id          String   @id @default(uuid())
+  roomId      String   @unique
+  name        String
+  description String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled])
+  @@index([roomId])
+}
+
+model ScheduledTask {
+  id              String          @id @default(uuid())
+  type            String          // "matrix_reminder", "auto_sync"
+  name            String
+  schedule        String          // Cron expression
+  enabled         Boolean         @default(true)
+  query           String?         // For reminders: RAG query
+  matrixRoomId    String?         // Target room for reminders
+  syncSource      String?         // For syncs: "google-calendar", "paperless", "goodreads"
+  lastRun         DateTime?
+  lastRunStatus   String?         // "success", "failed", "skipped"
+  lastRunError    String?         // Error message if failed
+  nextRun         DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  executions      TaskExecution[]
+
+  @@index([enabled, nextRun])
+  @@index([type])
+  @@index([syncSource])
+}
+
+model TaskExecution {
+  id              String        @id @default(uuid())
+  taskId          String
+  status          String        // "success", "failed"
+  startedAt       DateTime
+  completedAt     DateTime?
+  duration        Int?          // milliseconds
+  error           String?
+  response        String?       // Response sent to Matrix/logs
+  metadata        String?       // JSON: room, query, result count, etc.
+  task            ScheduledTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, startedAt])
+  @@index([status])
+  @@index([startedAt])
 }

@@ -1,5 +1,6 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import { createReminderTool, listRemindersTool, cancelReminderTool } from "./tools/reminderTool";
 
 /**
  * Generate utility tools for common operations like date/time calculations
@@ -9,6 +10,9 @@ export function generateUtilityTools(): DynamicStructuredTool[] {
     createCurrentDateTimeTool(),
     createDateCalculationTool(),
     createDateDifferenceTool(),
+    createReminderTool,
+    listRemindersTool,
+    cancelReminderTool,
   ];
 }
 

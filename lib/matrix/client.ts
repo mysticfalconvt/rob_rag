@@ -1,0 +1,357 @@
+// Suppress matrix-js-sdk multiple entrypoint warning
+// This can happen in Next.js dev mode with hot reloading
+if (typeof globalThis !== 'undefined') {
+  (globalThis as any).__js_sdk_entrypoint = false;
+}
+
+import { createClient, MatrixClient, ClientEvent, SyncState, RoomMemberEvent, MatrixEvent, RoomMember, Room } from "matrix-js-sdk";
+import prisma from "../prisma";
+
+/**
+ * Matrix client singleton
+ * Manages connection to Matrix homeserver and handles events
+ */
+class MatrixClientManager {
+  private client: MatrixClient | null = null;
+  private isStarted = false;
+  private isPrepared = false; // Track if client is synced and ready
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectDelay = 5000; // Start with 5 seconds
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private onReadyCallback: (() => void) | null = null;
+
+  /**
+   * Initialize the Matrix client with settings from database
+   */
+  async initialize(): Promise<void> {
+    if (this.client && this.isStarted) {
+      console.log("[Matrix] Client already initialized and running");
+      return;
+    }
+
+    try {
+      const settings = await prisma.settings.findUnique({
+        where: { id: "singleton" },
+        select: {
+          matrixHomeserver: true,
+          matrixAccessToken: true,
+          matrixUserId: true,
+          matrixEnabled: true,
+        },
+      });
+
+      if (!settings?.matrixEnabled) {
+        console.log("[Matrix] Matrix integration is disabled");
+        return;
+      }
+
+      if (!settings.matrixHomeserver || !settings.matrixAccessToken) {
+        console.log("[Matrix] Matrix not configured (missing homeserver or token)");
+        return;
+      }
+
+      console.log("[Matrix] Initializing Matrix client...");
+      console.log(`[Matrix] Homeserver: ${settings.matrixHomeserver}`);
+      console.log(`[Matrix] User ID: ${settings.matrixUserId || "not set"}`);
+      console.log(`[Matrix] Enabled: ${settings.matrixEnabled}`);
+
+      // Create client
+      this.client = createClient({
+        baseUrl: settings.matrixHomeserver,
+        accessToken: settings.matrixAccessToken,
+        userId: settings.matrixUserId || undefined,
+      });
+
+      // Set up event handlers before starting
+      this.setupEventHandlers();
+
+      // Start the client
+      await this.start();
+
+      console.log("[Matrix] Matrix client initialized successfully");
+      console.log("[Matrix] Waiting for sync to reach PREPARED state...");
+    } catch (error) {
+      console.error("[Matrix] Failed to initialize Matrix client:", error);
+      this.scheduleReconnect();
+    }
+  }
+
+  /**
+   * Start the Matrix client sync
+   */
+  private async start(): Promise<void> {
+    if (!this.client || this.isStarted) {
+      return;
+    }
+
+    try {
+      console.log("[Matrix] Starting Matrix client sync...");
+      await this.client.startClient({ initialSyncLimit: 10 });
+      this.isStarted = true;
+      this.reconnectAttempts = 0; // Reset on successful start
+      console.log("[Matrix] Matrix client started");
+    } catch (error) {
+      console.error("[Matrix] Failed to start Matrix client:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set up event handlers for the Matrix client
+   */
+  private setupEventHandlers(): void {
+    if (!this.client) return;
+
+    // Handle sync state changes
+    this.client.on(ClientEvent.Sync as any, async (state: SyncState) => {
+      console.log(`[Matrix] Sync state changed: ${state}`);
+
+      if (state === "PREPARED") {
+        console.log("[Matrix] Client is ready");
+        this.isPrepared = true;
+        this.reconnectAttempts = 0; // Reset on successful sync
+
+        // Sync existing rooms to database
+        try {
+          await this.syncRoomsToDatabase();
+        } catch (error) {
+          console.error("[Matrix] Failed to sync rooms:", error);
+        }
+
+        // Call the ready callback if set
+        if (this.onReadyCallback) {
+          console.log("[Matrix] Calling ready callback...");
+          this.onReadyCallback();
+        }
+      } else if (state === "ERROR") {
+        console.error("[Matrix] Sync error occurred");
+        this.isPrepared = false;
+        this.scheduleReconnect();
+      }
+    });
+
+    // Handle room invites
+    this.client.on(RoomMemberEvent.Membership as any, async (event: MatrixEvent, member: RoomMember) => {
+      if (
+        member.membership === "invite" &&
+        member.userId === this.client?.getUserId()
+      ) {
+        console.log(`[Matrix] Received invite to room: ${member.roomId}`);
+        try {
+          await this.client?.joinRoom(member.roomId);
+          console.log(`[Matrix] Joined room: ${member.roomId}`);
+
+          // Add room to database
+          const room = this.client?.getRoom(member.roomId);
+          if (room) {
+            await prisma.matrixRoom.upsert({
+              where: { roomId: member.roomId },
+              create: {
+                roomId: member.roomId,
+                name: room.name || "Unnamed Room",
+                description: room.getCanonicalAlias() || undefined,
+                enabled: true,
+              },
+              update: {},
+            });
+          }
+        } catch (error) {
+          console.error(`[Matrix] Failed to join room ${member.roomId}:`, error);
+        }
+      }
+    });
+
+    // Note: Message handling is done in messageHandler.ts to keep separation of concerns
+  }
+
+  /**
+   * Schedule a reconnect attempt with exponential backoff
+   */
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      return; // Already scheduled
+    }
+
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error(
+        `[Matrix] Max reconnect attempts (${this.maxReconnectAttempts}) reached. Giving up.`,
+      );
+      return;
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+
+    console.log(
+      `[Matrix] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay / 1000}s`,
+    );
+
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null;
+      console.log(`[Matrix] Attempting reconnect #${this.reconnectAttempts}...`);
+
+      try {
+        await this.stop();
+        await this.initialize();
+      } catch (error) {
+        console.error("[Matrix] Reconnect failed:", error);
+        this.scheduleReconnect();
+      }
+    }, delay);
+  }
+
+  /**
+   * Stop the Matrix client
+   */
+  async stop(): Promise<void> {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.client && this.isStarted) {
+      console.log("[Matrix] Stopping Matrix client...");
+      this.client.stopClient();
+      this.isStarted = false;
+      this.isPrepared = false;
+      console.log("[Matrix] Matrix client stopped");
+    }
+
+    this.client = null;
+    this.onReadyCallback = null;
+  }
+
+  /**
+   * Get the Matrix client instance
+   */
+  getClient(): MatrixClient | null {
+    return this.client;
+  }
+
+  /**
+   * Check if client is running
+   */
+  isRunning(): boolean {
+    return this.isStarted && this.client !== null;
+  }
+
+  /**
+   * Check if client is ready (synced and prepared)
+   */
+  isReady(): boolean {
+    return this.isPrepared && this.isStarted && this.client !== null;
+  }
+
+  /**
+   * Set a callback to be called when the client is ready (PREPARED state)
+   * If already ready, calls immediately
+   */
+  onReady(callback: () => void): void {
+    if (this.isPrepared) {
+      // Already ready, call immediately
+      callback();
+    } else {
+      // Set callback for when it becomes ready
+      this.onReadyCallback = callback;
+    }
+  }
+
+  /**
+   * Send a message to a room
+   */
+  async sendMessage(roomId: string, content: string): Promise<void> {
+    if (!this.client || !this.isStarted) {
+      throw new Error("Matrix client is not running");
+    }
+
+    try {
+      await this.client.sendTextMessage(roomId, content);
+      console.log(`[Matrix] Sent message to room ${roomId}`);
+    } catch (error) {
+      console.error(`[Matrix] Failed to send message to room ${roomId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send a typing indicator
+   */
+  async sendTyping(roomId: string, isTyping: boolean): Promise<void> {
+    if (!this.client || !this.isStarted) {
+      return;
+    }
+
+    try {
+      await this.client.sendTyping(roomId, isTyping, isTyping ? 5000 : 0);
+    } catch (error) {
+      console.error(`[Matrix] Failed to send typing indicator:`, error);
+    }
+  }
+
+  /**
+   * Get all rooms the bot is in
+   */
+  getRooms(): Room[] {
+    if (!this.client) {
+      return [];
+    }
+    return this.client.getRooms();
+  }
+
+  /**
+   * Get a specific room by ID
+   */
+  getRoom(roomId: string): Room | null {
+    if (!this.client) {
+      return null;
+    }
+    return this.client.getRoom(roomId);
+  }
+
+  /**
+   * Sync all joined rooms to database
+   */
+  async syncRoomsToDatabase(): Promise<void> {
+    if (!this.client) {
+      throw new Error("Matrix client not available");
+    }
+
+    const rooms = this.getRooms();
+    console.log(`[Matrix] Syncing ${rooms.length} rooms to database...`);
+
+    for (const room of rooms) {
+      try {
+        const roomId = room.roomId;
+        const myMembership = room.getMyMembership();
+
+        // Only sync rooms we're actually in
+        if (myMembership !== "join") {
+          continue;
+        }
+
+        await prisma.matrixRoom.upsert({
+          where: { roomId },
+          create: {
+            roomId,
+            name: room.name || "Unnamed Room",
+            description: room.getCanonicalAlias() || undefined,
+            enabled: true,
+          },
+          update: {
+            name: room.name || undefined,
+          },
+        });
+
+        console.log(`[Matrix] Synced room: ${room.name || roomId}`);
+      } catch (error) {
+        console.error(`[Matrix] Failed to sync room ${room.roomId}:`, error);
+      }
+    }
+
+    console.log(`[Matrix] Room sync complete`);
+  }
+}
+
+// Singleton instance
+export const matrixClient = new MatrixClientManager();
