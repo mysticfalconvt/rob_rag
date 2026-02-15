@@ -6,7 +6,6 @@ import ModelConfiguration from "@/components/ModelConfiguration";
 import PaperlessConfiguration from "@/components/PaperlessConfiguration";
 import CustomOcrConfiguration from "@/components/CustomOcrConfiguration";
 import SyncedFilesConfiguration from "@/components/SyncedFilesConfiguration";
-import PaperlessSyncConfig from "@/components/PaperlessSyncConfig";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
 import GoogleCalendarConfig from "@/components/GoogleCalendarConfig";
 import MatrixConfiguration from "@/components/MatrixConfiguration";
@@ -68,13 +67,6 @@ export default function ConfigPage() {
 
   const [syncedFilesConfig, setSyncedFilesConfig] = useState<any>(null);
 
-  const [paperlessSyncEnabled, setPaperlessSyncEnabled] = useState(false);
-  const [paperlessSyncInterval, setPaperlessSyncInterval] = useState(60);
-  const [paperlessSyncLastRun, setPaperlessSyncLastRun] = useState<Date | null>(null);
-  const [paperlessSyncFilters, setPaperlessSyncFilters] = useState<any>(null);
-  const [paperlessAutoOcr, setPaperlessAutoOcr] = useState(false);
-  const [isSyncingPaperless, setIsSyncingPaperless] = useState(false);
-
   const fetchModels = async () => {
     try {
       const res = await fetch("/api/models");
@@ -134,23 +126,6 @@ export default function ConfigPage() {
           }
         } else {
           setSyncedFilesConfig(null);
-        }
-
-        // Load Paperless sync settings
-        setPaperlessSyncEnabled(data.paperlessSyncEnabled || false);
-        setPaperlessSyncInterval(data.paperlessSyncInterval || 60);
-        setPaperlessSyncLastRun(data.paperlessSyncLastRun ? new Date(data.paperlessSyncLastRun) : null);
-        setPaperlessAutoOcr(data.paperlessAutoOcr || false);
-
-        if (data.paperlessSyncFilters) {
-          try {
-            setPaperlessSyncFilters(JSON.parse(data.paperlessSyncFilters));
-          } catch (e) {
-            console.error('Failed to parse paperlessSyncFilters:', e);
-            setPaperlessSyncFilters(null);
-          }
-        } else {
-          setPaperlessSyncFilters(null);
         }
       }
     } catch (error) {
@@ -424,71 +399,6 @@ export default function ConfigPage() {
     }
   };
 
-  const handleSavePaperlessSyncConfig = async (settings: any) => {
-    setIsSaving(true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paperlessSyncEnabled: settings.paperlessSyncEnabled,
-          paperlessSyncInterval: settings.paperlessSyncInterval,
-          paperlessSyncFilters: JSON.stringify(settings.paperlessSyncFilters),
-          paperlessAutoOcr: settings.paperlessAutoOcr,
-        }),
-      });
-
-      if (res.ok) {
-        await fetchSettings();
-        alert("✅ Paperless auto-sync configuration saved!");
-      } else {
-        alert("❌ Failed to save configuration");
-      }
-    } catch (error) {
-      console.error("Error saving Paperless sync config:", error);
-      alert("❌ Failed to save configuration");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSyncPaperlessNow = async () => {
-    setIsSyncingPaperless(true);
-    try {
-      const res = await fetch("/api/paperless/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const result = data.result;
-        if (result) {
-          const messages = [
-            `New documents: ${result.newDocuments}`,
-            `Updated documents: ${result.updatedDocuments}`,
-            result.skippedDocuments > 0 ? `Skipped: ${result.skippedDocuments}` : null,
-            result.ocrJobsStarted > 0 ? `OCR jobs started: ${result.ocrJobsStarted}` : null,
-            result.errors.length > 0 ? `\n\n⚠️ Errors: ${result.errors.length}` : null,
-          ].filter(Boolean).join('\n');
-
-          await fetchSettings(); // Refresh last sync time
-          alert(`✅ Paperless sync complete!\n\n${messages}`);
-        } else {
-          alert("✅ Sync complete!");
-        }
-        await fetchSettings();
-      } else {
-        const error = await res.json();
-        alert(`❌ Sync failed: ${error.details || error.error}`);
-      }
-    } catch (error) {
-      console.error("Error syncing Paperless:", error);
-      alert("❌ Failed to sync");
-    } finally {
-      setIsSyncingPaperless(false);
-    }
-  };
 
   const handleSaveRSSFeed = async (userId: string, rssUrl: string) => {
     try {
@@ -600,21 +510,6 @@ export default function ConfigPage() {
               config={syncedFilesConfig}
               onSave={handleSaveSyncedFilesConfig}
               isSaving={isSaving}
-            />
-
-            <PaperlessSyncConfig
-              settings={{
-                paperlessSyncEnabled,
-                paperlessSyncInterval,
-                paperlessSyncLastRun,
-                paperlessSyncFilters,
-                paperlessAutoOcr,
-              }}
-              paperlessEnabled={paperlessEnabled}
-              onSave={handleSavePaperlessSyncConfig}
-              onSyncNow={handleSyncPaperlessNow}
-              isSaving={isSaving}
-              isSyncing={isSyncingPaperless}
             />
 
             <PromptConfiguration />

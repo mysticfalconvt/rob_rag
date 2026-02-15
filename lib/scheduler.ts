@@ -1,4 +1,3 @@
-import { runScheduledSync } from "./paperlessSync";
 import prisma from "./prisma";
 import { CronExpressionParser } from "cron-parser";
 import { sendFormattedMessage } from "./matrix/sender";
@@ -55,13 +54,63 @@ class BackgroundScheduler {
 
   private async checkScheduledTasks() {
     try {
-      // Check if Paperless sync is due (legacy)
-      await runScheduledSync();
+      // Check if daily sync is due
+      await this.checkDailySync();
 
-      // Check for due ScheduledTask records
+      // Check for due ScheduledTask records (Matrix reminders only)
       await this.executeScheduledTasks();
     } catch (error) {
       console.error("[Scheduler] Error running scheduled tasks:", error);
+    }
+  }
+
+  /**
+   * Check if daily sync is due and execute it
+   */
+  private async checkDailySync() {
+    try {
+      const settings = await prisma.settings.findUnique({
+        where: { id: "singleton" },
+        select: {
+          dailySyncTime: true,
+          dailySyncLastRun: true,
+        },
+      });
+
+      if (!settings?.dailySyncTime) {
+        return; // No sync time configured
+      }
+
+      const now = new Date();
+      const [hours, minutes] = settings.dailySyncTime.split(":").map(Number);
+
+      // Create a date for today at the specified time
+      const scheduledTime = new Date(now);
+      scheduledTime.setHours(hours, minutes, 0, 0);
+
+      // If scheduled time hasn't passed today yet, skip
+      if (now < scheduledTime) {
+        return;
+      }
+
+      // Check if we already ran today
+      if (settings.dailySyncLastRun) {
+        const lastRun = new Date(settings.dailySyncLastRun);
+        const lastRunDay = lastRun.toDateString();
+        const todayDay = now.toDateString();
+
+        // If last run was today, skip
+        if (lastRunDay === todayDay) {
+          return;
+        }
+      }
+
+      // Time to run the daily sync!
+      console.log("[Scheduler] Running daily data sync...");
+      const { syncAllDataSources } = await import("./syncAll");
+      await syncAllDataSources();
+    } catch (error) {
+      console.error("[Scheduler] Error checking daily sync:", error);
     }
   }
 
@@ -205,30 +254,6 @@ class BackgroundScheduler {
             sourceCount: sources.length,
           };
         }
-      } else if (task.type === "auto_sync") {
-        // Execute auto-sync
-        if (!task.syncSource) {
-          throw new Error("Missing syncSource for auto-sync task");
-        }
-
-        let syncResult: any = {};
-
-        if (task.syncSource === "google-calendar") {
-          // TODO: Implement Google Calendar sync
-          throw new Error("Google Calendar auto-sync not yet implemented");
-        } else if (task.syncSource === "paperless") {
-          // Use existing paperless sync
-          await runScheduledSync();
-          syncResult = { status: "success", message: "Paperless sync completed" };
-        } else if (task.syncSource === "goodreads") {
-          // TODO: Implement Goodreads sync
-          throw new Error("Goodreads auto-sync not yet implemented");
-        } else {
-          throw new Error(`Unknown sync source: ${task.syncSource}`);
-        }
-
-        response = `Sync completed: ${JSON.stringify(syncResult)}`;
-        metadata = syncResult;
       } else {
         throw new Error(`Unknown task type: ${task.type}`);
       }

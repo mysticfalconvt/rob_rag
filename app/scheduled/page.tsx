@@ -31,6 +31,14 @@ interface TaskExecution {
   response?: string;
 }
 
+interface MatrixRoom {
+  id: string;
+  roomId: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+}
+
 export default function ScheduledPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -267,8 +275,7 @@ export default function ScheduledPage() {
                   <div>
                     <strong style={{ color: "var(--text-color)" }}>{task.name}</strong>
                     <div style={{ fontSize: "0.9em", color: "var(--text-secondary)", marginTop: "4px" }}>
-                      {task.type === "matrix_reminder" ? "📬 Reminder" : "🔄 Auto-Sync"} • Next run:{" "}
-                      {formatDate(task.nextRun)}
+                      📬 Reminder • Next run: {formatDate(task.nextRun)}
                     </div>
                   </div>
                   <button
@@ -375,7 +382,7 @@ export default function ScheduledPage() {
                     )}
                   </td>
                   <td style={{ padding: "8px", fontSize: "0.9em" }}>
-                    {task.type === "matrix_reminder" ? "📬 Reminder" : "🔄 Auto-Sync"}
+                    📬 Matrix Reminder
                   </td>
                   <td style={{ padding: "8px", fontSize: "0.9em" }}>
                     <div style={{ fontWeight: "500" }}>{formatSchedule(task.schedule)}</div>
@@ -548,18 +555,35 @@ function CreateTaskDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [type, setType] = useState<"matrix_reminder" | "auto_sync">(
-    (task?.type as "matrix_reminder" | "auto_sync") || "matrix_reminder"
+  const [type, setType] = useState<"matrix_reminder">(
+    (task?.type as "matrix_reminder") || "matrix_reminder"
   );
   const [name, setName] = useState(task?.name || "");
   const [schedule, setSchedule] = useState(task?.schedule || "0 7 * * *");
   const [query, setQuery] = useState(task?.query || "");
   const [matrixRoomId, setMatrixRoomId] = useState(task?.matrixRoomId || "");
-  const [syncSource, setSyncSource] = useState<"google-calendar" | "paperless" | "goodreads">(
-    (task?.syncSource as "google-calendar" | "paperless" | "goodreads") || "google-calendar"
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [rooms, setRooms] = useState<MatrixRoom[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
+
+  useEffect(() => {
+    fetchRooms();
+  }, []);
+
+  const fetchRooms = async () => {
+    try {
+      const res = await fetch("/api/matrix/rooms");
+      if (res.ok) {
+        const data = await res.json();
+        setRooms(data.rooms || []);
+      }
+    } catch (error) {
+      console.error("Error fetching Matrix rooms:", error);
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -572,14 +596,9 @@ function CreateTaskDialog({
         name,
         schedule,
         enabled: task?.enabled ?? true,
+        query,
+        matrixRoomId,
       };
-
-      if (type === "matrix_reminder") {
-        body.query = query;
-        body.matrixRoomId = matrixRoomId;
-      } else {
-        body.syncSource = syncSource;
-      }
 
       const url = task ? `/api/scheduled/tasks/${task.id}` : "/api/scheduled/tasks";
       const method = task ? "PATCH" : "POST";
@@ -638,26 +657,7 @@ function CreateTaskDialog({
         </h2>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>Type:</label>
-            <select
-              value={type}
-              onChange={(e) => setType(e.target.value as any)}
-              disabled={!!task}
-              style={{
-                width: "100%",
-                padding: "10px",
-                background: "#2a2a2a",
-                color: "#e0e0e0",
-                border: "1px solid #444",
-                borderRadius: "6px",
-                fontSize: "14px",
-              }}
-            >
-              <option value="matrix_reminder">Matrix Reminder</option>
-              <option value="auto_sync">Auto-Sync</option>
-            </select>
-          </div>
+          <input type="hidden" value="matrix_reminder" />
 
           <div style={{ marginBottom: "16px" }}>
             <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>Name:</label>
@@ -703,60 +703,42 @@ function CreateTaskDialog({
             <small style={{ color: "var(--text-secondary)" }}>Examples: 0 7 * * * (daily 7am), 0 */4 * * * (every 4 hours)</small>
           </div>
 
-          {type === "matrix_reminder" && (
-            <>
-              <div style={{ marginBottom: "16px" }}>
-                <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>Query:</label>
-                <textarea
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="What's on my calendar today?"
-                  required
-                  rows={3}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    background: "#2a2a2a",
-                    color: "#e0e0e0",
-                    border: "1px solid #444",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                    fontFamily: "inherit",
-                  }}
-                />
-              </div>
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>Query:</label>
+            <textarea
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="What's on my calendar today?"
+              required
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "10px",
+                background: "#2a2a2a",
+                color: "#e0e0e0",
+                border: "1px solid #444",
+                borderRadius: "6px",
+                fontSize: "14px",
+                fontFamily: "inherit",
+              }}
+            />
+          </div>
 
-              <div style={{ marginBottom: "16px" }}>
-                <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>
-                  Matrix Room ID:
-                </label>
-                <input
-                  type="text"
-                  value={matrixRoomId}
-                  onChange={(e) => setMatrixRoomId(e.target.value)}
-                  placeholder="!abc123:matrix.org"
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    fontFamily: "monospace",
-                    background: "#2a2a2a",
-                    color: "#e0e0e0",
-                    border: "1px solid #444",
-                    borderRadius: "6px",
-                    fontSize: "14px",
-                  }}
-                />
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>
+              Matrix Room:
+            </label>
+            {isLoadingRooms ? (
+              <div style={{ padding: "10px", color: "#999" }}>Loading rooms...</div>
+            ) : rooms.length === 0 ? (
+              <div style={{ padding: "10px", color: "#999" }}>
+                No Matrix rooms found. Please configure Matrix and join some rooms first.
               </div>
-            </>
-          )}
-
-          {type === "auto_sync" && (
-            <div style={{ marginBottom: "16px" }}>
-              <label style={{ display: "block", marginBottom: "4px", color: "var(--text-color)" }}>Sync Source:</label>
+            ) : (
               <select
-                value={syncSource}
-                onChange={(e) => setSyncSource(e.target.value as any)}
+                value={matrixRoomId}
+                onChange={(e) => setMatrixRoomId(e.target.value)}
+                required
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -767,12 +749,18 @@ function CreateTaskDialog({
                   fontSize: "14px",
                 }}
               >
-                <option value="google-calendar">Google Calendar</option>
-                <option value="paperless">Paperless-ngx</option>
-                <option value="goodreads">Goodreads</option>
+                <option value="">Select a room...</option>
+                {rooms.filter(r => r.enabled).map((room) => (
+                  <option key={room.roomId} value={room.roomId}>
+                    {room.name} ({room.roomId})
+                  </option>
+                ))}
               </select>
-            </div>
-          )}
+            )}
+            <small style={{ display: "block", marginTop: "4px", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+              Select the Matrix room where reminders will be sent
+            </small>
+          </div>
 
           {error && (
             <div

@@ -9,12 +9,14 @@ interface FileFilterBarProps {
   showGoodreads: boolean;
   showCustomOcr: boolean;
   showCalendar: boolean;
+  showNotes: boolean;
   uploadedCount: number;
   syncedCount: number;
   paperlessCount: number;
   goodreadsCount: number;
   customOcrCount: number;
   calendarCount: number;
+  notesCount: number;
   filteredCount: number;
   totalCount: number;
   onToggleUploaded: () => void;
@@ -23,6 +25,7 @@ interface FileFilterBarProps {
   onToggleGoodreads: () => void;
   onToggleCustomOcr: () => void;
   onToggleCalendar: () => void;
+  onToggleNotes: () => void;
 }
 
 export default function FileFilterBar({
@@ -32,12 +35,14 @@ export default function FileFilterBar({
   showGoodreads,
   showCustomOcr,
   showCalendar,
+  showNotes,
   uploadedCount,
   syncedCount,
   paperlessCount,
   goodreadsCount,
   customOcrCount,
   calendarCount,
+  notesCount,
   filteredCount,
   totalCount,
   onToggleUploaded,
@@ -46,6 +51,7 @@ export default function FileFilterBar({
   onToggleGoodreads,
   onToggleCustomOcr,
   onToggleCalendar,
+  onToggleNotes,
 }: FileFilterBarProps) {
   return (
     <div className={styles.filterBar}>
@@ -99,6 +105,14 @@ export default function FileFilterBar({
             <i className="fas fa-calendar"></i>
             Calendar
             <span className={styles.count}>({calendarCount})</span>
+          </button>
+          <button
+            className={`${styles.filterToggle} ${showNotes ? styles.active : ""} ${notesCount === 0 ? styles.empty : ""}`}
+            onClick={onToggleNotes}
+          >
+            <i className="fas fa-sticky-note"></i>
+            Notes
+            <span className={styles.count}>({notesCount})</span>
           </button>
         </div>
       </div>

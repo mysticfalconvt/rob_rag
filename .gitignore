@@ -50,4 +50,5 @@ prisma/dev.db-journal
 documents/File Uploads/
 documents/Sync Files/
 documents/Custom_Docs/
+documents/Notes/
 qdrant_storage/

@@ -811,10 +811,14 @@ export async function POST(req: NextRequest) {
               if (tool) {
                 const toolStartTime = Date.now();
                 try {
-                  // Pass config with matrixRoomId for reminder tools
-                  const toolConfig = matrixRoomId ? {
-                    configurable: { matrixRoomId }
-                  } : undefined;
+                  // Pass config with matrixRoomId for reminder tools, conversationHistory for note tools
+                  const toolConfig = {
+                    configurable: {
+                      ...(matrixRoomId && { matrixRoomId }),
+                      conversationHistory: messages,
+                      userId,
+                    }
+                  };
                   const result = await tool.func(toolCall.args, toolConfig);
                   const toolDuration = Date.now() - toolStartTime;
 
@@ -935,18 +939,20 @@ export async function POST(req: NextRequest) {
                   ),
                 );
               } else {
-                // Check if reminder tool was used
+                // Check if reminder tool or note tool was used
                 const usedReminderTool = toolCheckResponse.tool_calls?.some((tc: any) =>
                   tc.name === 'create_reminder' || tc.name === 'list_reminders' || tc.name === 'cancel_reminder'
                 );
+                const usedNoteTool = toolCheckResponse.tool_calls?.some((tc: any) =>
+                  tc.name === 'save_assistant_response'
+                );
 
-                if (usedReminderTool) {
+                if (usedReminderTool || usedNoteTool) {
                   langchainMessages.push(
                     new SystemMessage(
                       `Tool execution results:\n\n${toolResultsText}\n\n` +
-                      `IMPORTANT: The reminder tool has already completed the user's request. ` +
-                      `Simply relay the tool's response to the user. Do NOT search for or provide calendar data - ` +
-                      `the reminder will do that automatically when it runs.`
+                      `IMPORTANT: The tool has already completed the user's request. ` +
+                      `Simply relay the tool's response to the user in a natural way. Do NOT add extra commentary.`
                     ),
                   );
                 } else {

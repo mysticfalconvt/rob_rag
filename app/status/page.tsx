@@ -6,7 +6,7 @@ import StatusConnections from "@/components/StatusConnections";
 import StatisticsCard from "@/components/StatisticsCard";
 import ReindexCard from "@/components/ReindexCard";
 import ScanCard from "@/components/ScanCard";
-import AutoSyncCard from "@/components/AutoSyncCard";
+import DataSyncCard from "@/components/DataSyncCard";
 import styles from "./page.module.css";
 
 interface GoodreadsUserStatus {
@@ -33,6 +33,10 @@ interface SystemStatus {
   goodreadsBooks?: number;
   calendarEvents?: number;
   averageChunksPerFile?: number;
+  dailySyncTime?: string;
+  dailySyncLastRun?: string;
+  dailySyncLastStatus?: string;
+  dailySyncLastError?: string;
   config: {
     embeddingModel: string;
     chatModel: string;
@@ -171,10 +175,30 @@ export default function StatusPage() {
     }
   };
 
-  const handleSyncAll = async () => {
+  const handleSaveSyncTime = async (time: string) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dailySyncTime: time }),
+      });
+
+      if (res.ok) {
+        await fetchStatus();
+        alert("✅ Sync schedule saved!");
+      } else {
+        alert("❌ Failed to save sync schedule");
+      }
+    } catch (error) {
+      console.error("Error saving sync schedule:", error);
+      alert("❌ Failed to save sync schedule");
+    }
+  };
+
+  const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch("/api/webhooks/sync-all", {
+      const res = await fetch("/api/sync/all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -183,17 +207,14 @@ export default function StatusPage() {
         const data = await res.json();
         let message = "✅ Sync complete!\n\n";
 
-        if (data.sources?.["google-calendar"]) {
-          const cal = data.sources["google-calendar"];
-          message += `Calendar: ${cal.indexed || 0} indexed\n`;
+        if (data.calendar !== undefined) {
+          message += `Calendar: ${data.calendar} events indexed\n`;
         }
-        if (data.sources?.goodreads) {
-          const gr = data.sources.goodreads;
-          message += `Goodreads: ${gr.indexed || 0} indexed\n`;
+        if (data.goodreads !== undefined) {
+          message += `Goodreads: ${data.goodreads} books indexed\n`;
         }
-        if (data.sources?.paperless) {
-          const pl = data.sources.paperless;
-          message += `Paperless: ${pl.indexed || 0} indexed\n`;
+        if (data.paperless !== undefined) {
+          message += `Paperless: ${data.paperless} documents indexed\n`;
         }
 
         alert(message);
@@ -263,8 +284,14 @@ export default function StatusPage() {
             />
 
             <div className={styles.fullWidth}>
-              <AutoSyncCard
-                onSyncAll={handleSyncAll}
+              <DataSyncCard
+                dailySyncTime={status.dailySyncTime || null}
+                lastRun={status.dailySyncLastRun ? new Date(status.dailySyncLastRun) : null}
+                lastStatus={status.dailySyncLastStatus || null}
+                lastError={status.dailySyncLastError || null}
+                onSave={handleSaveSyncTime}
+                onSyncNow={handleSyncNow}
+                isSaving={false}
                 isSyncing={isSyncing}
               />
             </div>

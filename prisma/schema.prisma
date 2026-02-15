@@ -162,21 +162,17 @@ model Settings {
   googleLastSynced        DateTime?
   googleSyncEnabled       Boolean   @default(false)
   syncedFilesConfig       String?   // JSON config for synced files filtering
-  paperlessSyncEnabled    Boolean   @default(false)
-  paperlessSyncInterval   Int       @default(60) // minutes
-  paperlessSyncLastRun    DateTime?
-  paperlessSyncFilters    String?   // JSON: tags, dateRange, etc.
-  paperlessAutoOcr        Boolean   @default(false)
+  // Unified daily sync configuration
+  dailySyncTime           String?   @default("03:00") // Time in HH:mm format for daily sync
+  dailySyncLastRun        DateTime?
+  dailySyncLastStatus     String?   // "success" or "failed"
+  dailySyncLastError      String?
   // Matrix configuration
   matrixHomeserver        String?
   matrixAccessToken       String?
   matrixUserId            String?
   matrixEnabled           Boolean   @default(false)
   matrixAllowedUsers      String?   // JSON array of allowed Matrix user IDs
-  // Sync schedules (cron expressions)
-  googleCalendarSyncSchedule String? @default("0 0 * * *")  // Midnight daily
-  paperlessSyncSchedule      String? @default("0 * * * *")  // Hourly
-  goodreadsSyncSchedule      String? @default("0 2 * * *")  // 2am daily
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 }

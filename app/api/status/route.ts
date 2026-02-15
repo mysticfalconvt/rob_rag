@@ -130,6 +130,17 @@ export async function GET(req: NextRequest) {
     const averageChunksPerFile =
       fileCount > 0 ? (chunkStats._sum.chunkCount || 0) / fileCount : 0;
 
+    // Get daily sync settings
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
+      select: {
+        dailySyncTime: true,
+        dailySyncLastRun: true,
+        dailySyncLastStatus: true,
+        dailySyncLastError: true,
+      },
+    });
+
     return NextResponse.json({
       postgres: postgresStatus,
       lmStudio: lmStudioStatus,
@@ -146,6 +157,10 @@ export async function GET(req: NextRequest) {
       goodreadsBooks: goodreadsBookCount,
       calendarEvents: calendarEventCount,
       averageChunksPerFile,
+      dailySyncTime: settings?.dailySyncTime,
+      dailySyncLastRun: settings?.dailySyncLastRun,
+      dailySyncLastStatus: settings?.dailySyncLastStatus,
+      dailySyncLastError: settings?.dailySyncLastError,
       config: {
         embeddingModel: config.EMBEDDING_MODEL_NAME,
         chatModel: config.CHAT_MODEL_NAME,

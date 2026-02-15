@@ -86,9 +86,23 @@ Production mounts:
 
 ### Document Sources
 - **Local Files**: Watches `DOCUMENTS_FOLDER_PATH` with chokidar, supports PDF/DOCX/MD/TXT
-- **Paperless-ngx**: Integrates via API (configure in `/status`)
-- **Goodreads**: Import library via CSV, sync via RSS feeds
+- **Paperless-ngx**: Integrates via API (configure in `/config`)
+- **Goodreads**: Import library via CSV, sync via RSS feeds (configure in `/config`)
+- **Google Calendar**: Sync events via OAuth (configure in `/config`)
 - **File Uploads**: Authenticated users can upload documents
+
+### Data Source Syncing
+All external data sources (Google Calendar, Paperless, Goodreads) are synced via a **unified daily sync** mechanism:
+- **Single sync time**: Configure daily sync time in `/status` page under "Data Source Sync" card
+- **Manual trigger**: Use "Sync Now" button in `/status` page
+- **Automated**: Runs once daily at configured time via background scheduler
+- **Implementation**: All sync logic in `lib/syncAll.ts`
+
+**IMPORTANT**: When adding new data sources:
+1. Add sync logic to `syncAllDataSources()` function in `lib/syncAll.ts`
+2. DO NOT create separate sync mechanisms, UI controls, or webhook endpoints
+3. DO NOT add per-source scheduling - use the unified daily sync
+4. This prevents drift and maintains a single source of truth for syncing
 
 ### Custom OCR
 - Vision model-based OCR for scanned PDFs

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import React, { useEffect, useState, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import FilesHeader from "@/components/FilesHeader";
 import FileFilterBar from "@/components/FileFilterBar";
 import TagFilter from "@/components/TagFilter";
@@ -33,11 +33,41 @@ interface IndexedFile {
   calendarName?: string;
 }
 
+// Fetch all files in chunks
+async function fetchAllFiles(): Promise<IndexedFile[]> {
+  const allFiles: IndexedFile[] = [];
+  let offset = 0;
+  const chunkSize = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const res = await fetch(`/api/files?offset=${offset}&limit=${chunkSize}`);
+      if (res.ok) {
+        const chunk = await res.json();
+        if (chunk.length > 0) {
+          allFiles.push(...chunk);
+          offset += chunk.length;
+          hasMore = chunk.length === chunkSize;
+          // Small delay to avoid blocking
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } else {
+          hasMore = false;
+        }
+      } else {
+        hasMore = false;
+      }
+    } catch (error) {
+      console.error("Error fetching files chunk:", error);
+      hasMore = false;
+    }
+  }
+
+  return allFiles;
+}
+
 export default function FilesPage() {
-  const [files, setFiles] = useState<IndexedFile[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const queryClient = useQueryClient();
   const [isScanning, setIsScanning] = useState(false);
 
   const [showUploaded, setShowUploaded] = useState(true);
@@ -46,6 +76,7 @@ export default function FilesPage() {
   const [showGoodreads, setShowGoodreads] = useState(true);
   const [showCustomOcr, setShowCustomOcr] = useState(true);
   const [showCalendar, setShowCalendar] = useState(true);
+  const [showNotes, setShowNotes] = useState(true);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [taggedFilter, setTaggedFilter] = useState<"all" | "tagged" | "untagged">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,95 +86,16 @@ export default function FilesPage() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const tableParentRef = useRef<HTMLDivElement>(null);
-  const scrollPositionRef = useRef(0);
-  const hasInitialized = useRef(false);
 
-  // Cache key for localStorage
-  const CACHE_KEY = 'files-cache';
-  const CACHE_TIMESTAMP_KEY = 'files-cache-timestamp';
-  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-  const MAX_CACHE_SIZE = 3 * 1024 * 1024; // 3MB max cache size
-
-  // Helper to safely save to localStorage with size check
-  const saveToCache = useCallback((data: IndexedFile[]) => {
-    try {
-      const jsonStr = JSON.stringify(data);
-      // Check size before saving (rough estimate)
-      if (jsonStr.length > MAX_CACHE_SIZE) {
-        console.warn('Cache too large, storing only first 500 files');
-        // Store only first 500 files if too large
-        const truncated = data.slice(0, 500);
-        const truncatedStr = JSON.stringify(truncated);
-        localStorage.setItem(CACHE_KEY, truncatedStr);
-      } else {
-        localStorage.setItem(CACHE_KEY, jsonStr);
-      }
-      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        console.warn('localStorage quota exceeded, clearing old cache');
-        // Clear cache and try again with smaller dataset
-        localStorage.removeItem(CACHE_KEY);
-        try {
-          const truncated = data.slice(0, 300);
-          localStorage.setItem(CACHE_KEY, JSON.stringify(truncated));
-          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        } catch (e2) {
-          console.error('Failed to cache even truncated data:', e2);
-        }
-      } else {
-        console.error('Failed to save to cache:', e);
-      }
-    }
-  }, [CACHE_KEY, CACHE_TIMESTAMP_KEY, MAX_CACHE_SIZE]);
-
-  // Load from cache on mount
-  useEffect(() => {
-    // Prevent double initialization (React 19 strict mode)
-    if (hasInitialized.current) return;
-    hasInitialized.current = true;
-
-    const cached = localStorage.getItem(CACHE_KEY);
-    const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-
-    if (cached && timestamp) {
-      const age = Date.now() - parseInt(timestamp);
-      if (age < CACHE_DURATION) {
-        try {
-          const cachedFiles = JSON.parse(cached);
-          setFiles(cachedFiles);
-          setIsLoading(false);
-
-          // Restore scroll position after a short delay
-          const savedScroll = sessionStorage.getItem('files-scroll');
-          if (savedScroll && tableParentRef.current) {
-            setTimeout(() => {
-              if (tableParentRef.current) {
-                tableParentRef.current.scrollTop = parseInt(savedScroll);
-              }
-            }, 50);
-          }
-
-          // Check if cache might be incomplete and load more in background
-          // If we have exactly a multiple of 100, there might be more files
-          if (cachedFiles.length % 100 === 0 && cachedFiles.length > 0) {
-            setHasMore(true);
-            // Start loading from where cache left off
-            setTimeout(() => loadRemainingChunks(cachedFiles.length), 100);
-          } else {
-            setHasMore(false);
-          }
-          return;
-        } catch (e) {
-          console.error('Failed to parse cached files:', e);
-        }
-      }
-    }
-
-    // If no valid cache, fetch normally
-    fetchFiles();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  // Use TanStack Query for data fetching and caching
+  const { data: files = [], isLoading, isRefetching } = useQuery({
+    queryKey: ['files'],
+    queryFn: fetchAllFiles,
+    staleTime: 30 * 1000, // 30 seconds - refetch if data is older than 30s
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache for 10 minutes
+    refetchOnWindowFocus: true, // Refetch when user returns to the tab
+    refetchOnMount: true, // Always refetch when component mounts
+  });
 
   // Save scroll position when navigating away
   useEffect(() => {
@@ -169,74 +121,19 @@ export default function FilesPage() {
     };
   }, []);
 
-  // Fetch a chunk of files
-  const fetchFilesChunk = useCallback(async (offset: number, limit: number) => {
-    try {
-      const res = await fetch(`/api/files?offset=${offset}&limit=${limit}`);
-      if (res.ok) {
-        const data = await res.json();
-        return data;
-      }
-      return [];
-    } catch (error) {
-      console.error("Error fetching files chunk:", error);
-      return [];
-    }
-  }, []);
-
-  // Initial load - fetch first chunk immediately
-  const fetchFiles = useCallback(async () => {
-    setIsLoading(true);
-    const initialChunk = await fetchFilesChunk(0, 100);
-    setFiles(initialChunk);
-    setIsLoading(false);
-    setHasMore(initialChunk.length === 100);
-
-    // Continue loading remaining chunks in background
-    if (initialChunk.length === 100) {
-      loadRemainingChunks(100);
-    }
-  }, [fetchFilesChunk]);
-
-  // Load remaining chunks in background
-  const loadRemainingChunks = useCallback(async (startOffset: number) => {
-    setIsLoadingMore(true);
-    let offset = startOffset;
-    const chunkSize = 100;
-    let hasMoreChunks = true;
-    const allChunks: IndexedFile[] = [];
-
-    while (hasMoreChunks) {
-      const chunk = await fetchFilesChunk(offset, chunkSize);
-      if (chunk.length > 0) {
-        allChunks.push(...chunk);
-        setFiles((prev) => {
-          const updated = [...prev, ...chunk];
-          // Save to cache periodically (every 200 files)
-          if (allChunks.length % 200 === 0) {
-            saveToCache(updated);
+  // Restore scroll position after data loads
+  useEffect(() => {
+    if (!isLoading && files.length > 0) {
+      const savedScroll = sessionStorage.getItem('files-scroll');
+      if (savedScroll && tableParentRef.current) {
+        setTimeout(() => {
+          if (tableParentRef.current) {
+            tableParentRef.current.scrollTop = parseInt(savedScroll);
           }
-          return updated;
-        });
-        offset += chunk.length;
-        hasMoreChunks = chunk.length === chunkSize;
-
-        // Small delay to avoid blocking UI
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } else {
-        hasMoreChunks = false;
+        }, 50);
       }
     }
-
-    setHasMore(false);
-    setIsLoadingMore(false);
-
-    // Final cache save
-    setFiles((prev) => {
-      saveToCache(prev);
-      return prev;
-    });
-  }, [fetchFilesChunk, saveToCache]);
+  }, [isLoading, files.length]);
 
 
   const handleSort = (
@@ -261,10 +158,8 @@ export default function FilesPage() {
         body: JSON.stringify({ filePath }),
       });
       if (res.ok) {
-        // Invalidate cache
-        localStorage.removeItem(CACHE_KEY);
-        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-        await fetchFiles();
+        // Invalidate query cache to refetch
+        await queryClient.invalidateQueries({ queryKey: ['files'] });
       }
     } catch (error) {
       console.error("Error re-indexing file:", error);
@@ -309,10 +204,8 @@ export default function FilesPage() {
         if (data.ocrProcessed) {
           alert(`✅ File uploaded and OCR processed successfully!\n\n${data.message || ''}`);
         }
-        // Invalidate cache
-        localStorage.removeItem(CACHE_KEY);
-        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-        await fetchFiles();
+        // Invalidate query cache to refetch
+        await queryClient.invalidateQueries({ queryKey: ['files'] });
       } else {
         const error = await res.json();
         alert(`❌ Upload failed: ${error.details || error.error}`);
@@ -360,10 +253,8 @@ export default function FilesPage() {
         },
       );
       if (res.ok) {
-        // Invalidate cache
-        localStorage.removeItem(CACHE_KEY);
-        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-        await fetchFiles();
+        // Invalidate query cache to refetch
+        await queryClient.invalidateQueries({ queryKey: ['files'] });
       }
     } catch (error) {
       console.error("Error deleting file:", error);
@@ -395,10 +286,8 @@ export default function FilesPage() {
       if (res.ok) {
         const data = await res.json();
         alert(`✅ OCR processing started! Job ID: ${data.jobId}\n\nThe document will be re-indexed when processing completes.`);
-        // Invalidate cache and refresh file list to show processing status
-        localStorage.removeItem(CACHE_KEY);
-        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-        await fetchFiles();
+        // Invalidate query cache to refetch and show processing status
+        await queryClient.invalidateQueries({ queryKey: ['files'] });
       } else {
         const error = await res.json();
         alert(`❌ Failed to start OCR: ${error.details || error.error}`);
@@ -420,6 +309,7 @@ export default function FilesPage() {
       const isGoodreads = file.source === "goodreads";
       const isCustomOcr = file.source === "custom_ocr";
       const isCalendar = file.source === "google-calendar";
+      const isNote = file.source === "user_note";
 
       if (isUploaded && !showUploaded) return false;
       if (isSynced && !showSynced) return false;
@@ -427,6 +317,7 @@ export default function FilesPage() {
       if (isGoodreads && !showGoodreads) return false;
       if (isCustomOcr && !showCustomOcr) return false;
       if (isCalendar && !showCalendar) return false;
+      if (isNote && !showNotes) return false;
 
       // Apply tagged/untagged filter
       if (taggedFilter === "tagged" && (!file.tags || file.tags.length === 0)) {
@@ -523,13 +414,22 @@ export default function FilesPage() {
       return 0;
     });
 
-  // Virtual scrolling setup
-  const rowVirtualizer = useVirtualizer({
-    count: filteredFiles.length,
-    getScrollElement: () => tableParentRef.current,
-    estimateSize: () => 60, // Estimated row height in pixels
-    overscan: 10, // Render 10 extra rows above/below viewport
-  });
+  // Memoize filtered files to prevent unnecessary recalculations
+  const memoizedFilteredFiles = React.useMemo(() => filteredFiles, [
+    filteredFiles.length,
+    showUploaded,
+    showSynced,
+    showPaperless,
+    showGoodreads,
+    showCustomOcr,
+    showCalendar,
+    showNotes,
+    selectedTags,
+    taggedFilter,
+    searchQuery,
+    sortColumn,
+    sortDirection,
+  ]);
 
   // Helper function to check if a file matches the search query
   const matchesSearch = (file: IndexedFile) => {
@@ -582,6 +482,9 @@ export default function FilesPage() {
   const calendarCount = files.filter(
     (f) => f.source === "google-calendar" && matchesSearch(f),
   ).length;
+  const notesCount = files.filter(
+    (f) => f.source === "user_note" && matchesSearch(f),
+  ).length;
 
   return (
     <div className={styles.container}>
@@ -592,7 +495,7 @@ export default function FilesPage() {
         onSearchChange={setSearchQuery}
       />
 
-      <BulkTagGeneration onComplete={fetchFiles} />
+      <BulkTagGeneration onComplete={() => queryClient.invalidateQueries({ queryKey: ['files'] })} />
 
       <TagFilter
         selectedTags={selectedTags}
@@ -608,16 +511,18 @@ export default function FilesPage() {
         showGoodreads={showGoodreads}
         showCustomOcr={showCustomOcr}
         showCalendar={showCalendar}
+        showNotes={showNotes}
         uploadedCount={uploadedCount}
         syncedCount={syncedCount}
         paperlessCount={paperlessCount}
         goodreadsCount={goodreadsCount}
         customOcrCount={customOcrCount}
         calendarCount={calendarCount}
-        filteredCount={filteredFiles.length}
+        notesCount={notesCount}
+        filteredCount={memoizedFilteredFiles.length}
         totalCount={files.length}
         onToggleUploaded={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar && showNotes;
           if (allSelected) {
             // If all are selected, select only this one
             setShowUploaded(true);
@@ -626,9 +531,10 @@ export default function FilesPage() {
             setShowGoodreads(false);
             setShowCustomOcr(false);
             setShowCalendar(false);
+            setShowNotes(false);
           } else {
             // Check if this is the last one selected
-            const isLastSelected = showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar;
+            const isLastSelected = showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar && !showNotes;
             if (isLastSelected) {
               // Select all instead of deselecting the last one
               setShowUploaded(true);
@@ -637,6 +543,7 @@ export default function FilesPage() {
               setShowGoodreads(true);
               setShowCustomOcr(true);
               setShowCalendar(true);
+              setShowNotes(true);
             } else {
               // Otherwise, toggle this one
               setShowUploaded(!showUploaded);
@@ -652,8 +559,9 @@ export default function FilesPage() {
             setShowGoodreads(false);
             setShowCustomOcr(false);
             setShowCalendar(false);
+            setShowNotes(false);
           } else {
-            const isLastSelected = !showUploaded && showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar;
+            const isLastSelected = !showUploaded && showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar && !showNotes;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
@@ -661,6 +569,7 @@ export default function FilesPage() {
               setShowGoodreads(true);
               setShowCustomOcr(true);
               setShowCalendar(true);
+              setShowNotes(true);
             } else {
               setShowSynced(!showSynced);
             }
@@ -675,8 +584,9 @@ export default function FilesPage() {
             setShowGoodreads(false);
             setShowCustomOcr(false);
             setShowCalendar(false);
+            setShowNotes(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && showPaperless && !showGoodreads && !showCustomOcr && !showCalendar;
+            const isLastSelected = !showUploaded && !showSynced && showPaperless && !showGoodreads && !showCustomOcr && !showCalendar && !showNotes;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
@@ -684,6 +594,7 @@ export default function FilesPage() {
               setShowGoodreads(true);
               setShowCustomOcr(true);
               setShowCalendar(true);
+              setShowNotes(true);
             } else {
               setShowPaperless(!showPaperless);
             }
@@ -698,8 +609,9 @@ export default function FilesPage() {
             setShowGoodreads(true);
             setShowCustomOcr(false);
             setShowCalendar(false);
+            setShowNotes(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && !showPaperless && showGoodreads && !showCustomOcr && !showCalendar;
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && showGoodreads && !showCustomOcr && !showCalendar && !showNotes;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
@@ -707,6 +619,7 @@ export default function FilesPage() {
               setShowGoodreads(true);
               setShowCustomOcr(true);
               setShowCalendar(true);
+              setShowNotes(true);
             } else {
               setShowGoodreads(!showGoodreads);
             }
@@ -721,8 +634,9 @@ export default function FilesPage() {
             setShowGoodreads(false);
             setShowCustomOcr(true);
             setShowCalendar(false);
+            setShowNotes(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && showCustomOcr && !showCalendar;
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && showCustomOcr && !showCalendar && !showNotes;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
@@ -730,13 +644,14 @@ export default function FilesPage() {
               setShowGoodreads(true);
               setShowCustomOcr(true);
               setShowCalendar(true);
+              setShowNotes(true);
             } else {
               setShowCustomOcr(!showCustomOcr);
             }
           }
         }}
         onToggleCalendar={() => {
-          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar;
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar && showNotes;
           if (allSelected) {
             setShowUploaded(false);
             setShowSynced(false);
@@ -744,8 +659,9 @@ export default function FilesPage() {
             setShowGoodreads(false);
             setShowCustomOcr(false);
             setShowCalendar(true);
+            setShowNotes(false);
           } else {
-            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && showCalendar;
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && showCalendar && !showNotes;
             if (isLastSelected) {
               setShowUploaded(true);
               setShowSynced(true);
@@ -753,8 +669,34 @@ export default function FilesPage() {
               setShowGoodreads(true);
               setShowCustomOcr(true);
               setShowCalendar(true);
+              setShowNotes(true);
             } else {
               setShowCalendar(!showCalendar);
+            }
+          }
+        }}
+        onToggleNotes={() => {
+          const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar && showNotes;
+          if (allSelected) {
+            setShowUploaded(false);
+            setShowSynced(false);
+            setShowPaperless(false);
+            setShowGoodreads(false);
+            setShowCustomOcr(false);
+            setShowCalendar(false);
+            setShowNotes(true);
+          } else {
+            const isLastSelected = !showUploaded && !showSynced && !showPaperless && !showGoodreads && !showCustomOcr && !showCalendar && showNotes;
+            if (isLastSelected) {
+              setShowUploaded(true);
+              setShowSynced(true);
+              setShowPaperless(true);
+              setShowGoodreads(true);
+              setShowCustomOcr(true);
+              setShowCalendar(true);
+              setShowNotes(true);
+            } else {
+              setShowNotes(!showNotes);
             }
           }
         }}
@@ -833,10 +775,10 @@ export default function FilesPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={6} className={styles.loading}>
-                  Loading first batch...
+                  Loading files...
                 </td>
               </tr>
-            ) : filteredFiles.length === 0 ? (
+            ) : memoizedFilteredFiles.length === 0 ? (
               <tr>
                 <td colSpan={6} className={styles.empty}>
                   {files.length === 0
@@ -845,25 +787,22 @@ export default function FilesPage() {
                 </td>
               </tr>
             ) : (
-              rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const file = filteredFiles[virtualRow.index];
-                return (
-                  <FileTableRow
-                    key={virtualRow.key}
-                    file={file}
-                    isScanning={isScanning}
-                    onReindex={handleReindex}
-                    onDelete={handleDelete}
-                    onUseCustomOcr={handleUseCustomOcr}
-                  />
-                );
-              })
+              memoizedFilteredFiles.map((file) => (
+                <FileTableRow
+                  key={file.id}
+                  file={file}
+                  isScanning={isScanning}
+                  onReindex={handleReindex}
+                  onDelete={handleDelete}
+                  onUseCustomOcr={handleUseCustomOcr}
+                />
+              ))
             )}
           </tbody>
         </table>
-        {isLoadingMore && (
+        {isRefetching && !isLoading && (
           <div className={styles.loadingMore}>
-            <i className="fas fa-spinner fa-spin"></i> Loading more files in background...
+            <i className="fas fa-spinner fa-spin"></i> Updating files in background...
           </div>
         )}
       </div>

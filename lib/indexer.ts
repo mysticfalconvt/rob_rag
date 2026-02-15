@@ -32,9 +32,10 @@ export async function indexFile(filePath: string, uploadedBy?: string) {
     const chunks = await processFile(filePath);
     console.log(`Generated ${chunks.length} chunks for ${filePath}`);
 
-    // 3. Determine if this is an uploaded file or synced file
+    // 3. Determine file source based on path
     const isUploaded = filePath.includes("/File Uploads/");
-    const source = isUploaded ? "uploaded" : "synced";
+    const isNote = filePath.includes("/Notes/");
+    const source = isUploaded ? "uploaded" : isNote ? "user_note" : "synced";
 
     // 4. Delete old chunks for this file if they exist
     await prisma.documentChunk.deleteMany({

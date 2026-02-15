@@ -92,42 +92,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate type
-    if (!["matrix_reminder", "auto_sync"].includes(type)) {
+    if (type !== "matrix_reminder") {
       return NextResponse.json(
-        { error: "Invalid type. Must be 'matrix_reminder' or 'auto_sync'" },
+        { error: "Invalid type. Must be 'matrix_reminder'" },
         { status: 400 },
       );
     }
 
-    // Validate type-specific fields
-    if (type === "matrix_reminder") {
-      if (!query || !matrixRoomId) {
-        return NextResponse.json(
-          {
-            error:
-              "Matrix reminders require 'query' and 'matrixRoomId' fields",
-          },
-          { status: 400 },
-        );
-      }
-    } else if (type === "auto_sync") {
-      if (!syncSource) {
-        return NextResponse.json(
-          { error: "Auto-sync tasks require 'syncSource' field" },
-          { status: 400 },
-        );
-      }
-      if (
-        !["google-calendar", "paperless", "goodreads"].includes(syncSource)
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Invalid syncSource. Must be 'google-calendar', 'paperless', or 'goodreads'",
-          },
-          { status: 400 },
-        );
-      }
+    // Validate required fields for matrix reminders
+    if (!query || !matrixRoomId) {
+      return NextResponse.json(
+        {
+          error: "Matrix reminders require 'query' and 'matrixRoomId' fields",
+        },
+        { status: 400 },
+      );
     }
 
     // Validate cron expression
@@ -152,9 +131,8 @@ export async function POST(req: NextRequest) {
         name,
         schedule,
         enabled,
-        query: query || null,
-        matrixRoomId: matrixRoomId || null,
-        syncSource: syncSource || null,
+        query,
+        matrixRoomId,
         nextRun,
       },
     });
