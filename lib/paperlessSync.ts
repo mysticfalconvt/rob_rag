@@ -174,12 +174,6 @@ export async function syncPaperlessDocuments(
       }
     }
 
-    // Update last sync time
-    await prisma.settings.update({
-      where: { id: "singleton" },
-      data: { paperlessSyncLastRun: new Date() },
-    });
-
     console.log("[PaperlessSync] Sync complete:", result);
     return result;
   } catch (error: any) {
@@ -196,11 +190,6 @@ export async function getPaperlessSyncSettings() {
   const settings = await prisma.settings.findUnique({
     where: { id: "singleton" },
     select: {
-      paperlessSyncEnabled: true,
-      paperlessSyncInterval: true,
-      paperlessSyncLastRun: true,
-      paperlessSyncFilters: true,
-      paperlessAutoOcr: true,
       visionModel: true,
     },
   });
@@ -209,49 +198,24 @@ export async function getPaperlessSyncSettings() {
     return null;
   }
 
-  let filters: SyncFilters | null = null;
-  if (settings.paperlessSyncFilters) {
-    try {
-      filters = JSON.parse(settings.paperlessSyncFilters);
-    } catch (e) {
-      console.error("Failed to parse paperlessSyncFilters:", e);
-    }
-  }
-
+  // Return minimal settings for backward compatibility
+  // Paperless sync is now part of unified daily sync
   return {
-    enabled: settings.paperlessSyncEnabled,
-    interval: settings.paperlessSyncInterval,
-    lastRun: settings.paperlessSyncLastRun,
-    filters,
-    autoOcr: settings.paperlessAutoOcr,
+    enabled: false,
+    interval: 60,
+    lastRun: null,
+    filters: null,
+    autoOcr: false,
     visionModel: settings.visionModel,
   };
 }
 
 /**
- * Background sync job - called by scheduler
+ * Background sync job - DEPRECATED
+ * Paperless sync is now part of unified daily sync (see lib/syncAll.ts)
+ * This function is kept for backward compatibility but always returns null.
  */
 export async function runScheduledSync(): Promise<PaperlessSyncResult | null> {
-  const settings = await getPaperlessSyncSettings();
-
-  if (!settings || !settings.enabled) {
-    console.log("[PaperlessSync] Auto-sync not enabled, skipping");
-    return null;
-  }
-
-  // Check if enough time has passed since last sync
-  if (settings.lastRun) {
-    const minutesSinceLastRun = (Date.now() - settings.lastRun.getTime()) / 60000;
-    if (minutesSinceLastRun < settings.interval) {
-      console.log(`[PaperlessSync] Last sync was ${Math.round(minutesSinceLastRun)} minutes ago, skipping (interval: ${settings.interval} minutes)`);
-      return null;
-    }
-  }
-
-  console.log("[PaperlessSync] Running scheduled sync");
-  return await syncPaperlessDocuments(
-    settings.filters || undefined,
-    settings.autoOcr,
-    settings.visionModel || undefined
-  );
+  console.log("[PaperlessSync] runScheduledSync is deprecated - use unified sync instead");
+  return null;
 }

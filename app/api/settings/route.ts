@@ -43,11 +43,7 @@ export async function GET(req: NextRequest) {
       paperlessConfigured: !!settings.paperlessApiToken,
       customOcrEnabled: settings.customOcrEnabled,
       syncedFilesConfig: settings.syncedFilesConfig,
-      paperlessSyncEnabled: settings.paperlessSyncEnabled,
-      paperlessSyncInterval: settings.paperlessSyncInterval,
-      paperlessSyncLastRun: settings.paperlessSyncLastRun,
-      paperlessSyncFilters: settings.paperlessSyncFilters,
-      paperlessAutoOcr: settings.paperlessAutoOcr,
+      dailySyncTime: settings.dailySyncTime,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -76,11 +72,8 @@ export async function POST(req: NextRequest) {
       paperlessApiToken,
       paperlessEnabled,
       customOcrEnabled,
-      paperlessSyncEnabled,
-      paperlessSyncInterval,
-      paperlessSyncFilters,
-      paperlessAutoOcr,
       syncedFilesConfig,
+      dailySyncTime,
     } = await req.json();
 
     // Validate Paperless URL if provided
@@ -148,21 +141,12 @@ export async function POST(req: NextRequest) {
       updateData.customOcrEnabled = customOcrEnabled;
     }
 
-    // Handle Paperless sync settings
-    if (paperlessSyncEnabled !== undefined) {
-      updateData.paperlessSyncEnabled = paperlessSyncEnabled;
-    }
-    if (paperlessSyncInterval !== undefined) {
-      updateData.paperlessSyncInterval = paperlessSyncInterval;
-    }
-    if (paperlessSyncFilters !== undefined) {
-      updateData.paperlessSyncFilters = paperlessSyncFilters;
-    }
-    if (paperlessAutoOcr !== undefined) {
-      updateData.paperlessAutoOcr = paperlessAutoOcr;
-    }
+    // Handle sync settings
     if (syncedFilesConfig !== undefined) {
       updateData.syncedFilesConfig = syncedFilesConfig;
+    }
+    if (dailySyncTime !== undefined) {
+      updateData.dailySyncTime = dailySyncTime;
     }
 
     let settings;
@@ -209,11 +193,7 @@ export async function POST(req: NextRequest) {
       paperlessConfigured: !!settings.paperlessApiToken,
       customOcrEnabled: settings.customOcrEnabled,
       syncedFilesConfig: settings.syncedFilesConfig,
-      paperlessSyncEnabled: settings.paperlessSyncEnabled,
-      paperlessSyncInterval: settings.paperlessSyncInterval,
-      paperlessSyncLastRun: settings.paperlessSyncLastRun,
-      paperlessSyncFilters: settings.paperlessSyncFilters,
-      paperlessAutoOcr: settings.paperlessAutoOcr,
+      dailySyncTime: settings.dailySyncTime,
     });
   } catch (error) {
     if (error instanceof Error) {
