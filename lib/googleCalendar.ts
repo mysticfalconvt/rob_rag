@@ -3,6 +3,10 @@ import prisma from "./prisma";
 import { generateEmbedding } from "./ai";
 import { insertChunk } from "./pgvector";
 
+// Sync lock to prevent concurrent sync operations
+let syncInProgress = false;
+let indexInProgress = false;
+
 /**
  * Get redirect URI from environment or construct from request origin
  */
@@ -283,90 +287,101 @@ export async function fetchCalendarEvents(
  * Sync calendar events to database
  */
 export async function syncCalendarEvents() {
-  const settings = await prisma.settings.findUnique({
-    where: { id: "singleton" },
-  });
-
-  if (!settings?.googleCalendarIds) {
-    throw new Error("No calendars selected for sync");
+  // Check if sync is already in progress
+  if (syncInProgress) {
+    console.log("[GoogleCalendar] Sync already in progress, skipping...");
+    throw new Error("Sync already in progress");
   }
 
-  const calendarIds = JSON.parse(settings.googleCalendarIds) as string[];
-  console.log(`[GoogleCalendar] Syncing ${calendarIds.length} calendars...`);
-
-  // Fetch events
-  const events = await fetchCalendarEvents(calendarIds);
-  console.log(`[GoogleCalendar] Fetched ${events.length} events`);
-
-  let created = 0;
-  let updated = 0;
-
-  for (const event of events) {
-    if (!event.id || !event.start) continue;
-
-    // Skip cancelled events
-    if (event.status === "cancelled") continue;
-
-    // Skip birthday events (from Google Contacts)
-    // Birthday events typically have eventType: "birthday" or source.title includes "Birthdays"
-    if (event.eventType === "birthday") {
-      console.log(`[GoogleCalendar] Skipping birthday event: ${event.summary}`);
-      continue;
-    }
-
-    // Also check if the event source indicates it's from contacts/birthdays
-    if (event.source?.title === "Birthdays" || event.source?.title?.includes("Contacts")) {
-      console.log(`[GoogleCalendar] Skipping contacts/birthday event: ${event.summary}`);
-      continue;
-    }
-
-    const startTime = event.start.dateTime || event.start.date;
-    const endTime = event.end?.dateTime || event.end?.date || startTime;
-
-    if (!startTime) continue;
-
-    // Check if event exists
-    const existing = await prisma.calendarEvent.findUnique({
-      where: { eventId: event.id },
+  syncInProgress = true;
+  try {
+    const settings = await prisma.settings.findUnique({
+      where: { id: "singleton" },
     });
 
-    const eventData = {
-      eventId: event.id,
-      calendarId: event.calendarId,
-      calendarName: event.calendarName,
-      title: event.summary || "(No title)",
-      description: event.description || null,
-      location: event.location || null,
-      startTime: new Date(startTime),
-      endTime: new Date(endTime),
-      attendees: event.attendees ? JSON.stringify(event.attendees) : null,
-      recurringEventId: event.recurringEventId || null,
-      htmlLink: event.htmlLink || null,
-    };
-
-    if (existing) {
-      await prisma.calendarEvent.update({
-        where: { id: existing.id },
-        data: eventData,
-      });
-      updated++;
-    } else {
-      await prisma.calendarEvent.create({
-        data: eventData,
-      });
-      created++;
+    if (!settings?.googleCalendarIds) {
+      throw new Error("No calendars selected for sync");
     }
+
+    const calendarIds = JSON.parse(settings.googleCalendarIds) as string[];
+    console.log(`[GoogleCalendar] Syncing ${calendarIds.length} calendars...`);
+
+    // Fetch events
+    const events = await fetchCalendarEvents(calendarIds);
+    console.log(`[GoogleCalendar] Fetched ${events.length} events`);
+
+    let created = 0;
+    let updated = 0;
+
+    for (const event of events) {
+      if (!event.id || !event.start) continue;
+
+      // Skip cancelled events
+      if (event.status === "cancelled") continue;
+
+      // Skip birthday events (from Google Contacts)
+      // Birthday events typically have eventType: "birthday" or source.title includes "Birthdays"
+      if (event.eventType === "birthday") {
+        console.log(`[GoogleCalendar] Skipping birthday event: ${event.summary}`);
+        continue;
+      }
+
+      // Also check if the event source indicates it's from contacts/birthdays
+      if (event.source?.title === "Birthdays" || event.source?.title?.includes("Contacts")) {
+        console.log(`[GoogleCalendar] Skipping contacts/birthday event: ${event.summary}`);
+        continue;
+      }
+
+      const startTime = event.start.dateTime || event.start.date;
+      const endTime = event.end?.dateTime || event.end?.date || startTime;
+
+      if (!startTime) continue;
+
+      // Check if event exists
+      const existing = await prisma.calendarEvent.findUnique({
+        where: { eventId: event.id },
+      });
+
+      const eventData = {
+        eventId: event.id,
+        calendarId: event.calendarId,
+        calendarName: event.calendarName,
+        title: event.summary || "(No title)",
+        description: event.description || null,
+        location: event.location || null,
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        attendees: event.attendees ? JSON.stringify(event.attendees) : null,
+        recurringEventId: event.recurringEventId || null,
+        htmlLink: event.htmlLink || null,
+      };
+
+      if (existing) {
+        await prisma.calendarEvent.update({
+          where: { id: existing.id },
+          data: eventData,
+        });
+        updated++;
+      } else {
+        await prisma.calendarEvent.create({
+          data: eventData,
+        });
+        created++;
+      }
+    }
+
+    // Update last synced timestamp
+    await prisma.settings.update({
+      where: { id: "singleton" },
+      data: { googleLastSynced: new Date() },
+    });
+
+    console.log(`[GoogleCalendar] Sync complete: ${created} created, ${updated} updated`);
+
+    return { created, updated, total: events.length };
+  } finally {
+    syncInProgress = false;
   }
-
-  // Update last synced timestamp
-  await prisma.settings.update({
-    where: { id: "singleton" },
-    data: { googleLastSynced: new Date() },
-  });
-
-  console.log(`[GoogleCalendar] Sync complete: ${created} created, ${updated} updated`);
-
-  return { created, updated, total: events.length };
 }
 
 /**
@@ -374,50 +389,58 @@ export async function syncCalendarEvents() {
  * @param onlyNew - If true, only index events that haven't been indexed yet OR have been updated since last embedding
  */
 export async function indexCalendarEvents(onlyNew: boolean = false) {
-  console.log("[GoogleCalendar] Starting event indexing...");
-
-  // Get all calendar events (or filter for unindexed)
-  let events = await prisma.calendarEvent.findMany({
-    orderBy: { startTime: "desc" },
-  });
-
-  // If onlyNew, filter to only unindexed or changed events
-  if (onlyNew) {
-    events = events.filter((event) => {
-      // Never indexed
-      if (!event.lastEmbedded || !event.embeddingVersion) {
-        return true;
-      }
-      // Changed since last embedding (event moved, title changed, etc.)
-      if (event.updatedAt && event.lastEmbedded && event.updatedAt > event.lastEmbedded) {
-        return true;
-      }
-      return false;
-    });
+  // Check if indexing is already in progress
+  if (indexInProgress) {
+    console.log("[GoogleCalendar] Indexing already in progress, skipping...");
+    throw new Error("Indexing already in progress");
   }
 
-  console.log(`[GoogleCalendar] Indexing ${events.length} events${onlyNew ? " (new/changed only)" : " (full reindex)"}`);
+  indexInProgress = true;
+  try {
+    console.log("[GoogleCalendar] Starting event indexing...");
 
-  let indexed = 0;
+    // Get all calendar events (or filter for unindexed)
+    let events = await prisma.calendarEvent.findMany({
+      orderBy: { startTime: "desc" },
+    });
 
-  for (const event of events) {
-    try {
-      // Verify the event still exists (in case it was deleted during processing)
-      const eventExists = await prisma.calendarEvent.findUnique({
-        where: { id: event.id },
+    // If onlyNew, filter to only unindexed or changed events
+    if (onlyNew) {
+      events = events.filter((event) => {
+        // Never indexed
+        if (!event.lastEmbedded || !event.embeddingVersion) {
+          return true;
+        }
+        // Changed since last embedding (event moved, title changed, etc.)
+        if (event.updatedAt && event.lastEmbedded && event.updatedAt > event.lastEmbedded) {
+          return true;
+        }
+        return false;
       });
+    }
 
-      if (!eventExists) {
-        console.log(`[GoogleCalendar] Event ${event.id} no longer exists, skipping indexing`);
-        continue;
-      }
+    console.log(`[GoogleCalendar] Indexing ${events.length} events${onlyNew ? " (new/changed only)" : " (full reindex)"}`);
 
-      // Create searchable content from event
-      const attendeeList = event.attendees
-        ? JSON.parse(event.attendees).map((a: any) => a.email || a.displayName).join(", ")
-        : "";
+    let indexed = 0;
 
-      const content = `
+    for (const event of events) {
+      try {
+        // Verify the event still exists (in case it was deleted during processing)
+        const eventExists = await prisma.calendarEvent.findUnique({
+          where: { id: event.id },
+        });
+
+        if (!eventExists) {
+          console.log(`[GoogleCalendar] Event ${event.id} no longer exists, skipping indexing`);
+          continue;
+        }
+
+        // Create searchable content from event
+        const attendeeList = event.attendees
+          ? JSON.parse(event.attendees).map((a: any) => a.email || a.displayName).join(", ")
+          : "";
+
+        const content = `
 Event: ${event.title}
 Calendar: ${event.calendarName || "Unknown"}
 Start: ${event.startTime.toLocaleString()}
@@ -427,89 +450,92 @@ ${attendeeList ? `Attendees: ${attendeeList}` : ""}
 ${event.description ? `Description: ${event.description}` : ""}
 `.trim();
 
-      // Generate embedding
-      const embedding = await generateEmbedding(content);
+        // Generate embedding
+        const embedding = await generateEmbedding(content);
 
-      // Delete existing chunks for this event
-      await prisma.documentChunk.deleteMany({
-        where: { eventId: event.id },
-      });
-
-      const filePath = `calendar/${event.calendarId}/${event.eventId}`;
-      const now = new Date();
-
-      // Create or update IndexedFile entry for this event
-      await prisma.indexedFile.upsert({
-        where: { filePath },
-        update: {
-          chunkCount: 1,
-          lastIndexed: now,
-          status: "indexed",
-        },
-        create: {
-          filePath,
-          fileHash: event.id, // Use event ID as hash
-          chunkCount: 1,
-          lastIndexed: now,
-          lastModified: event.updatedAt || now,
-          status: "indexed",
-          source: "google-calendar",
-        },
-      });
-
-      // Create chunk using insertChunk from pgvector
-      // Wrap in try-catch to handle foreign key constraint errors gracefully
-      try {
-        await insertChunk({
-          content,
-          embedding,
-          source: "google-calendar",
-          fileName: event.title,
-          filePath,
-          eventId: event.id,
-          eventTitle: event.title,
-          eventStartTime: event.startTime.toISOString(),
-          eventEndTime: event.endTime.toISOString(),
-          eventLocation: event.location || undefined,
-          eventAttendees: attendeeList || undefined,
-          calendarName: event.calendarName || undefined,
-          chunkIndex: 0,
-          totalChunks: 1,
+        // Delete existing chunks for this event
+        await prisma.documentChunk.deleteMany({
+          where: { eventId: event.id },
         });
-      } catch (insertError: any) {
-        // If foreign key constraint error, the event was likely deleted during processing
-        if (insertError.code === 'P2010' || insertError.message?.includes('foreign key constraint')) {
-          console.log(`[GoogleCalendar] Event ${event.id} was deleted during indexing, skipping`);
-          continue;
+
+        const filePath = `calendar/${event.calendarId}/${event.eventId}`;
+        const now = new Date();
+
+        // Create or update IndexedFile entry for this event
+        await prisma.indexedFile.upsert({
+          where: { filePath },
+          update: {
+            chunkCount: 1,
+            lastIndexed: now,
+            status: "indexed",
+          },
+          create: {
+            filePath,
+            fileHash: event.id, // Use event ID as hash
+            chunkCount: 1,
+            lastIndexed: now,
+            lastModified: event.updatedAt || now,
+            status: "indexed",
+            source: "google-calendar",
+          },
+        });
+
+        // Create chunk using insertChunk from pgvector
+        // Wrap in try-catch to handle foreign key constraint errors gracefully
+        try {
+          await insertChunk({
+            content,
+            embedding,
+            source: "google-calendar",
+            fileName: event.title,
+            filePath,
+            eventId: event.id,
+            eventTitle: event.title,
+            eventStartTime: event.startTime.toISOString(),
+            eventEndTime: event.endTime.toISOString(),
+            eventLocation: event.location || undefined,
+            eventAttendees: attendeeList || undefined,
+            calendarName: event.calendarName || undefined,
+            chunkIndex: 0,
+            totalChunks: 1,
+          });
+        } catch (insertError: any) {
+          // If foreign key constraint error, the event was likely deleted during processing
+          if (insertError.code === 'P2010' || insertError.message?.includes('foreign key constraint')) {
+            console.log(`[GoogleCalendar] Event ${event.id} was deleted during indexing, skipping`);
+            continue;
+          }
+          throw insertError;
         }
-        throw insertError;
+
+        // Update event embedding metadata
+        await prisma.calendarEvent.update({
+          where: { id: event.id },
+          data: {
+            embeddingVersion: 1,
+            lastEmbedded: new Date(),
+          },
+        }).catch((updateError) => {
+          // Event might have been deleted during processing
+          console.log(`[GoogleCalendar] Could not update event ${event.id} metadata, may have been deleted`);
+        });
+
+        indexed++;
+
+        if (indexed % 10 === 0) {
+          console.log(`[GoogleCalendar] Indexed ${indexed}/${events.length} events`);
+        }
+      } catch (error) {
+        console.error(`[GoogleCalendar] Error indexing event ${event.id}:`, error);
       }
-
-      // Update event embedding metadata
-      await prisma.calendarEvent.update({
-        where: { id: event.id },
-        data: {
-          embeddingVersion: 1,
-          lastEmbedded: new Date(),
-        },
-      }).catch((updateError) => {
-        // Event might have been deleted during processing
-        console.log(`[GoogleCalendar] Could not update event ${event.id} metadata, may have been deleted`);
-      });
-
-      indexed++;
-
-      if (indexed % 10 === 0) {
-        console.log(`[GoogleCalendar] Indexed ${indexed}/${events.length} events`);
-      }
-    } catch (error) {
-      console.error(`[GoogleCalendar] Error indexing event ${event.id}:`, error);
     }
+
+    console.log(`[GoogleCalendar] Indexing complete: ${indexed} events indexed`);
+
+    return indexed;
+  } finally {
+    indexInProgress = false;
   }
-
-  console.log(`[GoogleCalendar] Indexing complete: ${indexed} events indexed`);
-
-  return indexed;
 }
 
 /**

@@ -255,8 +255,8 @@ export class CalendarPlugin implements DataSourcePlugin {
       // Sync events from Google
       const syncResult = await syncCalendarEvents();
 
-      // Index events
-      const indexed = await indexCalendarEvents();
+      // Index events - ONLY new/changed events for efficiency
+      const indexed = await indexCalendarEvents(true);
 
       return {
         indexed,
