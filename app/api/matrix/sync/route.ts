@@ -28,11 +28,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // First clean up any unreachable invites
+    const cleanedCount = await matrixClient.cleanupUnreachableInvites();
+
+    // Then sync all valid rooms
     await matrixClient.syncRoomsToDatabase();
 
     return NextResponse.json({
       success: true,
-      message: "Rooms synced successfully",
+      message: `Rooms synced successfully${cleanedCount > 0 ? `. Cleaned up ${cleanedCount} unreachable invite(s)` : ""}`,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {

@@ -159,14 +159,30 @@ class MatrixClientManager {
         } catch (error: any) {
           // Handle specific Matrix errors
           if (error?.errcode === 'M_UNKNOWN' && error?.httpStatus === 404) {
-            console.warn(`[Matrix] Room ${member.roomId} is unreachable (404) - removing from database if exists`);
-            // Try to clean up database entry for unreachable room
+            console.warn(`[Matrix] Room ${member.roomId} is unreachable (404) - attempting to leave/forget`);
+
+            // Try to leave/forget the room to stop getting invites
+            try {
+              await this.client?.leave(member.roomId);
+              console.log(`[Matrix] Left unreachable room ${member.roomId}`);
+            } catch (leaveError: any) {
+              console.error(`[Matrix] Failed to leave unreachable room:`, leaveError);
+              // If leave fails, try to forget it
+              try {
+                await this.client?.forget(member.roomId);
+                console.log(`[Matrix] Forgot unreachable room ${member.roomId}`);
+              } catch (forgetError) {
+                console.error(`[Matrix] Failed to forget unreachable room:`, forgetError);
+              }
+            }
+
+            // Clean up database entry for unreachable room
             try {
               await prisma.matrixRoom.deleteMany({
                 where: { roomId: member.roomId }
               });
             } catch (dbError) {
-              console.error(`[Matrix] Failed to clean up unreachable room:`, dbError);
+              console.error(`[Matrix] Failed to clean up unreachable room from database:`, dbError);
             }
           } else {
             console.error(`[Matrix] Failed to join room ${member.roomId}:`, error);
@@ -343,6 +359,7 @@ class MatrixClientManager {
 
         // Only sync rooms we're actually in
         if (myMembership !== "join") {
+          console.log(`[Matrix] Skipping room ${roomId} with membership: ${myMembership}`);
           continue;
         }
 
@@ -386,6 +403,64 @@ class MatrixClientManager {
     }
 
     console.log(`[Matrix] Room sync complete`);
+  }
+
+  /**
+   * Clean up unreachable or problematic room invites
+   * This can help resolve issues with rooms that return 404 or other errors
+   */
+  async cleanupUnreachableInvites(): Promise<number> {
+    if (!this.client) {
+      throw new Error("Matrix client not available");
+    }
+
+    let cleanedCount = 0;
+    const rooms = this.getRooms();
+
+    for (const room of rooms) {
+      try {
+        const roomId = room.roomId;
+        const myMembership = room.getMyMembership();
+
+        // If we're in "invite" state, try to validate the room
+        if (myMembership === "invite") {
+          console.log(`[Matrix] Found invite for room ${roomId}, attempting to join or clean up...`);
+
+          try {
+            await this.client.joinRoom(roomId);
+            console.log(`[Matrix] Successfully joined room ${roomId}`);
+          } catch (error: any) {
+            if (error?.httpStatus === 404 || error?.errcode === 'M_UNKNOWN') {
+              console.warn(`[Matrix] Room ${roomId} is unreachable, leaving/forgetting...`);
+
+              try {
+                await this.client.leave(roomId);
+              } catch (leaveError) {
+                // Ignore leave errors
+              }
+
+              try {
+                await this.client.forget(roomId);
+                cleanedCount++;
+                console.log(`[Matrix] Cleaned up unreachable invite for ${roomId}`);
+              } catch (forgetError) {
+                console.error(`[Matrix] Failed to forget room ${roomId}:`, forgetError);
+              }
+
+              // Remove from database
+              await prisma.matrixRoom.deleteMany({
+                where: { roomId }
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[Matrix] Error processing room ${room.roomId}:`, error);
+      }
+    }
+
+    console.log(`[Matrix] Cleaned up ${cleanedCount} unreachable invites`);
+    return cleanedCount;
   }
 }
 
