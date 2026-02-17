@@ -14,6 +14,7 @@ import prisma from "../prisma";
 class MatrixClientManager {
   private client: MatrixClient | null = null;
   private isStarted = false;
+  private isStarting = false; // Track if initialization is in progress
   private isPrepared = false; // Track if client is synced and ready
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -25,10 +26,18 @@ class MatrixClientManager {
    * Initialize the Matrix client with settings from database
    */
   async initialize(): Promise<void> {
+    // Prevent concurrent initialization
+    if (this.isStarting) {
+      console.log("[Matrix] Initialization already in progress, skipping");
+      return;
+    }
+
     if (this.client && this.isStarted) {
       console.log("[Matrix] Client already initialized and running");
       return;
     }
+
+    this.isStarting = true;
 
     try {
       const settings = await prisma.settings.findUnique({
@@ -43,11 +52,13 @@ class MatrixClientManager {
 
       if (!settings?.matrixEnabled) {
         console.log("[Matrix] Matrix integration is disabled");
+        this.isStarting = false;
         return;
       }
 
       if (!settings.matrixHomeserver || !settings.matrixAccessToken) {
         console.log("[Matrix] Matrix not configured (missing homeserver or token)");
+        this.isStarting = false;
         return;
       }
 
@@ -71,8 +82,10 @@ class MatrixClientManager {
 
       console.log("[Matrix] Matrix client initialized successfully");
       console.log("[Matrix] Waiting for sync to reach PREPARED state...");
+      this.isStarting = false;
     } catch (error) {
       console.error("[Matrix] Failed to initialize Matrix client:", error);
+      this.isStarting = false;
       this.scheduleReconnect();
     }
   }
@@ -243,6 +256,7 @@ class MatrixClientManager {
       console.log("[Matrix] Stopping Matrix client...");
       this.client.stopClient();
       this.isStarted = false;
+      this.isStarting = false;
       this.isPrepared = false;
       console.log("[Matrix] Matrix client stopped");
     }
