@@ -222,25 +222,40 @@ export class CalendarPlugin implements DataSourcePlugin {
       {
         name: "get_upcoming_events",
         description:
-          "Get upcoming events from Google Calendar (REAL-TIME from API, not indexed database). Use this for 'what's on my calendar today/this week' type queries. Supports flexible date ranges. Always returns fresh data.",
+          `Get upcoming events from Google Calendar (REAL-TIME from API, not indexed database).
+
+          **When to use:**
+          - "What's on my calendar today?" - Automatically uses full day range
+          - "What's on my calendar this week?" - Automatically uses week range
+          - "What do I have tomorrow?" - Automatically uses tomorrow's full day
+          - "What's coming up?" - Uses next 7 days by default
+
+          **Smart features:**
+          - Automatically detects "today", "this week", "tomorrow" in queries and sets appropriate date ranges
+          - Returns ALL events for the specified period, including past events if within range
+          - Always returns fresh, real-time data from Google Calendar API
+
+          **Do NOT use this for:**
+          - Historical queries like "meetings last month" - use search_calendar_by_date instead
+          - Searching by attendee or location - use specific search tools instead`,
         parameters: [
           {
             name: "startDate",
             type: "string",
             required: false,
-            description: "Start date in ISO format (YYYY-MM-DD). Defaults to current date/time.",
+            description: "Start date in ISO format (YYYY-MM-DD). Leave empty for automatic detection from query.",
           },
           {
             name: "endDate",
             type: "string",
             required: false,
-            description: "End date in ISO format (YYYY-MM-DD). If not provided, uses 'days' parameter instead.",
+            description: "End date in ISO format (YYYY-MM-DD). Leave empty for automatic detection from query.",
           },
           {
             name: "days",
             type: "number",
             required: false,
-            description: "Number of days to look ahead from start date (default: 7). Only used if endDate is not provided.",
+            description: "Number of days to look ahead (default: 7). Only used if dates aren't auto-detected or specified.",
           },
         ],
         hasCustomExecution: true,
@@ -294,10 +309,10 @@ export class CalendarPlugin implements DataSourcePlugin {
   /**
    * Custom tool execution for tools with special handling
    */
-  async executeTool(toolName: string, params: QueryParams): Promise<string> {
+  async executeTool(toolName: string, params: QueryParams, originalQuery?: string): Promise<string> {
     if (toolName === "get_upcoming_events") {
       try {
-        const events = await this.getUpcomingEventsRealtime(params);
+        const events = await this.getUpcomingEventsRealtime({ ...params, query: originalQuery });
 
         if (events.length === 0) {
           return "No upcoming events found in the specified time range.";
@@ -360,9 +375,46 @@ export class CalendarPlugin implements DataSourcePlugin {
    * Special method to handle real-time upcoming events query
    * This bypasses the indexed database and queries Google API directly
    */
-  async getUpcomingEventsRealtime(params: { startDate?: string; endDate?: string; days?: number } = {}) {
+  async getUpcomingEventsRealtime(params: { startDate?: string; endDate?: string; days?: number; query?: string } = {}) {
     try {
-      const { startDate, endDate, days = 7 } = params;
+      let { startDate, endDate, days = 7 } = params;
+
+      // Smart handling for "today" queries
+      if (params.query) {
+        const queryLower = params.query.toLowerCase();
+
+        // If query mentions "today", set date range to current day
+        if (queryLower.includes("today") || queryLower.includes("today's")) {
+          const today = new Date();
+          const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+          const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
+          startDate = startOfDay.toISOString().split('T')[0]; // YYYY-MM-DD
+          endDate = endOfDay.toISOString().split('T')[0];
+          console.log(`[CalendarPlugin] Detected 'today' query, using date range: ${startDate} to ${endDate}`);
+        }
+        // If query mentions "this week", set appropriate range
+        else if (queryLower.includes("this week")) {
+          const today = new Date();
+          const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay(), 0, 0, 0, 0);
+          const endOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() + (6 - today.getDay()), 23, 59, 59, 999);
+
+          startDate = startOfWeek.toISOString().split('T')[0];
+          endDate = endOfWeek.toISOString().split('T')[0];
+          console.log(`[CalendarPlugin] Detected 'this week' query, using date range: ${startDate} to ${endDate}`);
+        }
+        // If query mentions "tomorrow"
+        else if (queryLower.includes("tomorrow")) {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const startOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0, 0);
+          const endOfDay = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59, 999);
+
+          startDate = startOfDay.toISOString().split('T')[0];
+          endDate = endOfDay.toISOString().split('T')[0];
+          console.log(`[CalendarPlugin] Detected 'tomorrow' query, using date range: ${startDate} to ${endDate}`);
+        }
+      }
 
       const events = await getUpcomingEvents(days, startDate, endDate);
 

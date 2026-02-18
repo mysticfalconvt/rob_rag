@@ -64,11 +64,13 @@ function generateToolsForPlugin(
       name: toolDef.name,
       description: toolDef.description,
       schema,
-      func: async (params) => {
+      func: async (params, config) => {
         try {
           // Check if this tool has custom execution
           if (toolDef.hasCustomExecution && plugin.executeTool) {
-            return await plugin.executeTool(toolDef.name, params);
+            // Extract original query from config if available (for calendar tools)
+            const originalQuery = (config as any)?.configurable?.originalQuery;
+            return await plugin.executeTool(toolDef.name, params, originalQuery);
           }
 
           // Call the plugin's queryByMetadata method

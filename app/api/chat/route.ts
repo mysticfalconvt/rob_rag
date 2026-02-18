@@ -30,6 +30,7 @@ import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 import { generateUtilityTools } from "@/lib/utilityTools";
 import { routeQuery } from "@/lib/queryRouter";
 import { LLMRequestTracker } from "@/lib/llmTracking";
+import { routeToolSelection, filterToolsByRouting, explainToolSelection } from "@/lib/toolRouter";
 
 export async function POST(req: NextRequest) {
   try {
@@ -743,7 +744,17 @@ export async function POST(req: NextRequest) {
         // Get both plugin tools and utility tools
         const pluginTools = await generateToolsForConfiguredPlugins();
         const utilityTools = generateUtilityTools();
-        tools = [...pluginTools, ...utilityTools];
+        const allTools = [...pluginTools, ...utilityTools];
+
+        // Route tool selection based on query intent
+        const toolRouting = routeToolSelection(query);
+        tools = filterToolsByRouting(allTools, toolRouting);
+
+        // Log tool selection reasoning
+        console.log(explainToolSelection(toolRouting, tools.length));
+        if (toolRouting.suggestedTools) {
+          console.log(`[ToolRouter] Suggested tools: ${toolRouting.suggestedTools.join(", ")}`);
+        }
 
         if (tools.length > 0) {
           // Add guidance about tool usage
@@ -811,12 +822,13 @@ export async function POST(req: NextRequest) {
               if (tool) {
                 const toolStartTime = Date.now();
                 try {
-                  // Pass config with matrixRoomId for reminder tools, conversationHistory for note tools
+                  // Pass config with matrixRoomId for reminder tools, conversationHistory for note tools, originalQuery for calendar tools
                   const toolConfig = {
                     configurable: {
                       ...(matrixRoomId && { matrixRoomId }),
                       conversationHistory: messages,
                       userId,
+                      originalQuery: query, // Pass original query for smart calendar handling
                     }
                   };
                   const result = await tool.func(toolCall.args, toolConfig);

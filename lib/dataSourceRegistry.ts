@@ -89,8 +89,11 @@ export interface DataSourcePlugin {
   /**
    * Execute a tool with custom logic (optional)
    * Only called for tools with hasCustomExecution=true
+   * @param toolName - Name of the tool to execute
+   * @param params - Tool parameters
+   * @param originalQuery - Original user query (optional, for context-aware tool execution)
    */
-  executeTool?(toolName: string, params: QueryParams): Promise<any>;
+  executeTool?(toolName: string, params: QueryParams, originalQuery?: string): Promise<any>;
 
   /**
    * Scan and index data from this source
