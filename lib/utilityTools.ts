@@ -2,12 +2,13 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createReminderTool, listRemindersTool, cancelReminderTool } from "./tools/reminderTool";
 import { saveAssistantResponseTool } from "./tools/noteTool";
+import { webSearchTool, deepResearchTool, isWebSearchToolAvailable, isDeepResearchToolAvailable } from "./tools/webSearchTool";
 
 /**
  * Generate utility tools for common operations like date/time calculations
  */
 export function generateUtilityTools(): DynamicStructuredTool[] {
-  return [
+  const tools: DynamicStructuredTool[] = [
     createCurrentDateTimeTool(),
     createDateCalculationTool(),
     createDateDifferenceTool(),
@@ -16,6 +17,15 @@ export function generateUtilityTools(): DynamicStructuredTool[] {
     cancelReminderTool,
     saveAssistantResponseTool,
   ];
+
+  if (isWebSearchToolAvailable()) {
+    tools.push(webSearchTool);
+  }
+  if (isDeepResearchToolAvailable()) {
+    tools.push(deepResearchTool);
+  }
+
+  return tools;
 }
 
 /**

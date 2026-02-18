@@ -22,6 +22,8 @@ interface ChatInputProps {
   isSaving: boolean;
   /** When true (e.g. single-doc chat), default RAG mode on so the first message uses document context */
   defaultUseRag?: boolean;
+  useWebSearch: boolean;
+  webSearchAvailable: boolean;
   onChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onDirectLLMSubmit: (e: React.FormEvent) => void;
@@ -33,6 +35,7 @@ interface ChatInputProps {
   onToggleGoodreadsUser: (userId: string) => void;
   onSaveConversation: () => void;
   onDeleteConversation: () => void;
+  onToggleWebSearch: () => void;
 }
 
 export default function ChatInput({
@@ -46,6 +49,8 @@ export default function ChatInput({
   conversationId,
   isSaving,
   defaultUseRag = false,
+  useWebSearch,
+  webSearchAvailable,
   onChange,
   onSubmit,
   onDirectLLMSubmit,
@@ -57,6 +62,7 @@ export default function ChatInput({
   onToggleGoodreadsUser,
   onSaveConversation,
   onDeleteConversation,
+  onToggleWebSearch,
 }: ChatInputProps) {
   const [useRAG, setUseRAG] = useState(defaultUseRag);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -116,6 +122,22 @@ export default function ChatInput({
                 <span className={styles.toggleSwitch}></span>
               </label>
             </div>
+            {webSearchAvailable && (
+              <div className={`${styles.toggleButton} ${useWebSearch ? styles.toggleButtonActive : ''}`} title={useWebSearch ? "Web search enabled - results from the web will supplement your documents" : "Web search disabled"}>
+                <div className={styles.toggleIconContainer}>
+                  <i className="fas fa-globe"></i>
+                </div>
+                <label className={styles.toggleLabel}>
+                  <input
+                    type="checkbox"
+                    checked={useWebSearch}
+                    onChange={() => onToggleWebSearch()}
+                    className={styles.toggleInput}
+                  />
+                  <span className={styles.toggleSwitch}></span>
+                </label>
+              </div>
+            )}
           </div>
           <button
             type="button"

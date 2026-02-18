@@ -8,16 +8,18 @@ import { backgroundScheduler } from "./scheduler";
 import { matrixClient } from "./matrix/client";
 import { initializeMessageHandler } from "./matrix/messageHandler";
 
-let initialized = false;
-let matrixInitialized = false;
-let matrixInitializing = false;
+// Use globalThis to survive across Next.js module instances (instrumentation vs API routes)
+const globalInit = globalThis as any;
+if (globalInit.__robrag_init === undefined) globalInit.__robrag_init = false;
+if (globalInit.__robrag_matrixInit === undefined) globalInit.__robrag_matrixInit = false;
+if (globalInit.__robrag_matrixInitializing === undefined) globalInit.__robrag_matrixInitializing = false;
 
 /**
  * Initialize the application (core services only)
  * Safe to call multiple times - will only run once
  */
 export function initializeApp(): void {
-  if (initialized) {
+  if (globalInit.__robrag_init) {
     return;
   }
 
@@ -32,7 +34,7 @@ export function initializeApp(): void {
     backgroundScheduler.start();
   }
 
-  initialized = true;
+  globalInit.__robrag_init = true;
   console.log("[Init] Application initialization complete (Matrix will initialize on first use)");
 }
 
@@ -41,14 +43,14 @@ export function initializeApp(): void {
  * Safe to call multiple times - will only run once
  */
 export function initializeMatrix(): void {
-  if (matrixInitialized || matrixInitializing || typeof window !== 'undefined') {
-    if (matrixInitializing) {
+  if (globalInit.__robrag_matrixInit || globalInit.__robrag_matrixInitializing || typeof window !== 'undefined') {
+    if (globalInit.__robrag_matrixInitializing) {
       console.log("[Init] Matrix initialization already in progress, skipping");
     }
     return;
   }
 
-  matrixInitializing = true;
+  globalInit.__robrag_matrixInitializing = true;
   console.log("[Init] Initializing Matrix client...");
 
   // Initialize Matrix client (with delay for database readiness)
@@ -60,12 +62,12 @@ export function initializeMatrix(): void {
       matrixClient.onReady(() => {
         console.log("[Init] Matrix client is ready, initializing message handler...");
         initializeMessageHandler();
-        matrixInitialized = true;
-        matrixInitializing = false;
+        globalInit.__robrag_matrixInit = true;
+        globalInit.__robrag_matrixInitializing = false;
       });
     } catch (error) {
       console.error("[Init] Failed to initialize Matrix client:", error);
-      matrixInitializing = false; // Allow retry
+      globalInit.__robrag_matrixInitializing = false; // Allow retry
     }
   }, 5000); // 5 second delay
 }
@@ -74,5 +76,5 @@ export function initializeMatrix(): void {
  * Check if app has been initialized
  */
 export function isInitialized(): boolean {
-  return initialized;
+  return globalInit.__robrag_init;
 }

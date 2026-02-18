@@ -31,6 +31,7 @@ import { generateUtilityTools } from "@/lib/utilityTools";
 import { routeQuery } from "@/lib/queryRouter";
 import { LLMRequestTracker } from "@/lib/llmTracking";
 import { routeToolSelection, filterToolsByRouting, explainToolSelection } from "@/lib/toolRouter";
+import { searchWeb, searchDeep, formatWebResultsAsContext, isWebSearchConfigured } from "@/lib/webSearch";
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,6 +51,9 @@ export async function POST(req: NextRequest) {
       matrixRoomId,
       matrixSender,
       matrixDisplayName,
+      webSearchQuery,
+      webResearchQuery,
+      webSearchEnabled,
     } = body;
 
     // Check for internal service authentication (Matrix/Scheduler)
@@ -472,6 +476,57 @@ export async function POST(req: NextRequest) {
 
       context = contextParts.join("\n\n");
     } else {
+    }
+
+    // 1.5 Handle web search / research commands and toggle
+    let webSources: any[] = [];
+
+    if (webSearchQuery) {
+      // Explicit #search command - replace RAG context with web results
+      console.log(`[WebSearch] Explicit web search: "${webSearchQuery.substring(0, 50)}"`);
+      const webResponse = await searchWeb(webSearchQuery);
+      const webContext = formatWebResultsAsContext(webResponse);
+      context = webContext;
+      contextParts = [webContext];
+      webSources = webResponse.results.map((r) => ({
+        fileName: r.title,
+        filePath: r.url,
+        chunk: r.snippet,
+        score: r.score || 0,
+        source: "web_search",
+      }));
+      searchResults = []; // Clear RAG results
+    } else if (webResearchQuery) {
+      // Explicit #research command - replace RAG context with Perplexica results
+      console.log(`[WebSearch] Explicit deep research: "${webResearchQuery.substring(0, 50)}"`);
+      const webResponse = await searchDeep(webResearchQuery);
+      const webContext = formatWebResultsAsContext(webResponse);
+      context = webContext;
+      contextParts = [webContext];
+      webSources = webResponse.results.map((r) => ({
+        fileName: r.title,
+        filePath: r.url,
+        chunk: r.snippet,
+        score: r.score || 0,
+        source: "web_research",
+      }));
+      searchResults = []; // Clear RAG results
+    } else if (webSearchEnabled && isWebSearchConfigured()) {
+      // UI toggle - merge web results with RAG context
+      console.log(`[WebSearch] Web search toggle enabled, supplementing RAG context`);
+      const webResponse = await searchWeb(query);
+      if (webResponse.results.length > 0) {
+        const webContext = formatWebResultsAsContext(webResponse);
+        contextParts.push("\n--- Web Search Results ---\n" + webContext);
+        context = contextParts.join("\n\n");
+        webSources = webResponse.results.map((r) => ({
+          fileName: r.title,
+          filePath: r.url,
+          chunk: r.snippet,
+          score: r.score || 0,
+          source: "web_search",
+        }));
+      }
     }
 
     // 2. Build system prompt using customizable prompts
@@ -1009,7 +1064,7 @@ export async function POST(req: NextRequest) {
       sources: SourceData[];
     } = {
       type: "sources",
-      sources: shouldIncludeSources ? [
+      sources: shouldIncludeSources || webSources.length > 0 ? [
         ...searchResults.map((r) => ({
           fileName: r.metadata.fileName,
           filePath: r.metadata.filePath,
@@ -1018,6 +1073,7 @@ export async function POST(req: NextRequest) {
           source: r.metadata.source || "synced",
         })),
         ...additionalSources, // Add any sources from iterative retrieval
+        ...webSources, // Add any web search sources
       ] : [],
     };
 

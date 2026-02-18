@@ -103,6 +103,35 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       return;
     }
 
+    // Check for #search command
+    const trimmedMessage = messageText.trim();
+    const lowerTrimmed = trimmedMessage.toLowerCase();
+
+    if (lowerTrimmed.startsWith("#search ")) {
+      const searchQuery = trimmedMessage.substring(8).trim();
+      if (!searchQuery) {
+        await sendFormattedMessage(roomId, "⚠️ Please provide a search query. Usage: `#search your query here`");
+        return;
+      }
+      console.log(`[Matrix] Web search command in ${roomId}: "${searchQuery.substring(0, 50)}"`);
+      // Process as web search - handled in callRagFlow via webSearchQuery field
+      await handleWebCommand(event, roomId, sender, messageText, searchQuery, "search");
+      return;
+    }
+
+    // Check for #research command
+    if (lowerTrimmed.startsWith("#research ")) {
+      const researchQuery = trimmedMessage.substring(10).trim();
+      if (!researchQuery) {
+        await sendFormattedMessage(roomId, "⚠️ Please provide a research query. Usage: `#research your query here`");
+        return;
+      }
+      console.log(`[Matrix] Deep research command in ${roomId}: "${researchQuery.substring(0, 50)}"`);
+      // Process as deep research - handled in callRagFlow via webResearchQuery field
+      await handleWebCommand(event, roomId, sender, messageText, researchQuery, "research");
+      return;
+    }
+
     // Check if room is enabled
     const room = await prisma.matrixRoom.findUnique({
       where: { roomId },
@@ -242,6 +271,8 @@ async function callRagFlow(
   sender: string,
   displayName: string,
   useRag: boolean,
+  webSearchQuery?: string,
+  webResearchQuery?: string,
 ): Promise<{ text: string; sources?: any[] }> {
   try {
     const internalServiceKey = process.env.INTERNAL_SERVICE_KEY;
@@ -266,6 +297,8 @@ async function callRagFlow(
         matrixDisplayName: displayName,
         internalServiceKey,
         sourceFilter: useRag ? undefined : "none", // Disable RAG if useRag is false
+        ...(webSearchQuery && { webSearchQuery }),
+        ...(webResearchQuery && { webResearchQuery }),
       }),
     });
 
@@ -315,6 +348,76 @@ async function callRagFlow(
   } catch (error) {
     console.error("[Matrix] Error calling RAG flow:", error);
     throw error;
+  }
+}
+
+/**
+ * Handle #search and #research web commands
+ */
+async function handleWebCommand(
+  event: MatrixEvent,
+  roomId: string,
+  sender: string,
+  originalMessage: string,
+  webQuery: string,
+  type: "search" | "research",
+): Promise<void> {
+  // Send typing indicator and keep it alive
+  await matrixClient.sendTyping(roomId, true);
+  const typingInterval = setInterval(async () => {
+    try {
+      await matrixClient.sendTyping(roomId, true);
+    } catch (error) {
+      console.error("[Matrix] Error sending typing indicator:", error);
+    }
+  }, 10000);
+
+  try {
+    const displayName = await getMatrixUserDisplayName(roomId, sender!);
+
+    // Add user message to conversation history
+    const userMessage: ConversationMessage = {
+      role: "user",
+      content: originalMessage,
+      timestamp: Date.now(),
+    };
+    const history = roomConversations.get(roomId) || [];
+    history.push(userMessage);
+    roomConversations.set(roomId, history);
+
+    // Check room settings
+    const room = await prisma.matrixRoom.findUnique({ where: { roomId } });
+    const useRag = room?.useRag ?? true;
+
+    const response = await callRagFlow(
+      webQuery,
+      roomId,
+      sender!,
+      displayName,
+      useRag,
+      type === "search" ? webQuery : undefined,
+      type === "research" ? webQuery : undefined,
+    );
+
+    // Add assistant response to conversation history
+    const assistantMessage: ConversationMessage = {
+      role: "assistant",
+      content: response.text,
+      timestamp: Date.now(),
+    };
+    history.push(assistantMessage);
+    roomConversations.set(roomId, history);
+
+    await sendFormattedMessage(roomId, response.text, response.sources);
+  } catch (error) {
+    console.error("[Matrix] Error processing web command:", error);
+    await sendFormattedMessage(
+      roomId,
+      "❌ Sorry, I encountered an error processing your web search. Please try again later.",
+    );
+  } finally {
+    clearInterval(typingInterval);
+    await matrixClient.sendTyping(roomId, false);
   }
 }
 

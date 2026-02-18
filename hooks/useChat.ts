@@ -65,6 +65,7 @@ export function useChat(
       | "none"
       | string[],
     documentPath?: string | null,
+    webSearchEnabled?: boolean,
   ) => {
     if (!input.trim() || isLoading) return;
 
@@ -82,6 +83,16 @@ export function useChat(
         sourceFilter,
       };
       if (documentPath) body.documentPath = documentPath;
+      if (webSearchEnabled) body.webSearchEnabled = true;
+
+      // Detect #search and #research command prefixes
+      const trimmedInput = input.trim();
+      const lowerInput = trimmedInput.toLowerCase();
+      if (lowerInput.startsWith("#search ")) {
+        body.webSearchQuery = trimmedInput.substring(8).trim();
+      } else if (lowerInput.startsWith("#research ")) {
+        body.webResearchQuery = trimmedInput.substring(10).trim();
+      }
 
       const response = await fetch("/api/chat", {
         method: "POST",

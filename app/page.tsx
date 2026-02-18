@@ -32,6 +32,8 @@ function ChatPageContent() {
   const [goodreadsUsers, setGoodreadsUsers] = useState<
     Array<{ id: string; name: string; enabled: boolean }>
   >([]);
+  const [useWebSearch, setUseWebSearch] = useState(false);
+  const [webSearchAvailable, setWebSearchAvailable] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -46,6 +48,22 @@ function ChatPageContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Check if web search is available
+    const checkWebSearch = async () => {
+      try {
+        const res = await fetch("/api/web-search/status");
+        if (res.ok) {
+          const data = await res.json();
+          setWebSearchAvailable(data.available);
+        }
+      } catch (error) {
+        console.error("Error checking web search status:", error);
+      }
+    };
+    checkWebSearch();
+  }, []);
 
   useEffect(() => {
     // Fetch Goodreads users
@@ -121,7 +139,7 @@ function ChatPageContent() {
     if (!input.trim() || isLoading) return;
 
     const sourceFilter = getSourceFilter();
-    await sendMessage(input, sourceFilter, documentPath || undefined);
+    await sendMessage(input, sourceFilter, documentPath || undefined, useWebSearch);
     setInput("");
   };
 
@@ -227,6 +245,8 @@ function ChatPageContent() {
           conversationId={currentConversationId}
           isSaving={isSaving}
           defaultUseRag={!!documentPath}
+          useWebSearch={useWebSearch}
+          webSearchAvailable={webSearchAvailable}
           onChange={setInput}
           onSubmit={handleSubmit}
           onDirectLLMSubmit={handleDirectLLMSubmit}
@@ -238,6 +258,7 @@ function ChatPageContent() {
           onToggleGoodreadsUser={handleToggleGoodreadsUser}
           onSaveConversation={handleSaveConversation}
           onDeleteConversation={handleDeleteConversation}
+          onToggleWebSearch={() => setUseWebSearch(!useWebSearch)}
         />
       </div>
 

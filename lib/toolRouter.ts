@@ -18,6 +18,8 @@ export type ToolCategory =
   | "reminders"          // Reminder creation/management
   | "notes"              // Note saving/retrieval
   | "metadata_search"    // Specific metadata searches (by date, attendee, etc.)
+  | "web_search"         // Web search queries (current events, news, online lookups)
+  | "deep_research"      // Deep research queries (comprehensive analysis, academic)
   | "all";               // General queries that might need multiple tools
 
 /**
@@ -45,6 +47,11 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   const attendeeSearch = /\b(meetings? with|events? with|who attended)\b/;
   const locationSearch = /\b(events? at|meetings? at|at the location)\b/;
   const dateRangeSearch = /\b(between|from .* to|during|in (january|february|march|april|may|june|july|august|september|october|november|december))\b/;
+
+  // Web search patterns
+  const webSearchKeywords = /\b(search the web|current events|latest news|recent news|trending|2025|2026|google|look up online|what'?s happening|breaking news|stock price|weather forecast)\b/;
+  // Deep research patterns
+  const deepResearchKeywords = /\b(in-depth|detailed analysis|academic|comprehensive analysis|explain thoroughly|deep research|research paper|literature review)\b/;
 
   // Determine categories
   const categories: ToolCategory[] = [];
@@ -91,6 +98,18 @@ export function routeToolSelection(query: string): ToolRoutingResult {
     reasons.push("detected metadata-specific search criteria");
   }
 
+  // Check for web search queries
+  if (webSearchKeywords.test(lowerQuery)) {
+    categories.push("web_search");
+    reasons.push("detected web search keywords");
+  }
+
+  // Check for deep research queries
+  if (deepResearchKeywords.test(lowerQuery)) {
+    categories.push("deep_research");
+    reasons.push("detected deep research keywords");
+  }
+
   // If no specific categories matched, use all tools
   if (categories.length === 0) {
     categories.push("all");
@@ -111,6 +130,12 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   }
   if (categories.includes("notes")) {
     suggestedTools.push("save_assistant_response");
+  }
+  if (categories.includes("web_search")) {
+    suggestedTools.push("web_search", "get_current_datetime");
+  }
+  if (categories.includes("deep_research")) {
+    suggestedTools.push("deep_research");
   }
   if (attendeeSearch.test(lowerQuery)) {
     suggestedTools.push("search_calendar_by_attendee");
@@ -187,6 +212,15 @@ export function filterToolsByRouting(
         relevantToolNames.add("search_calendar_by_date");
         relevantToolNames.add("search_calendar_by_attendee");
         relevantToolNames.add("search_calendar_by_location");
+        break;
+
+      case "web_search":
+        relevantToolNames.add("web_search");
+        relevantToolNames.add("get_current_datetime");
+        break;
+
+      case "deep_research":
+        relevantToolNames.add("deep_research");
         break;
     }
   }
