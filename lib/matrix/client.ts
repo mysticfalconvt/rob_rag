@@ -62,16 +62,15 @@ class MatrixClientManager {
         return;
       }
 
-      console.log("[Matrix] Initializing Matrix client...");
-      console.log(`[Matrix] Homeserver: ${settings.matrixHomeserver}`);
-      console.log(`[Matrix] User ID: ${settings.matrixUserId || "not set"}`);
-      console.log(`[Matrix] Enabled: ${settings.matrixEnabled}`);
+      console.log(`[Matrix] Initializing client (${settings.matrixHomeserver}, user: ${settings.matrixUserId || "not set"})`);
 
-      // Create client
+      // Create client with suppressed HTTP request logging
+      const silentLogger = { debug() {}, info() {}, warn() {}, error() {}, trace() {}, getChild() { return silentLogger; } };
       this.client = createClient({
         baseUrl: settings.matrixHomeserver,
         accessToken: settings.matrixAccessToken,
         userId: settings.matrixUserId || undefined,
+        logger: silentLogger as any,
       });
 
       // Set up event handlers before starting
@@ -80,8 +79,7 @@ class MatrixClientManager {
       // Start the client
       await this.start();
 
-      console.log("[Matrix] Matrix client initialized successfully");
-      console.log("[Matrix] Waiting for sync to reach PREPARED state...");
+      console.log("[Matrix] Client initialized, waiting for sync...");
       this.isStarting = false;
     } catch (error) {
       console.error("[Matrix] Failed to initialize Matrix client:", error);
@@ -99,11 +97,10 @@ class MatrixClientManager {
     }
 
     try {
-      console.log("[Matrix] Starting Matrix client sync...");
       await this.client.startClient({ initialSyncLimit: 10 });
       this.isStarted = true;
       this.reconnectAttempts = 0; // Reset on successful start
-      console.log("[Matrix] Matrix client started");
+      // Client started
     } catch (error) {
       console.error("[Matrix] Failed to start Matrix client:", error);
       throw error;
@@ -118,10 +115,12 @@ class MatrixClientManager {
 
     // Handle sync state changes
     this.client.on(ClientEvent.Sync as any, async (state: SyncState) => {
-      console.log(`[Matrix] Sync state changed: ${state}`);
+      // Only log significant state changes, not routine SYNCING
+      if (state !== "SYNCING") {
+        console.log(`[Matrix] Sync state: ${state}`);
+      }
 
       if (state === "PREPARED") {
-        console.log("[Matrix] Client is ready");
         this.isPrepared = true;
         this.reconnectAttempts = 0; // Reset on successful sync
 
@@ -134,7 +133,7 @@ class MatrixClientManager {
 
         // Call the ready callback if set
         if (this.onReadyCallback) {
-          console.log("[Matrix] Calling ready callback...");
+          // Invoke ready callback
           this.onReadyCallback();
         }
       } else if (state === "ERROR") {
@@ -361,7 +360,6 @@ class MatrixClientManager {
     }
 
     const rooms = this.getRooms();
-    console.log(`[Matrix] Syncing ${rooms.length} rooms to database...`);
 
     // Get list of room IDs we're currently in
     const joinedRoomIds = new Set<string>();
@@ -373,7 +371,6 @@ class MatrixClientManager {
 
         // Only sync rooms we're actually in
         if (myMembership !== "join") {
-          console.log(`[Matrix] Skipping room ${roomId} with membership: ${myMembership}`);
           continue;
         }
 
@@ -392,7 +389,7 @@ class MatrixClientManager {
           },
         });
 
-        console.log(`[Matrix] Synced room: ${room.name || roomId}`);
+        // Room synced successfully
       } catch (error) {
         console.error(`[Matrix] Failed to sync room ${room.roomId}:`, error);
       }
@@ -406,7 +403,7 @@ class MatrixClientManager {
 
       for (const dbRoom of dbRooms) {
         if (!joinedRoomIds.has(dbRoom.roomId)) {
-          console.log(`[Matrix] Removing stale room from database: ${dbRoom.roomId}`);
+          console.log(`[Matrix] Removing stale room: ${dbRoom.roomId}`);
           await prisma.matrixRoom.delete({
             where: { roomId: dbRoom.roomId }
           });
@@ -416,7 +413,7 @@ class MatrixClientManager {
       console.error(`[Matrix] Failed to clean up stale rooms:`, error);
     }
 
-    console.log(`[Matrix] Room sync complete`);
+    console.log(`[Matrix] Synced ${joinedRoomIds.size} rooms`);
   }
 
   /**

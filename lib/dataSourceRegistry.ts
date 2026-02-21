@@ -117,13 +117,7 @@ class DataSourceRegistry {
    * Register a new data source plugin
    */
   register(plugin: DataSourcePlugin): void {
-    if (this.plugins.has(plugin.name)) {
-      console.warn(
-        `[DataSourceRegistry] Plugin '${plugin.name}' is already registered, overwriting`,
-      );
-    }
     this.plugins.set(plugin.name, plugin);
-    console.log(`[DataSourceRegistry] Registered plugin: ${plugin.name}`);
   }
 
   /**

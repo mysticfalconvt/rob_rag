@@ -68,9 +68,10 @@ function generateToolsForPlugin(
         try {
           // Check if this tool has custom execution
           if (toolDef.hasCustomExecution && plugin.executeTool) {
-            // Extract original query from config if available (for calendar tools)
+            // Extract original query and userId from config if available
             const originalQuery = (config as any)?.configurable?.originalQuery;
-            return await plugin.executeTool(toolDef.name, params, originalQuery);
+            const userId = (config as any)?.configurable?.userId;
+            return await plugin.executeTool(toolDef.name, { ...params, userId }, originalQuery);
           }
 
           // Call the plugin's queryByMetadata method

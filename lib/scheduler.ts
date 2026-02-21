@@ -18,7 +18,7 @@ class BackgroundScheduler {
       return;
     }
 
-    console.log("[Scheduler] Starting background scheduler");
+    // Background scheduler started
     this.isRunning = true;
 
     // Initialize Matrix client after a delay to avoid module loading issues

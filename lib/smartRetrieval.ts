@@ -123,15 +123,7 @@ export function analyzeQuery(query: string): QueryAnalysis {
     suggestedChunkCount = Math.max(suggestedChunkCount, 5);
   }
 
-  console.log("[SmartRetrieval] Query analysis:", {
-    queryType,
-    complexity,
-    suggestedSources,
-    suggestedChunkCount,
-    confidence: confidence.toFixed(2),
-    bookMatches: bookMatches.length,
-    docMatches: docMatches.length,
-  });
+  // Detailed analysis available at debug level if needed
 
   return {
     queryType,
@@ -192,10 +184,7 @@ export async function smartSearch(
   ) {
     const chunkCount = Math.min(analysis.suggestedChunkCount, maxChunks);
 
-    console.log(
-      `[SmartRetrieval] High confidence (${analysis.confidence.toFixed(2)}), using suggested sources:`,
-      analysis.suggestedSources,
-    );
+    // High confidence: using suggested sources directly
 
     const results = await search(query, chunkCount, analysis.suggestedSources, onEmbeddingMetrics);
 
@@ -207,9 +196,6 @@ export async function smartSearch(
   }
 
   // Low confidence or general query: do two-stage search
-  console.log(
-    "[SmartRetrieval] Low confidence or general query, doing two-stage search",
-  );
 
   // Stage 1: Probe with small number from all sources
   const probeResults = await search(query, 10, "all", onEmbeddingMetrics); // Get 10 samples from all sources
@@ -244,14 +230,7 @@ export async function smartSearch(
 
   sourceAverages.sort((a, b) => b.avgScore - a.avgScore);
 
-  console.log(
-    "[SmartRetrieval] Probe results by source:",
-    sourceAverages.map((s) => ({
-      source: s.source,
-      avgScore: s.avgScore.toFixed(3),
-      count: s.count,
-    })),
-  );
+  // Probe results analyzed
 
   // If top source is significantly better (>15% better avg score), focus on it
   const topSource = sourceAverages[0];
@@ -266,20 +245,16 @@ export async function smartSearch(
   ) {
     // Top source is clearly better
     focusedSources = [topSource.source];
-    console.log(
-      `[SmartRetrieval] Top source '${topSource.source}' significantly better, focusing search`,
-    );
+    // Focusing on top source
   } else if (
     sourceAverages.length > 2 &&
     topSource.avgScore > sourceAverages[2].avgScore * 1.2
   ) {
     // Top 2 sources are better than the rest
     focusedSources = [topSource.source, secondSource.source];
-    console.log(
-      `[SmartRetrieval] Top 2 sources better, focusing on: ${focusedSources.join(", ")}`,
-    );
+    // Focusing on top 2 sources
   } else {
-    console.log("[SmartRetrieval] No clear winner, searching all sources");
+    // No clear winner, searching all sources
   }
 
   // Stage 2: Get more results from focused sources

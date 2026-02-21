@@ -25,6 +25,7 @@ model AuthUser {
   conversations   Conversation[]
   uploadedFiles   IndexedFile[]
   sessions        Session[]
+  emailAccounts   EmailAccount[]
 
   @@index([email])
   @@index([role])
@@ -381,6 +382,39 @@ model CalendarEvent {
   @@index([startTime])
   @@index([endTime])
   @@index([embedding])
+}
+
+model EmailAccount {
+  id                String    @id @default(uuid())
+  userId            String
+  provider          String    // "gmail" | "zoho"
+  email             String
+  label             String?   // User-friendly label like "Work Gmail", "Personal Zoho"
+  permissions       String    @default("read") // "read" | "read_write" | "read_write_delete"
+  enabled           Boolean   @default(true)
+
+  // Gmail OAuth fields
+  gmailAccessToken  String?
+  gmailRefreshToken String?
+  gmailTokenExpiry  DateTime?
+
+  // Zoho IMAP fields
+  imapHost          String?   @default("imap.zoho.com")
+  imapPort          Int?      @default(993)
+  imapPassword      String?
+
+  // Status
+  lastConnected     DateTime?
+  connectionError   String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, email])
+  @@index([userId])
+  @@index([provider])
+  @@index([enabled])
 }
 
 model MatrixRoom {

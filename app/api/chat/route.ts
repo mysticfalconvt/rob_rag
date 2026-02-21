@@ -245,7 +245,8 @@ export async function POST(req: NextRequest) {
     const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
     const isReminderQuery = /\b(remind me|reminder|set a reminder|schedule|create reminder)\b/i.test(query);
     const isListQuery = /\b(list (my )?reminders?|show (my )?reminders?|what reminders)\b/i.test(query);
-    const skipRagForTools = (isCountingQuery || isReminderQuery || isListQuery) && sourceFilter !== "none";
+    const isEmailQuery = /\b(email|emails|e-mail|inbox|unread mail|mailbox|mail from)\b/i.test(query);
+    const skipRagForTools = (isCountingQuery || isReminderQuery || isListQuery || isEmailQuery) && sourceFilter !== "none";
 
     // Single-document chat: use only this doc as context (full content or chunked vector search)
     const singleDocPath =
@@ -548,11 +549,19 @@ export async function POST(req: NextRequest) {
       }
       systemPrompt += matrixFormattingNote;
     } else if (skipRagForTools) {
-      // For counting queries, use a special prompt that emphasizes tool usage
-      systemPrompt =
-        `You are a helpful assistant with access to database query tools. ` +
-        `The user has asked a counting or metadata query. You should use the appropriate tool to get accurate results from the database. ` +
-        `Do not make up or estimate numbers - only use the exact counts returned by the tools.`;
+      // For tool-only queries (counting, email, reminders), use a prompt that emphasizes tool usage
+      if (isEmailQuery) {
+        systemPrompt =
+          `You are a helpful assistant with access to email tools that can search, list, read, archive, and delete emails ` +
+          `across the user's connected email accounts (Gmail and Zoho Mail). ` +
+          `You MUST use the available email tools (search_email, list_unread_email, get_email_detail, archive_email, delete_email, cleanup_old_email) to fulfill the user's request. ` +
+          `NEVER say you cannot access the user's email - you CAN through these tools. Always call the appropriate tool.`;
+      } else {
+        systemPrompt =
+          `You are a helpful assistant with access to database query tools. ` +
+          `The user has asked a counting or metadata query. You should use the appropriate tool to get accurate results from the database. ` +
+          `Do not make up or estimate numbers - only use the exact counts returned by the tools.`;
+      }
       if (userContextString) {
         systemPrompt += `\n\n${userContextString}`;
       }
@@ -813,14 +822,23 @@ export async function POST(req: NextRequest) {
 
         if (tools.length > 0) {
           // Add guidance about tool usage
-          const toolGuidanceMessage = new SystemMessage(
+          let toolGuidanceText =
             `You have access to tools that query databases directly for ACCURATE counts and metadata. ` +
             `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
             `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
             `The context documents are just a semantic search sample (limited to ~20 items). ` +
             `The tools query the FULL database and return the ACCURATE total count. ` +
-            `ALWAYS report the count from the tool result, not from the context.`,
-          );
+            `ALWAYS report the count from the tool result, not from the context.`;
+
+          // Add email-specific guidance when email tools are available
+          if (tools.some((t: any) => t.name.includes("email"))) {
+            toolGuidanceText +=
+              ` You also have email tools that can search, list, and manage emails across the user's connected accounts. ` +
+              `When the user asks about emails, inbox, unread messages, or wants to manage mail, ALWAYS use the email tools. ` +
+              `Never say you cannot access the user's email.`;
+          }
+
+          const toolGuidanceMessage = new SystemMessage(toolGuidanceText);
           const messagesWithGuidance = [
             ...langchainMessages,
             toolGuidanceMessage,
@@ -1023,11 +1041,32 @@ export async function POST(req: NextRequest) {
                     ),
                   );
                 } else {
-                  langchainMessages.push(
-                    new SystemMessage(
-                      `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
-                    ),
+                  // Check if email tools were used
+                  const usedEmailTool = toolCheckResponse.tool_calls?.some((tc: any) =>
+                    tc.name.includes("email")
                   );
+
+                  if (usedEmailTool) {
+                    // Replace the system prompt to stop the model from hallucinating tool calls
+                    langchainMessages[0] = new SystemMessage(
+                      `You are a helpful assistant. The user asked about their email. ` +
+                      `The email data has already been retrieved and is provided below. ` +
+                      `Present the results clearly and helpfully. Do NOT attempt to call any tools or functions.` +
+                      (userContextString ? `\n\n${userContextString}` : "") +
+                      matrixFormattingNote
+                    );
+                    langchainMessages.push(
+                      new SystemMessage(
+                        `Email results:\n\n${toolResultsText}\n\nPresent these email results to the user in a clear, readable format.`,
+                      ),
+                    );
+                  } else {
+                    langchainMessages.push(
+                      new SystemMessage(
+                        `Tool execution results:\n\n${toolResultsText}\n\nUse these results to answer the user's question.`,
+                      ),
+                    );
+                  }
                 }
               }
             }
@@ -1035,6 +1074,90 @@ export async function POST(req: NextRequest) {
         }
       } catch (error) {
         // Error in tool calling flow, continue without tools
+        console.error("[Tools] Tool calling flow error:", error);
+      }
+    }
+
+    // Fallback: If this is an email query and the LLM didn't call email tools,
+    // force-execute the email tool directly. This handles models with poor tool-calling support.
+    const emailToolWasCalled = langchainMessages.some(
+      (m) => typeof m.content === "string" && m.content.includes("Tool 'search_email'") || m.content.toString().includes("Tool 'list_unread_email'")
+    );
+
+    if (isEmailQuery && skipRagForTools && !emailToolWasCalled) {
+      console.log("[EmailFallback] LLM did not call email tools, executing directly");
+      try {
+        const { getPlugin } = await import("@/lib/plugins");
+        const emailPlugin = getPlugin("email");
+        if (emailPlugin?.executeTool) {
+          // Determine the best tool and params from the query
+          const isUnreadQuery = /\b(unread|new|unseen)\b/i.test(query);
+          const toolName = isUnreadQuery ? "list_unread_email" : "search_email";
+
+          // Extract search params from query
+          const toolParams: any = { userId };
+
+          // Extract date filters
+          const todayMatch = /\b(today|today's)\b/i.test(query);
+          if (todayMatch) {
+            const today = new Date().toISOString().split("T")[0];
+            toolParams.after = today;
+          }
+
+          // Extract "from" filter — but not time expressions like "from today/this/last"
+          const fromMatch = query.match(/(?:from|by)\s+(\S+)/i);
+          if (fromMatch) {
+            const candidate = fromMatch[1].toLowerCase();
+            const timeWords = ["today", "yesterday", "this", "last", "the", "my", "a", "an", "now", "recent"];
+            if (!timeWords.includes(candidate)) {
+              toolParams.from = fromMatch[1];
+            }
+          }
+
+          // Extract account filter
+          const accountMatch = query.match(/\b([\w.-]+@[\w.-]+\.\w+)\b/);
+          if (accountMatch) toolParams.accountEmail = accountMatch[1];
+
+          // Check for specific account references by domain
+          if (/\b(zoho|boskind\.tech|\.tech)\b/i.test(query)) {
+            // Try to find the Zoho account email
+            const emailAccounts = await prisma.emailAccount.findMany({
+              where: { userId, enabled: true, provider: "zoho" },
+              select: { email: true },
+            });
+            if (emailAccounts.length > 0) {
+              toolParams.accountEmail = emailAccounts[0].email;
+            }
+          } else if (/\b(gmail|google)\b/i.test(query)) {
+            const emailAccounts = await prisma.emailAccount.findMany({
+              where: { userId, enabled: true, provider: "gmail" },
+              select: { email: true },
+            });
+            if (emailAccounts.length > 0) {
+              toolParams.accountEmail = emailAccounts[0].email;
+            }
+          }
+
+          console.log(`[EmailFallback] Executing ${toolName} with params:`, toolParams);
+          const result = await emailPlugin.executeTool(toolName, toolParams, query);
+          console.log(`[EmailFallback] Got result (${result.length} chars)`);
+
+          // Replace system prompt to prevent model from hallucinating tool calls
+          langchainMessages[0] = new SystemMessage(
+            `You are a helpful assistant. The user asked about their email. ` +
+            `The email data has already been retrieved and is provided below. ` +
+            `Present the results clearly and helpfully. Do NOT attempt to call any tools or functions.` +
+            (userContextString ? `\n\n${userContextString}` : "") +
+            matrixFormattingNote
+          );
+          langchainMessages.push(
+            new SystemMessage(
+              `Email results:\n\n${result}\n\nPresent these email results to the user in a clear, readable format.`
+            ),
+          );
+        }
+      } catch (error) {
+        console.error("[EmailFallback] Error:", error);
       }
     }
 

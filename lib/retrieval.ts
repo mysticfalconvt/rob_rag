@@ -28,7 +28,7 @@ export async function search(
 ): Promise<SearchResult[]> {
   try {
     const queryEmbedding = await generateEmbedding(query, onEmbeddingMetrics);
-    console.log("[Retrieval] Using PostgreSQL pgvector for search");
+    // Using PostgreSQL pgvector for search
     const results = await searchWithPgVector(queryEmbedding, limit, sourceFilter, documentPath);
 
     // Apply tag-based score boosting

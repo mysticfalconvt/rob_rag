@@ -18,6 +18,7 @@ export type ToolCategory =
   | "reminders"          // Reminder creation/management
   | "notes"              // Note saving/retrieval
   | "metadata_search"    // Specific metadata searches (by date, attendee, etc.)
+  | "email"              // Email queries (inbox, unread, mail, sender)
   | "web_search"         // Web search queries (current events, news, online lookups)
   | "deep_research"      // Deep research queries (comprehensive analysis, academic)
   | "all";               // General queries that might need multiple tools
@@ -47,6 +48,10 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   const attendeeSearch = /\b(meetings? with|events? with|who attended)\b/;
   const locationSearch = /\b(events? at|meetings? at|at the location)\b/;
   const dateRangeSearch = /\b(between|from .* to|during|in (january|february|march|april|may|june|july|august|september|october|november|december))\b/;
+
+  // Email patterns
+  const emailKeywords = /\b(email|emails|e-mail|inbox|unread mail|unread email|mailbox|mail from|sender|gmail|zoho)\b/;
+  const emailActionKeywords = /\b(archive|delete|cleanup|clean up|trash)\b.*\b(email|emails|mail|message|messages)\b|\b(email|emails|mail|message|messages)\b.*\b(archive|delete|cleanup|clean up|trash)\b/;
 
   // Web search patterns
   const webSearchKeywords = /\b(search the web|current events|latest news|recent news|trending|2025|2026|google|look up online|what'?s happening|breaking news|stock price|weather forecast)\b/;
@@ -81,8 +86,9 @@ export function routeToolSelection(query: string): ToolRoutingResult {
     }
   }
 
-  // Check for calendar queries
-  if (calendarKeywords.test(lowerQuery) || todayKeywords.test(lowerQuery) || upcomingKeywords.test(lowerQuery)) {
+  // Check for calendar queries (but not if query is clearly about email)
+  const isEmailContext = emailKeywords.test(lowerQuery);
+  if (calendarKeywords.test(lowerQuery) || ((todayKeywords.test(lowerQuery) || upcomingKeywords.test(lowerQuery)) && !isEmailContext)) {
     if (historicalKeywords.test(lowerQuery)) {
       categories.push("calendar_historical");
       reasons.push("detected historical calendar query");
@@ -96,6 +102,12 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   if (attendeeSearch.test(lowerQuery) || locationSearch.test(lowerQuery) || dateRangeSearch.test(lowerQuery)) {
     categories.push("metadata_search");
     reasons.push("detected metadata-specific search criteria");
+  }
+
+  // Check for email queries
+  if (emailKeywords.test(lowerQuery) || emailActionKeywords.test(lowerQuery)) {
+    categories.push("email");
+    reasons.push("detected email-related keywords");
   }
 
   // Check for web search queries
@@ -136,6 +148,15 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   }
   if (categories.includes("deep_research")) {
     suggestedTools.push("deep_research");
+  }
+  if (categories.includes("email")) {
+    if (emailActionKeywords.test(lowerQuery)) {
+      suggestedTools.push("archive_email", "delete_email", "cleanup_old_email");
+    } else if (/\bunread\b/.test(lowerQuery)) {
+      suggestedTools.push("list_unread_email");
+    } else {
+      suggestedTools.push("search_email", "list_unread_email");
+    }
   }
   if (attendeeSearch.test(lowerQuery)) {
     suggestedTools.push("search_calendar_by_attendee");
@@ -212,6 +233,15 @@ export function filterToolsByRouting(
         relevantToolNames.add("search_calendar_by_date");
         relevantToolNames.add("search_calendar_by_attendee");
         relevantToolNames.add("search_calendar_by_location");
+        break;
+
+      case "email":
+        relevantToolNames.add("search_email");
+        relevantToolNames.add("list_unread_email");
+        relevantToolNames.add("get_email_detail");
+        relevantToolNames.add("archive_email");
+        relevantToolNames.add("delete_email");
+        relevantToolNames.add("cleanup_old_email");
         break;
 
       case "web_search":

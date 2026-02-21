@@ -67,7 +67,6 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
 
     // Check if we've already processed this event
     if (processedEvents.has(eventId)) {
-      console.log(`[Matrix] Skipping duplicate event ${eventId}`);
       return;
     }
 
@@ -93,12 +92,12 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       return;
     }
 
-    console.log(`[Matrix] Received message in ${roomId} from ${sender}: ${messageText.substring(0, 100)}`);
+    // Message received
 
     // Check for #clear command first
     if (messageText.trim().toLowerCase() === "#clear") {
       roomConversations.delete(roomId);
-      console.log(`[Matrix] Context cleared for room ${roomId}`);
+      // Context cleared
       await sendFormattedMessage(roomId, "✅ Context cleared. Starting fresh conversation.");
       return;
     }
@@ -113,8 +112,7 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         await sendFormattedMessage(roomId, "⚠️ Please provide a search query. Usage: `#search your query here`");
         return;
       }
-      console.log(`[Matrix] Web search command in ${roomId}: "${searchQuery.substring(0, 50)}"`);
-      // Process as web search - handled in callRagFlow via webSearchQuery field
+      // Process as web search
       await handleWebCommand(event, roomId, sender, messageText, searchQuery, "search");
       return;
     }
@@ -126,8 +124,7 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         await sendFormattedMessage(roomId, "⚠️ Please provide a research query. Usage: `#research your query here`");
         return;
       }
-      console.log(`[Matrix] Deep research command in ${roomId}: "${researchQuery.substring(0, 50)}"`);
-      // Process as deep research - handled in callRagFlow via webResearchQuery field
+      // Process as deep research
       await handleWebCommand(event, roomId, sender, messageText, researchQuery, "research");
       return;
     }
@@ -137,22 +134,14 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       where: { roomId },
     });
 
-    if (!room) {
-      console.log(`[Matrix] Room ${roomId} not in database, skipping`);
+    if (!room || !room.enabled) {
       return;
     }
 
-    if (!room.enabled) {
-      console.log(`[Matrix] Room ${roomId} is disabled, skipping`);
-      return;
-    }
-
-    const useRag = room.useRag ?? true; // Default to true if not set
-    console.log(`[Matrix] Room ${roomId} useRag setting: ${useRag}`);
+    const useRag = room.useRag ?? true;
 
     // Check rate limiting
     if (isRateLimited(roomId)) {
-      console.log(`[Matrix] Room ${roomId} is rate limited, skipping`);
       await sendFormattedMessage(
         roomId,
         "⚠️ Rate limit exceeded. Please wait a moment before sending more messages.",
@@ -175,7 +164,6 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
     try {
       // Get user display name for better context
       const displayName = await getMatrixUserDisplayName(roomId, sender);
-      console.log(`[Matrix] Processing message from ${displayName} (${sender})`);
 
       // Add user message to conversation history
       const userMessage: ConversationMessage = {
@@ -257,7 +245,7 @@ function getPrunedHistory(roomId: string, currentMessage: string): Array<{ role:
   // Always include the current message (it's already added to history before this call)
   // The last message in history is the current user message, so it's already included
 
-  console.log(`[Matrix] Context for room ${roomId}: ${messages.length} messages (pruned ${history.length - prunedHistory.length} old messages)`);
+  // Context built: messages.length messages after pruning
 
   return messages;
 }
@@ -452,7 +440,7 @@ export function initializeMessageHandler(): void {
     }
   }
 
-  console.log("[Matrix] Initializing message handler...");
+  // Initializing message handler
 
   // Listen for timeline events (new messages)
   client.on(RoomEvent.Timeline as any, async (event: MatrixEvent, room: Room | undefined) => {
@@ -473,5 +461,5 @@ export function initializeMessageHandler(): void {
 
   handlerInitialized = true;
   registeredClient = client;
-  console.log("[Matrix] Message handler initialized");
+  // Message handler initialized
 }

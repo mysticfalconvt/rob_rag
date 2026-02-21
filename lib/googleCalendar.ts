@@ -111,7 +111,7 @@ function isAuthError(error: any): boolean {
   if (!error) return false;
 
   const errorMessage = error.message?.toLowerCase() || "";
-  const errorCode = error.code?.toLowerCase() || "";
+  const errorCode = String(error.code || "").toLowerCase();
 
   // Check for common auth error patterns
   return (

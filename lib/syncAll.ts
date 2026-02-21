@@ -2,6 +2,8 @@ import prisma from "./prisma";
 import { syncCalendarEvents, indexCalendarEvents } from "./googleCalendar";
 import { scanPaperlessDocuments } from "./indexer";
 import { parseGoodreadsRSS, importBooksForUser, indexGoodreadsBooks } from "./goodreads";
+import { refreshGmailTokens } from "./email/gmailProvider";
+import { EmailAccountData } from "./email/types";
 
 interface SyncResult {
   calendar: number;
@@ -91,6 +93,25 @@ export async function syncAllDataSources(): Promise<SyncResult> {
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
     console.error("[Sync All] Paperless sync failed:", errorMsg);
     errors.push(`Paperless: ${errorMsg}`);
+  }
+
+  // 4. Refresh Gmail tokens (keeps tokens fresh for on-demand queries)
+  try {
+    console.log("[Sync All] Refreshing Gmail tokens...");
+    const gmailAccounts = await prisma.emailAccount.findMany({
+      where: { provider: "gmail", enabled: true, gmailRefreshToken: { not: null } },
+    });
+
+    let refreshed = 0;
+    for (const account of gmailAccounts) {
+      const success = await refreshGmailTokens(account as EmailAccountData);
+      if (success) refreshed++;
+    }
+    console.log(`[Sync All] Gmail tokens: ${refreshed}/${gmailAccounts.length} refreshed`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[Sync All] Gmail token refresh failed:", errorMsg);
+    errors.push(`Gmail tokens: ${errorMsg}`);
   }
 
   // Update last sync status in database

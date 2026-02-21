@@ -8,6 +8,7 @@ import CustomOcrConfiguration from "@/components/CustomOcrConfiguration";
 import SyncedFilesConfiguration from "@/components/SyncedFilesConfiguration";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
 import GoogleCalendarConfig from "@/components/GoogleCalendarConfig";
+import EmailConfiguration from "@/components/EmailConfiguration";
 import MatrixConfiguration from "@/components/MatrixConfiguration";
 import PromptConfiguration from "@/components/PromptConfiguration";
 import UserProfile from "@/components/UserProfile";
@@ -517,6 +518,8 @@ export default function ConfigPage() {
             <ContextWindowSettings />
 
             <GoogleCalendarConfig />
+
+            <EmailConfiguration />
 
             <MatrixConfiguration />
 
