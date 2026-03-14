@@ -46,8 +46,13 @@ function isRateLimited(roomId: string): boolean {
 
 /**
  * Track processed events to prevent duplicates
+ * Uses globalThis to survive across Next.js module re-evaluations
  */
-const processedEvents = new Set<string>();
+const _global = globalThis as any;
+if (!_global.__robrag_processedEvents) {
+  _global.__robrag_processedEvents = new Set<string>();
+}
+const processedEvents: Set<string> = _global.__robrag_processedEvents;
 const EVENT_CACHE_SIZE = 1000; // Keep track of last 1000 events
 
 /**
@@ -409,8 +414,9 @@ async function handleWebCommand(
   }
 }
 
-let handlerInitialized = false;
-let registeredClient: any = null; // Track which client has the listener
+// Use globalThis to survive across Next.js module re-evaluations in production
+if (_global.__robrag_handlerInitialized === undefined) _global.__robrag_handlerInitialized = false;
+if (_global.__robrag_registeredClient === undefined) _global.__robrag_registeredClient = null;
 
 /**
  * Initialize message handler
@@ -425,22 +431,22 @@ export function initializeMessageHandler(): void {
   }
 
   // Check if already initialized for this specific client instance
-  if (handlerInitialized && registeredClient === client) {
+  if (_global.__robrag_handlerInitialized && _global.__robrag_registeredClient === client) {
     console.log("[Matrix] Message handler already initialized for this client, skipping");
     return;
   }
 
   // Remove old listener if client changed
-  if (registeredClient && registeredClient !== client) {
+  if (_global.__robrag_registeredClient && _global.__robrag_registeredClient !== client) {
     console.log("[Matrix] Client changed, removing old listener");
     try {
-      registeredClient.removeAllListeners(RoomEvent.Timeline);
+      _global.__robrag_registeredClient.removeAllListeners(RoomEvent.Timeline);
     } catch (error) {
       console.error("[Matrix] Failed to remove old listeners:", error);
     }
   }
 
-  // Initializing message handler
+  console.log("[Matrix] Registering message handler");
 
   // Listen for timeline events (new messages)
   client.on(RoomEvent.Timeline as any, async (event: MatrixEvent, room: Room | undefined) => {
@@ -459,7 +465,7 @@ export function initializeMessageHandler(): void {
     await handleMessage(event);
   });
 
-  handlerInitialized = true;
-  registeredClient = client;
+  _global.__robrag_handlerInitialized = true;
+  _global.__robrag_registeredClient = client;
   // Message handler initialized
 }
