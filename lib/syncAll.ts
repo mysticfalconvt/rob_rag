@@ -1,6 +1,6 @@
 import prisma from "./prisma";
 import { syncCalendarEvents, indexCalendarEvents } from "./googleCalendar";
-import { scanPaperlessDocuments } from "./indexer";
+import { scanPaperlessDocuments, cleanupStaleFileIndexes } from "./indexer";
 import { parseGoodreadsRSS, importBooksForUser, indexGoodreadsBooks } from "./goodreads";
 import { refreshGmailTokens } from "./email/gmailProvider";
 import { EmailAccountData } from "./email/types";
@@ -9,6 +9,7 @@ interface SyncResult {
   calendar: number;
   goodreads: number;
   paperless: number;
+  staleFilesRemoved: number;
 }
 
 /**
@@ -22,6 +23,7 @@ export async function syncAllDataSources(): Promise<SyncResult> {
     calendar: 0,
     goodreads: 0,
     paperless: 0,
+    staleFilesRemoved: 0,
   };
 
   const errors: string[] = [];
@@ -112,6 +114,18 @@ export async function syncAllDataSources(): Promise<SyncResult> {
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
     console.error("[Sync All] Gmail token refresh failed:", errorMsg);
     errors.push(`Gmail tokens: ${errorMsg}`);
+  }
+
+  // 5. Clean up stale file indexes (deleted or now-excluded files)
+  try {
+    console.log("[Sync All] Cleaning up stale file indexes...");
+    const removed = await cleanupStaleFileIndexes();
+    result.staleFilesRemoved = removed;
+    console.log(`[Sync All] Stale cleanup: ${removed} files removed`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[Sync All] Stale file cleanup failed:", errorMsg);
+    errors.push(`Stale cleanup: ${errorMsg}`);
   }
 
   // Update last sync status in database

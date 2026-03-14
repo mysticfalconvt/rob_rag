@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
       calendar: result.calendar,
       goodreads: result.goodreads,
       paperless: result.paperless,
+      staleFilesRemoved: result.staleFilesRemoved,
     });
   } catch (error) {
     console.error("[Sync All] Error:", error);

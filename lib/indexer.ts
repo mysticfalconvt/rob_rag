@@ -161,6 +161,47 @@ export async function deleteFileIndex(filePath: string) {
   }
 }
 
+/**
+ * Remove IndexedFile records for disk-backed sources whose files
+ * are no longer found by the scanner (deleted or now excluded).
+ * Returns the number of records cleaned up.
+ */
+export async function cleanupStaleFileIndexes(currentFiles?: string[]): Promise<number> {
+  // If no file list provided, scan fresh
+  const allFiles = currentFiles || await getAllFiles(config.DOCUMENTS_FOLDER_PATH);
+  const allFilesSet = new Set(allFiles);
+
+  // Find all disk-backed indexed files (synced, uploaded, user_note)
+  const dbFiles = await prisma.indexedFile.findMany({
+    where: {
+      source: { in: ["synced", "uploaded", "user_note"] },
+    },
+    select: { filePath: true },
+  });
+
+  let deleted = 0;
+  for (const dbFile of dbFiles) {
+    if (!allFilesSet.has(dbFile.filePath)) {
+      try {
+        await deleteFileIndex(dbFile.filePath);
+        deleted++;
+        console.log(`Cleaned up stale index: ${dbFile.filePath}`);
+      } catch (error) {
+        console.error(
+          `Failed to delete stale index for ${dbFile.filePath}:`,
+          error,
+        );
+      }
+    }
+  }
+
+  if (deleted > 0) {
+    console.log(`Cleanup complete: removed ${deleted} stale file indexes`);
+  }
+
+  return deleted;
+}
+
 export async function scanAllFiles() {
   console.log("Starting full scan...");
 
@@ -179,26 +220,8 @@ export async function scanAllFiles() {
     }
   }
 
-  // 2. Remove deleted local files
-  const dbFiles = await prisma.indexedFile.findMany({
-    where: { source: "local" },
-    select: { filePath: true },
-  });
-
-  let localDeleted = 0;
-  for (const dbFile of dbFiles) {
-    if (!allFiles.includes(dbFile.filePath)) {
-      try {
-        await deleteFileIndex(dbFile.filePath);
-        localDeleted++;
-      } catch (error) {
-        console.error(
-          `Failed to delete index for ${dbFile.filePath} during scan:`,
-          error,
-        );
-      }
-    }
-  }
+  // 2. Remove stale local files (deleted from disk or now excluded from scanning)
+  const localDeleted = await cleanupStaleFileIndexes(allFiles);
 
   console.log(
     `Local scan complete. Indexed: ${localIndexed}, Deleted: ${localDeleted}`,
