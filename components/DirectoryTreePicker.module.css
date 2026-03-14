@@ -1,0 +1,150 @@
+.treeContainer {
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  background: #fafafa;
+  font-size: 0.85rem;
+}
+
+.loading {
+  padding: 1rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+.error {
+  padding: 0.75rem;
+  color: #dc2626;
+  font-size: 0.85rem;
+}
+
+.nodeRow {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nodeRow:hover {
+  background: rgba(59, 130, 246, 0.06);
+  border-radius: 4px;
+}
+
+.toggleBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.15rem;
+  font-size: 0.7rem;
+  color: #6b7280;
+  width: 1rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.togglePlaceholder {
+  width: 1rem;
+  flex-shrink: 0;
+}
+
+.checkbox {
+  margin: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkbox:disabled {
+  cursor: not-allowed;
+}
+
+.dirName {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.systemExcluded .dirName {
+  color: #9ca3af;
+}
+
+.fileBadge {
+  font-size: 0.7rem;
+  color: #6b7280;
+  margin-left: 0.25rem;
+}
+
+.systemBadge {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #9ca3af;
+  margin-left: 0.35rem;
+  font-weight: 500;
+}
+
+.childrenContainer {
+  padding-left: 1.25rem;
+}
+
+.rootInfo {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.rootPath {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  .treeContainer {
+    background: #1a1a1a;
+    border-color: #333;
+  }
+
+  .loading {
+    color: #9ca3af;
+  }
+
+  .nodeRow:hover {
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .toggleBtn {
+    color: #9ca3af;
+  }
+
+  .dirName {
+    color: #ededed;
+  }
+
+  .systemExcluded .dirName {
+    color: #6b7280;
+  }
+
+  .fileBadge {
+    color: #9ca3af;
+  }
+
+  .systemBadge {
+    background: #262626;
+    color: #6b7280;
+  }
+
+  .rootInfo {
+    color: #9ca3af;
+    border-bottom-color: #333;
+  }
+
+  .rootPath {
+    color: #6b7280;
+  }
+}

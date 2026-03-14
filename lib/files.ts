@@ -5,6 +5,10 @@ import matter from "gray-matter";
 
 const pdf = require("pdf-parse");
 
+export const SYSTEM_EXCLUDED_DIRS = [
+  "node_modules", ".git", ".next", "temp_images", ".archive", "Custom_Docs"
+];
+
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import mammoth from "mammoth";
 
@@ -109,11 +113,12 @@ export async function processFile(filePath: string): Promise<ProcessedChunk[]> {
 }
 
 interface SyncedFilesConfig {
-  excludeDirs: string[];
+  excludeDirs?: string[];         // Legacy: name-based exclusions
+  excludePaths?: string[];        // New: relative path-based exclusions from tree picker
   includeExtensions: string[];
   excludeExtensions: string[];
   maxFileSizeBytes: number;
-  excludePathPatterns?: string[]; // New: patterns to match in full path
+  excludePathPatterns?: string[];
 }
 
 async function getSyncedFilesConfig(): Promise<SyncedFilesConfig | null> {
@@ -133,44 +138,67 @@ async function getSyncedFilesConfig(): Promise<SyncedFilesConfig | null> {
   return null;
 }
 
-export async function getAllFiles(dirPath: string): Promise<string[]> {
+interface ResolvedScanConfig {
+  rootDir: string;
+  supportedExtensions: string[];
+  excludePaths: string[];
+  legacyExcludeDirs: string[];
+  excludeExtensions: string[];
+  excludePathPatterns: string[];
+  maxFileSize: number;
+}
+
+export async function getAllFiles(dirPath: string, _rootDir?: string): Promise<string[]> {
+  // Load config once at the top level, then pass resolved config to recursive helper
+  const rootDir = _rootDir || dirPath;
+
+  if (!_rootDir) {
+    const config = await getSyncedFilesConfig();
+
+    let supportedExtensions = [
+      ".txt", ".md", ".markdown", ".json", ".ts", ".tsx",
+      ".js", ".jsx", ".css", ".html", ".pdf", ".docx",
+    ];
+    if (config?.includeExtensions && config.includeExtensions.length > 0) {
+      supportedExtensions = config.includeExtensions;
+    }
+
+    const resolved: ResolvedScanConfig = {
+      rootDir,
+      supportedExtensions,
+      excludePaths: config?.excludePaths || [],
+      legacyExcludeDirs: config?.excludeDirs || [],
+      excludeExtensions: config?.excludeExtensions || [],
+      excludePathPatterns: config?.excludePathPatterns || [],
+      maxFileSize: config?.maxFileSizeBytes || Number.MAX_SAFE_INTEGER,
+    };
+
+    return getAllFilesInternal(dirPath, resolved);
+  }
+
+  // Recursive calls should not reach here — this is a backward-compat path
+  const resolved: ResolvedScanConfig = {
+    rootDir,
+    supportedExtensions: [".txt", ".md", ".markdown", ".json", ".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".pdf", ".docx"],
+    excludePaths: [],
+    legacyExcludeDirs: [],
+    excludeExtensions: [],
+    excludePathPatterns: [],
+    maxFileSize: Number.MAX_SAFE_INTEGER,
+  };
+  return getAllFilesInternal(dirPath, resolved);
+}
+
+async function getAllFilesInternal(dirPath: string, cfg: ResolvedScanConfig): Promise<string[]> {
   const entries = await fs.readdir(dirPath, { withFileTypes: true });
   const files: string[] = [];
 
-  // Load config
-  const config = await getSyncedFilesConfig();
-
-  // Default supported extensions
-  let supportedExtensions = [
-    ".txt",
-    ".md",
-    ".markdown",
-    ".json",
-    ".ts",
-    ".tsx",
-    ".js",
-    ".jsx",
-    ".css",
-    ".html",
-    ".pdf",
-    ".docx",
-  ];
-
-  // Apply include filter if configured
-  if (config?.includeExtensions && config.includeExtensions.length > 0) {
-    supportedExtensions = config.includeExtensions;
-  }
-
-  const excludeDirs = config?.excludeDirs || [];
-  const excludeExtensions = config?.excludeExtensions || [];
-  const excludePathPatterns = config?.excludePathPatterns || [];
-  const maxFileSize = config?.maxFileSizeBytes || Number.MAX_SAFE_INTEGER;
-
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
+    const relativePath = path.relative(cfg.rootDir, fullPath);
 
     // Check if path contains any exclude patterns (case-insensitive)
-    const shouldExcludePath = excludePathPatterns.some(pattern =>
+    const shouldExcludePath = cfg.excludePathPatterns.some(pattern =>
       fullPath.toLowerCase().includes(pattern.toLowerCase())
     );
 
@@ -180,34 +208,45 @@ export async function getAllFiles(dirPath: string): Promise<string[]> {
     }
 
     if (entry.isDirectory()) {
-      if (entry.name.startsWith(".")) continue; // Skip dot folders
+      if (entry.name.startsWith(".")) continue;
 
-      // Check if directory is in exclude list
-      if (excludeDirs.includes(entry.name)) {
+      // System-excluded directories (always skipped)
+      if (SYSTEM_EXCLUDED_DIRS.includes(entry.name)) {
+        continue;
+      }
+
+      // Path-based user exclusions (new tree picker)
+      const isPathExcluded = cfg.excludePaths.some(p =>
+        relativePath === p || relativePath.startsWith(p + "/")
+      );
+      if (isPathExcluded) {
+        console.log(`Skipping user-excluded path: ${relativePath}`);
+        continue;
+      }
+
+      // Legacy name-based exclusions (backward compatibility)
+      if (cfg.excludePaths.length === 0 && cfg.legacyExcludeDirs.includes(entry.name)) {
         console.log(`Skipping excluded directory: ${entry.name}`);
         continue;
       }
 
-      files.push(...(await getAllFiles(fullPath)));
+      files.push(...(await getAllFilesInternal(fullPath, cfg)));
     } else {
-      if (entry.name.startsWith(".")) continue; // Skip dot files
+      if (entry.name.startsWith(".")) continue;
 
       const ext = path.extname(entry.name).toLowerCase();
 
-      // Check exclude extensions (takes priority)
-      if (excludeExtensions.includes(ext)) {
+      if (cfg.excludeExtensions.includes(ext)) {
         continue;
       }
 
-      // Check include extensions
-      if (!supportedExtensions.includes(ext)) {
+      if (!cfg.supportedExtensions.includes(ext)) {
         continue;
       }
 
-      // Check file size
       try {
         const stats = await fs.stat(fullPath);
-        if (stats.size > maxFileSize) {
+        if (stats.size > cfg.maxFileSize) {
           console.log(`Skipping large file (${Math.round(stats.size / 1024 / 1024)}MB): ${fullPath}`);
           continue;
         }

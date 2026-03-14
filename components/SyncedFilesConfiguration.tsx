@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Card from "./Card";
+import DirectoryTreePicker from "./DirectoryTreePicker";
 import styles from "./ModelConfiguration.module.css";
 
 interface SyncedFilesConfig {
-  excludeDirs: string[];
+  excludeDirs?: string[];        // Legacy
+  excludePaths?: string[];       // New: relative paths from tree picker
   includeExtensions: string[];
   excludeExtensions: string[];
   maxFileSizeBytes: number;
@@ -19,7 +21,7 @@ interface SyncedFilesConfigurationProps {
 }
 
 const DEFAULT_CONFIG: SyncedFilesConfig = {
-  excludeDirs: ["node_modules", ".git", ".next", "temp_images", ".archive"],
+  excludePaths: [],
   includeExtensions: [".md", ".pdf", ".txt", ".docx"],
   excludeExtensions: [],
   maxFileSizeBytes: 10485760, // 10MB
@@ -33,8 +35,8 @@ export default function SyncedFilesConfiguration({
 }: SyncedFilesConfigurationProps) {
   const currentConfig = config || DEFAULT_CONFIG;
 
-  const [excludeDirs, setExcludeDirs] = useState<string>(
-    currentConfig.excludeDirs.join(", ")
+  const [excludedPaths, setExcludedPaths] = useState<string[]>(
+    currentConfig.excludePaths || []
   );
   const [includeExtensions, setIncludeExtensions] = useState<string>(
     currentConfig.includeExtensions.join(", ")
@@ -51,10 +53,7 @@ export default function SyncedFilesConfiguration({
 
   const handleSave = async () => {
     const newConfig: SyncedFilesConfig = {
-      excludeDirs: excludeDirs
-        .split(",")
-        .map((d) => d.trim())
-        .filter((d) => d.length > 0),
+      excludePaths: excludedPaths,
       includeExtensions: includeExtensions
         .split(",")
         .map((e) => e.trim())
@@ -81,19 +80,16 @@ export default function SyncedFilesConfiguration({
       </p>
 
       <div className={styles.formGroup}>
-        <label htmlFor="excludeDirs">Excluded Directories</label>
-        <input
-          id="excludeDirs"
-          type="text"
-          value={excludeDirs}
-          onChange={(e) => setExcludeDirs(e.target.value)}
-          className={styles.input}
-          placeholder="node_modules, .git, .next"
+        <label>Directory Scanner</label>
+        <p className={styles.helpText} style={{ marginBottom: "0.5rem" }}>
+          Toggle directories to include or exclude from scanning.
+          System-excluded directories (node_modules, .git, Custom_Docs, etc.) are always skipped.
+        </p>
+        <DirectoryTreePicker
+          excludedPaths={excludedPaths}
+          onExcludedPathsChange={setExcludedPaths}
           disabled={isSaving}
         />
-        <p className={styles.helpText}>
-          Comma-separated list of directory names to skip during scanning.
-        </p>
       </div>
 
       <div className={styles.formGroup}>
@@ -142,7 +138,6 @@ export default function SyncedFilesConfiguration({
         />
         <p className={styles.helpText}>
           Skip any file or folder whose path contains these patterns (case-insensitive).
-          Example: "copilot" will exclude "/path/to/copilot/file.txt" and "/copilot_data/file.md"
         </p>
       </div>
 
