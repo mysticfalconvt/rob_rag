@@ -171,21 +171,31 @@ export async function cleanupStaleFileIndexes(currentFiles?: string[]): Promise<
   const allFiles = currentFiles || await getAllFiles(config.DOCUMENTS_FOLDER_PATH);
   const allFilesSet = new Set(allFiles);
 
-  // Find all disk-backed indexed files (synced, uploaded, user_note)
+  // Build patterns for system-excluded directories to catch any source
+  const { SYSTEM_EXCLUDED_DIRS } = await import("./files");
+  const excludedPathSegments = SYSTEM_EXCLUDED_DIRS.map(d => `/${d}/`);
+
+  // Find all disk-backed indexed files (real filesystem paths, not virtual like paperless:// or uploaded://)
   const dbFiles = await prisma.indexedFile.findMany({
     where: {
-      source: { in: ["synced", "uploaded", "user_note"] },
+      filePath: { startsWith: "/" },  // Only real filesystem paths
     },
-    select: { filePath: true },
+    select: { filePath: true, source: true },
   });
 
   let deleted = 0;
   for (const dbFile of dbFiles) {
-    if (!allFilesSet.has(dbFile.filePath)) {
+    // Remove if file is inside a system-excluded directory (regardless of source)
+    const inExcludedDir = excludedPathSegments.some(seg => dbFile.filePath.includes(seg));
+
+    // Remove if file is no longer found by the scanner
+    const notInScan = !allFilesSet.has(dbFile.filePath);
+
+    if (inExcludedDir || notInScan) {
       try {
         await deleteFileIndex(dbFile.filePath);
         deleted++;
-        console.log(`Cleaned up stale index: ${dbFile.filePath}`);
+        console.log(`Cleaned up stale index: ${dbFile.filePath} (source: ${dbFile.source}, reason: ${inExcludedDir ? "excluded dir" : "not in scan"})`);
       } catch (error) {
         console.error(
           `Failed to delete stale index for ${dbFile.filePath}:`,

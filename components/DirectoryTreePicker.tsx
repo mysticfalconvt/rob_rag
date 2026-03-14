@@ -8,6 +8,7 @@ interface DirectoryNode {
   path: string;
   children: DirectoryNode[];
   fileCount: number;
+  totalFileCount: number;
   isSystemExcluded: boolean;
 }
 
@@ -105,8 +106,12 @@ function TreeNode({
         <span className={styles.dirName} onClick={() => hasChildren && setExpanded(!expanded)}>
           {node.name}
         </span>
-        {node.fileCount > 0 && (
-          <span className={styles.fileBadge}>({node.fileCount} files)</span>
+        {node.totalFileCount > 0 && (
+          <span className={styles.fileBadge}>
+            ({expanded && hasChildren
+              ? `${node.fileCount} files`
+              : `${node.totalFileCount} files`})
+          </span>
         )}
         {node.isSystemExcluded && (
           <span className={styles.systemBadge}>system</span>

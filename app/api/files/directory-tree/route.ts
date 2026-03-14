@@ -9,7 +9,8 @@ interface DirectoryNode {
   name: string;
   path: string;
   children: DirectoryNode[];
-  fileCount: number;
+  fileCount: number;        // files directly in this directory
+  totalFileCount: number;   // files in this directory and all descendants
   isSystemExcluded: boolean;
 }
 
@@ -17,6 +18,18 @@ const SUPPORTED_EXTENSIONS = [
   ".txt", ".md", ".markdown", ".json", ".ts", ".tsx",
   ".js", ".jsx", ".css", ".html", ".pdf", ".docx",
 ];
+
+function countImmediateFiles(entries: { isDirectory(): boolean; name: string }[]): number {
+  return entries.filter(c =>
+    !c.isDirectory() &&
+    !c.name.startsWith(".") &&
+    SUPPORTED_EXTENSIONS.includes(path.extname(c.name).toLowerCase())
+  ).length;
+}
+
+function sumTotalFiles(node: DirectoryNode): number {
+  return node.fileCount + node.children.reduce((sum, child) => sum + child.totalFileCount, 0);
+}
 
 async function buildTree(
   dirPath: string,
@@ -43,15 +56,11 @@ async function buildTree(
     const relativePath = path.relative(rootDir, fullPath);
     const isSystemExcluded = SYSTEM_EXCLUDED_DIRS.includes(entry.name);
 
-    // Count indexable files in this directory (non-recursive, just immediate)
+    // Count indexable files directly in this directory
     let fileCount = 0;
     try {
       const children = await fs.readdir(fullPath, { withFileTypes: true });
-      fileCount = children.filter(c =>
-        !c.isDirectory() &&
-        !c.name.startsWith(".") &&
-        SUPPORTED_EXTENSIONS.includes(path.extname(c.name).toLowerCase())
-      ).length;
+      fileCount = countImmediateFiles(children);
     } catch {
       // ignore permission errors
     }
@@ -61,13 +70,17 @@ async function buildTree(
       ? []
       : await buildTree(fullPath, rootDir, depth + 1, maxDepth);
 
-    nodes.push({
+    const node: DirectoryNode = {
       name: entry.name,
       path: relativePath,
       children: childNodes,
       fileCount,
+      totalFileCount: 0, // computed below
       isSystemExcluded,
-    });
+    };
+    node.totalFileCount = sumTotalFiles(node);
+
+    nodes.push(node);
   }
 
   // Sort alphabetically
@@ -100,11 +113,7 @@ export async function GET(req: NextRequest) {
     let rootFileCount = 0;
     try {
       const rootEntries = await fs.readdir(rootDir, { withFileTypes: true });
-      rootFileCount = rootEntries.filter(c =>
-        !c.isDirectory() &&
-        !c.name.startsWith(".") &&
-        SUPPORTED_EXTENSIONS.includes(path.extname(c.name).toLowerCase())
-      ).length;
+      rootFileCount = countImmediateFiles(rootEntries);
     } catch {
       // ignore
     }
