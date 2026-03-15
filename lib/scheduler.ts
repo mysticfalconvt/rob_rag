@@ -1,6 +1,7 @@
 import prisma from "./prisma";
 import { CronExpressionParser } from "cron-parser";
 import { sendFormattedMessage } from "./matrix/sender";
+import { config as appConfig } from "./config";
 
 /**
  * Background scheduler for periodic tasks
@@ -287,7 +288,7 @@ class BackgroundScheduler {
     let isOneTimeTask = false;
 
     try {
-      const interval = CronExpressionParser.parse(task.schedule);
+      const interval = CronExpressionParser.parse(task.schedule, { tz: appConfig.USER_TIMEZONE });
       nextRun = interval.next().toDate();
 
       // Check if this is a one-time cron (has specific date fields like day and month)

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { CronExpressionParser } from "cron-parser";
+import { config as appConfig } from "@/lib/config";
 
 /**
  * GET /api/scheduled/tasks/[id]
@@ -99,7 +100,7 @@ export async function PATCH(
     // If schedule is updated, validate and calculate nextRun
     if (schedule !== undefined) {
       try {
-        const interval = CronExpressionParser.parse(schedule);
+        const interval = CronExpressionParser.parse(schedule, { tz: appConfig.USER_TIMEZONE });
         updateData.schedule = schedule;
         updateData.nextRun = interval.next().toDate();
       } catch (error) {

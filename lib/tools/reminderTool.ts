@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import prisma from "../prisma";
 import { CronExpressionParser } from "cron-parser";
+import { config as appConfig } from "../config";
 
 /**
  * Parse natural language time expressions into cron expressions
@@ -38,10 +39,13 @@ function parseTimeExpression(timeStr: string): { cron: string; description: stri
       now.setHours(now.getHours() + amount);
     }
 
-    // Create a one-time cron for this specific time
+    // Convert to local time for cron expression
+    const localTime = new Date(now.toLocaleString('en-US', { timeZone: appConfig.USER_TIMEZONE }));
+
+    // Create a one-time cron for this specific time (in user's local timezone)
     return {
-      cron: `${now.getMinutes()} ${now.getHours()} ${now.getDate()} ${now.getMonth() + 1} *`,
-      description: `In ${amount} ${unit} (at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })})`
+      cron: `${localTime.getMinutes()} ${localTime.getHours()} ${localTime.getDate()} ${localTime.getMonth() + 1} *`,
+      description: `In ${amount} ${unit} (at ${localTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })})`
     };
   }
 
@@ -138,11 +142,12 @@ function parseTimeExpression(timeStr: string): { cron: string; description: stri
     };
   }
 
-  // One-time reminders
+  // One-time reminders — use local date so "tomorrow" means tomorrow in user's timezone
+  const nowLocal = new Date(new Date().toLocaleString('en-US', { timeZone: appConfig.USER_TIMEZONE }));
+
   if (lower.includes('tomorrow')) {
-    const tomorrow = new Date();
+    const tomorrow = new Date(nowLocal);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(hour, minute, 0, 0);
 
     return {
       cron: `${minute} ${hour} ${tomorrow.getDate()} ${tomorrow.getMonth() + 1} *`,
@@ -151,9 +156,8 @@ function parseTimeExpression(timeStr: string): { cron: string; description: stri
   }
 
   if (lower.includes('today') || lower.includes('later today')) {
-    const today = new Date();
     return {
-      cron: `${minute} ${hour} ${today.getDate()} ${today.getMonth() + 1} *`,
+      cron: `${minute} ${hour} ${nowLocal.getDate()} ${nowLocal.getMonth() + 1} *`,
       description: `Today at ${hour}:${minute.toString().padStart(2, '0')}`
     };
   }
@@ -200,10 +204,10 @@ Examples:
       // Parse the time expression
       const { cron, description } = parseTimeExpression(time_expression);
 
-      // Validate cron expression and get next run time
+      // Validate cron expression and get next run time (interpret cron in user's timezone)
       let nextRun: Date;
       try {
-        const interval = CronExpressionParser.parse(cron);
+        const interval = CronExpressionParser.parse(cron, { tz: appConfig.USER_TIMEZONE });
         nextRun = interval.next().toDate();
       } catch (error) {
         return `❌ I couldn't parse the time expression "${time_expression}".
@@ -257,7 +261,8 @@ Please try rephrasing, for example:
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true
+        hour12: true,
+        timeZone: appConfig.USER_TIMEZONE,
       });
 
       return `✅ **Reminder Created!**
@@ -319,7 +324,8 @@ export const listRemindersTool = new DynamicStructuredTool({
           day: 'numeric',
           hour: 'numeric',
           minute: '2-digit',
-          hour12: true
+          hour12: true,
+          timeZone: appConfig.USER_TIMEZONE,
         }) : "Not scheduled";
 
         response += `**${reminder.name}**\n`;

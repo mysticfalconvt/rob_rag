@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { CronExpressionParser } from "cron-parser";
+import { config as appConfig } from "@/lib/config";
 
 /**
  * GET /api/scheduled/tasks
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
     // Validate cron expression
     let nextRun: Date;
     try {
-      const interval = CronExpressionParser.parse(schedule);
+      const interval = CronExpressionParser.parse(schedule, { tz: appConfig.USER_TIMEZONE });
       nextRun = interval.next().toDate();
     } catch (error) {
       return NextResponse.json(
