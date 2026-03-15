@@ -1033,11 +1033,18 @@ export async function POST(req: NextRequest) {
                 );
 
                 if (usedReminderTool || usedNoteTool) {
+                  // Replace system prompt to prevent model from hallucinating tool calls
+                  langchainMessages[0] = new SystemMessage(
+                    `You are a helpful assistant. A tool has already completed the user's request. ` +
+                    `Simply relay the tool's response to the user in a natural, conversational way. ` +
+                    `Do NOT attempt to call any tools, functions, or output any code. Do NOT add extra commentary.` +
+                    (userContextString ? `\n\n${userContextString}` : "") +
+                    matrixFormattingNote
+                  );
                   langchainMessages.push(
                     new SystemMessage(
                       `Tool execution results:\n\n${toolResultsText}\n\n` +
-                      `IMPORTANT: The tool has already completed the user's request. ` +
-                      `Simply relay the tool's response to the user in a natural way. Do NOT add extra commentary.`
+                      `Relay this result to the user briefly and naturally. Do NOT output tool syntax, code blocks, or function calls.`
                     ),
                   );
                 } else {

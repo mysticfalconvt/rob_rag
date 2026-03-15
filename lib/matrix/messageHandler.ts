@@ -334,8 +334,26 @@ async function callRagFlow(
       }
     }
 
+    // Strip any hallucinated tool-call syntax that leaked into the response
+    let cleanedResponse = fullResponse.trim();
+    // Remove patterns like: commentary to=container.exec code{"cmd":...}
+    cleanedResponse = cleanedResponse.replace(/commentary\s+to=\S+\s+code\{[^}]*\}/g, "").trim();
+    // Remove patterns like: <tool_call>...</tool_call> or <function_call>...</function_call>
+    cleanedResponse = cleanedResponse.replace(/<\/?(?:tool_call|function_call|tool_use)[^>]*>[\s\S]*?<\/(?:tool_call|function_call|tool_use)>/g, "").trim();
+    // Remove bare JSON tool call blocks that start with {"name": or {"tool":
+    cleanedResponse = cleanedResponse.replace(/\{"(?:name|tool)":\s*"[^"]+",\s*"(?:arguments|parameters|input)":\s*\{[^}]*\}\s*\}/g, "").trim();
+
+    if (cleanedResponse !== fullResponse.trim()) {
+      console.log("[Matrix] Stripped hallucinated tool-call syntax from response");
+    }
+
+    // If the response was entirely tool-call garbage, return a fallback
+    if (!cleanedResponse || cleanedResponse.length < 5) {
+      cleanedResponse = "I've processed your request, but encountered an issue generating a response. Please try again.";
+    }
+
     return {
-      text: fullResponse.trim(),
+      text: cleanedResponse,
       sources,
     };
   } catch (error) {

@@ -217,6 +217,22 @@ export default function ScheduledPage() {
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
+  const formatTimeUntil = (dateStr?: string): string => {
+    if (!dateStr) return "-";
+    const now = new Date();
+    const target = new Date(dateStr);
+    const diffMs = target.getTime() - now.getTime();
+    if (diffMs <= 0) return "now";
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 60) return `in ${diffMin}m`;
+    const diffHrs = Math.floor(diffMin / 60);
+    const remainMin = diffMin % 60;
+    if (diffHrs < 24) return remainMin > 0 ? `in ${diffHrs}h ${remainMin}m` : `in ${diffHrs}h`;
+    const diffDays = Math.floor(diffHrs / 24);
+    const remainHrs = diffHrs % 24;
+    return remainHrs > 0 ? `in ${diffDays}d ${remainHrs}h` : `in ${diffDays}d`;
+  };
+
   const isOneTimeTask = (schedule: string): boolean => {
     const cronParts = schedule.trim().split(/\s+/);
     if (cronParts.length >= 5) {
@@ -275,7 +291,8 @@ export default function ScheduledPage() {
                   <div>
                     <strong style={{ color: "var(--text-color)" }}>{task.name}</strong>
                     <div style={{ fontSize: "0.9em", color: "var(--text-secondary)", marginTop: "4px" }}>
-                      📬 Reminder • Next run: {formatDate(task.nextRun)}
+                      📬 Reminder • {formatDate(task.nextRun)}{" "}
+                      <span style={{ color: "#3b82f6", fontWeight: 500 }}>({formatTimeUntil(task.nextRun)})</span>
                     </div>
                   </div>
                   <button
@@ -345,6 +362,7 @@ export default function ScheduledPage() {
                 <th style={{ textAlign: "left" }}>Schedule</th>
                 <th style={{ textAlign: "left" }}>Last Run</th>
                 <th style={{ textAlign: "left" }}>Next Run</th>
+                <th style={{ textAlign: "left" }}>Runs In</th>
                 <th style={{ textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
@@ -409,6 +427,9 @@ export default function ScheduledPage() {
                   </td>
                   <td style={{ padding: "8px", fontSize: "0.9em" }}>
                     {formatDate(task.nextRun)}
+                  </td>
+                  <td style={{ padding: "8px", fontSize: "0.9em", color: "#3b82f6", fontWeight: 500 }}>
+                    {task.enabled ? formatTimeUntil(task.nextRun) : "-"}
                   </td>
                   <td style={{ padding: "8px", textAlign: "right" }}>
                     <button
