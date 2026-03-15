@@ -193,16 +193,15 @@ class BackgroundScheduler {
             throw new Error("INTERNAL_SERVICE_KEY not configured");
           }
 
-          // Enhance the query with a reminder context prefix to help the LLM understand this is a scheduled reminder
-          const enhancedQuery = `🔔 Scheduled Reminder: ${task.query}`;
-
+          // Send the query directly — no prefix that could trigger reminder keyword detection
           const ragResponse = await fetch("http://localhost:3000/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              messages: [{ role: "user", content: enhancedQuery }],
+              messages: [{ role: "user", content: task.query }],
               triggerSource: "scheduled",
               internalServiceKey,
+              matrixRoomId: task.matrixRoomId,
             }),
           });
 

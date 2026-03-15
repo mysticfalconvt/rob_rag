@@ -178,18 +178,29 @@ export const createReminderTool = new DynamicStructuredTool({
 Use this when the user asks to be reminded about something, or wants to schedule a recurring query.
 This tool creates the reminder immediately.
 
-IMPORTANT: For reminders that involve knowledge retrieval (books, documents, calendar, emails, etc.),
-write the query as a question or search request so the RAG system can find relevant information.
+CRITICAL: The "query" field will be sent to the chat system later AS IF a user typed it fresh.
+You MUST rewrite the user's request into a clean, standalone question or instruction.
+- Do NOT include words like "remind", "reminder", "schedule", or time references (e.g., "at 7am", "tomorrow").
+- Do NOT repeat the user's phrasing verbatim — rephrase it as a direct question or action.
+- For knowledge retrieval (books, documents, calendar, emails), phrase as a clear search question.
+- For simple tasks, use a short imperative (e.g., "call mom", "take out trash").
 
-Examples:
-- "Remind me tomorrow at 8am to check my email" → query: "check email" (simple reminder)
-- "Every morning at 7am, tell me what's on my calendar" → query: "what's on my calendar today?" (uses RAG)
-- "Remind me about books I've read" → query: "show me some interesting books from my reading history" (uses RAG with Goodreads)
-- "Every Friday at 5pm to review my week" → query: "what happened this week?" (uses RAG with calendar/documents)
-- "Every weekday at 9am, show me unread Paperless documents" → query: "what are my recent unread documents?" (uses RAG)`,
+Examples of user request → query transformation:
+- User: "At 7:29am check my latest books I am reading in good reads and tell me something about them"
+  → query: "What are my latest books on Goodreads? Tell me something interesting about each one."
+- User: "Remind me Tuesday at 2PM with the events in my calendar for the day"
+  → query: "What are my calendar events for today?"
+- User: "Every morning at 7am, tell me what's on my calendar"
+  → query: "What is on my calendar today?"
+- User: "Remind me tomorrow at 8am to check my email"
+  → query: "check email" (simple task)
+- User: "Every Friday at 5pm to review my week"
+  → query: "What happened this week? Summarize my calendar events and documents."
+- User: "Every weekday at 9am, show me unread Paperless documents"
+  → query: "What are my recent unread Paperless documents?"`,
   schema: z.object({
     time_expression: z.string().describe("When to send the reminder (e.g., 'tomorrow at 8am', 'in 15 minutes', 'every morning at 7am', 'every Friday at 5pm')"),
-    query: z.string().describe("The question or query to run when the reminder triggers. For knowledge retrieval (books, documents, calendar), phrase as a search question. For simple tasks, use an imperative (e.g., 'call mom', 'take out trash')."),
+    query: z.string().describe("A clean, standalone question or instruction to execute when the reminder fires. Rewrite the user's request — do NOT include 'remind', 'reminder', 'schedule', or time references. For knowledge retrieval, phrase as a direct question. For simple tasks, use an imperative."),
     name: z.string().optional().describe("Optional short name for the reminder (e.g., 'Daily calendar check', 'Book reflection')"),
   }),
   func: async ({ time_expression, query, name }, config) => {

@@ -243,7 +243,7 @@ export async function POST(req: NextRequest) {
 
     // Detect if this is a counting/metadata/tool-only query that should skip RAG
     const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
-    const isReminderQuery = /\b(remind me|reminder|set a reminder|schedule|create reminder)\b/i.test(query);
+    const isReminderQuery = /\b(remind me|reminder|set a reminder|schedule|create reminder)\b/i.test(query) && triggerSource !== "scheduled";
     const isListQuery = /\b(list (my )?reminders?|show (my )?reminders?|what reminders)\b/i.test(query);
     const isEmailQuery = /\b(email|emails|e-mail|inbox|unread mail|mailbox|mail from)\b/i.test(query);
     const skipRagForTools = (isCountingQuery || isReminderQuery || isListQuery || isEmailQuery) && sourceFilter !== "none";
@@ -611,6 +611,15 @@ export async function POST(req: NextRequest) {
       ),
     );
 
+    // Add scheduled task context to prevent reminder re-creation
+    if (triggerSource === "scheduled") {
+      langchainMessages.push(new SystemMessage(
+        "This is a scheduled query execution triggered by a previously-created reminder. " +
+        "Execute the query and return the results directly. Do NOT create new reminders or suggest creating reminders. " +
+        "Simply answer the question or retrieve the requested information."
+      ));
+    }
+
     // Add current query
     langchainMessages.push(new HumanMessage(query));
 
@@ -813,6 +822,11 @@ export async function POST(req: NextRequest) {
         // Route tool selection based on query intent
         const toolRouting = routeToolSelection(query);
         tools = filterToolsByRouting(allTools, toolRouting);
+
+        // Exclude reminder tools for scheduled task execution to prevent re-creation loops
+        if (triggerSource === "scheduled") {
+          tools = tools.filter((t: any) => !["create_reminder", "list_reminders", "cancel_reminder"].includes(t.name));
+        }
 
         // Log tool selection reasoning
         console.log(explainToolSelection(toolRouting, tools.length));
