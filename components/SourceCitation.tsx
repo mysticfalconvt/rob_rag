@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import styles from "./SourceCitation.module.css";
-import type { Source } from "@/types/source";
+import { type Source, getSourceIcon, getSourceDisplayName } from "@/types/source";
 
 interface SourceCitationProps {
   sources: Source[];
@@ -70,13 +70,7 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
                 className={styles.sourceLink}
               >
                 <span className={styles.icon}>
-                  {source.source === "paperless"
-                    ? "🗂️"
-                    : source.source === "uploaded"
-                      ? "📤"
-                      : source.source === "goodreads"
-                        ? "📚"
-                        : "🔄"}
+                  {getSourceIcon(source.source)}
                 </span>
                 <span className={styles.fileName}>{source.fileName}</span>
                 <span className={styles.score}>
@@ -91,7 +85,7 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
                       {source.fileName}
                     </span>
                     <span className={styles.tooltipScore}>
-                      Score: {(source.score * 100).toFixed(1)}%
+                      {getSourceDisplayName(source.source)} &middot; {(source.score * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className={styles.tooltipContent}>

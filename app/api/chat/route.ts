@@ -5,20 +5,11 @@ import {
 } from "@langchain/core/messages";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { type NextRequest, NextResponse } from "next/server";
-import { getChatModel, getFastChatModel, trackChatInvoke, estimateMessageTokens } from "@/lib/ai";
-import { readFileContent } from "@/lib/files";
+import { getChatModel, getFastChatModel, estimateMessageTokens } from "@/lib/ai";
 import prisma from "@/lib/prisma";
-import { search } from "@/lib/retrieval";
-import { smartSearch } from "@/lib/smartRetrieval";
-import {
-  shouldRetrieveMore,
-  retrieveAdditionalContext,
-} from "@/lib/iterativeRetrieval";
 import { getPrompts, interpolatePrompt } from "@/lib/prompts";
 import {
-  buildSearchQueryWithUserContext,
   buildUserContext,
-  rephraseQuestionIfNeeded,
   updateConversationTopics,
 } from "@/lib/contextBuilder";
 import { manageContext } from "@/lib/contextWindow";
@@ -28,10 +19,10 @@ import { initializeApp, initializeMatrix } from "@/lib/init";
 import { generateToolsForConfiguredPlugins } from "@/lib/toolGenerator";
 import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 import { generateUtilityTools } from "@/lib/utilityTools";
-import { routeQuery } from "@/lib/queryRouter";
 import { LLMRequestTracker } from "@/lib/llmTracking";
 import { routeToolSelection, filterToolsByRouting, explainToolSelection } from "@/lib/toolRouter";
 import { searchWeb, searchDeep, formatWebResultsAsContext, isWebSearchConfigured } from "@/lib/webSearch";
+import { createRagTool } from "@/lib/tools/ragTool";
 
 export async function POST(req: NextRequest) {
   try {
@@ -172,10 +163,6 @@ export async function POST(req: NextRequest) {
     // Check if this is the first message
     const isFirstMessage = messages.length === 1;
 
-    // Route query to determine optimization strategy
-    const queryRoute = routeQuery(query, isFirstMessage, messages.slice(0, -1));
-    console.log(`[QueryRouter] ${queryRoute.reason}`);
-
     // Create or get conversation (skip for internal requests without conversationId)
     let convId = conversationId;
 
@@ -235,260 +222,18 @@ export async function POST(req: NextRequest) {
       }),
     });
 
-    // 1. Retrieve context (skip if sourceFilter is 'none' or if query is a counting/metadata query)
-    let searchResults: any[] = [];
-    let context = "";
-    let searchQuery = query;
-    let contextParts: string[] = []; // Declare outside for iterative retrieval access
-
-    // Detect if this is a counting/metadata/tool-only query that should skip RAG
-    const isCountingQuery = /\b(how many|count|total|number of)\b/i.test(query);
-    const isReminderQuery = /\b(remind me|reminder|set a reminder|schedule|create reminder)\b/i.test(query) && triggerSource !== "scheduled";
-    const isListQuery = /\b(list (my )?reminders?|show (my )?reminders?|what reminders)\b/i.test(query);
+    // 1. RAG is now a tool — the LLM decides when to search the knowledge base.
+    //    We still detect email queries for the fallback path (weak tool-calling models).
     const isEmailQuery = /\b(email|emails|e-mail|inbox|unread mail|mailbox|mail from)\b/i.test(query);
-    const skipRagForTools = (isCountingQuery || isReminderQuery || isListQuery || isEmailQuery) && sourceFilter !== "none";
 
-    // Single-document chat: use only this doc as context (full content or chunked vector search)
-    const singleDocPath =
-      typeof documentPath === "string" ? documentPath.trim() : null;
-    if (singleDocPath) {
-      const fileRecord = await prisma.indexedFile.findUnique({
-        where: { filePath: singleDocPath },
-        select: { chunkCount: true, source: true, paperlessTitle: true },
-      });
-
-      if (fileRecord) {
-        const docDisplayName =
-          fileRecord.paperlessTitle ??
-          singleDocPath.split("/").filter(Boolean).pop() ??
-          "document";
-        const isVirtualSource =
-          fileRecord.source === "goodreads" ||
-          fileRecord.source === "paperless" ||
-          fileRecord.source === "google-calendar";
-        const fullContentMaxChars = 12000; // ~3k tokens
-        const fullContentMaxChunks = 20;
-
-        if (
-          !isVirtualSource &&
-          fileRecord.chunkCount <= fullContentMaxChunks
-        ) {
-          try {
-            const { content: fullContent } = await readFileContent(singleDocPath);
-            if (fullContent.length <= fullContentMaxChars) {
-              context = `Document: ${docDisplayName}\n(Full content - single document chat)\n${fullContent}`;
-              console.log(
-                "[Chat] Single-doc mode: using full document content",
-                singleDocPath,
-              );
-            } else {
-              // Too long: use vector search for this doc only
-              searchResults = await search(
-                searchQuery,
-                25,
-                undefined,
-                (m) => llmTracker.trackCall("embedding", { ...m, callPayload: "single_doc_search" }),
-                singleDocPath,
-              );
-            }
-          } catch (e) {
-            console.warn(
-              "[Chat] Single-doc full content failed, falling back to chunk search:",
-              e,
-            );
-            searchResults = await search(
-              searchQuery,
-              25,
-              undefined,
-              (m) => llmTracker.trackCall("embedding", { ...m, callPayload: "single_doc_search" }),
-              singleDocPath,
-            );
-          }
-        } else {
-          // Virtual source or many chunks: use vector search restricted to this doc
-          searchResults = await search(
-            searchQuery,
-            25,
-            undefined,
-            (m) => llmTracker.trackCall("embedding", { ...m, callPayload: "single_doc_search" }),
-            singleDocPath,
-          );
-        }
-
-        if (searchResults.length > 0 && !context) {
-          const processedFiles = new Set<string>();
-          for (const result of searchResults) {
-            const filePath = result.metadata.filePath;
-            if (!filePath || processedFiles.has(filePath)) continue;
-            processedFiles.add(filePath);
-            contextParts.push(
-              `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
-            );
-          }
-          context = contextParts.join("\n\n");
-        }
-      } else {
-        console.warn("[Chat] Single-doc path not found in index:", singleDocPath);
-      }
-    }
-
-    if (
-      !singleDocPath &&
-      sourceFilter !== "none" &&
-      !skipRagForTools
-    ) {
-      // Enhance search query based on context
-      if (isFirstMessage) {
-        // First message: Add user context
-        searchQuery = buildSearchQueryWithUserContext(
-          query,
-          userProfile.userName,
-          userProfile.userBio,
-        );
-      } else if (!queryRoute.skipRephrasing) {
-        // Follow-up message: Rephrase if needed (skip for fast path)
-        const { rephrased, wasRephrased } = await rephraseQuestionIfNeeded(
-          query,
-          messages.slice(0, -1),
-        );
-        if (wasRephrased) {
-          searchQuery = rephrased;
-        }
-      }
-
-      // Use smart search if no specific filter is set, otherwise respect user's choice
-      const clampedSourceCount = Math.max(1, Math.min(35, sourceCount));
-
-      if (!sourceFilter || sourceFilter === "all") {
-        // Fast path: use direct search, skip two-stage probe for simple queries
-        if (queryRoute.path === "fast") {
-          console.log("[QueryRouter] Fast path: using direct search");
-          searchResults = await search(
-            searchQuery,
-            10,
-            "all",
-            (metrics) => llmTracker.trackCall("embedding", {
-              ...metrics,
-              callPayload: JSON.stringify({
-                type: "fast_path_search",
-                queryLength: searchQuery.length,
-                limit: 10,
-                sourceFilter: "all",
-                request: searchQuery,
-                response: "embedding_vector"
-              })
-            })
-          ); // Smaller chunk count for fast queries
-        } else {
-          // Slow path: Smart search with two-stage analysis
-          const smartResult = await smartSearch(
-            searchQuery,
-            undefined, // No user filter
-            clampedSourceCount, // Max chunks
-            (metrics) => llmTracker.trackCall("embedding", {
-              ...metrics,
-              callPayload: JSON.stringify({
-                type: "smart_search",
-                queryLength: searchQuery.length,
-                maxChunks: clampedSourceCount,
-                request: searchQuery,
-                response: "embedding_vector"
-              })
-            })
-          );
-          searchResults = smartResult.results;
-        }
-      } else {
-        // Manual filter: respect user's source selection
-        searchResults = await search(
-          searchQuery,
-          clampedSourceCount,
-          sourceFilter,
-          (metrics) => llmTracker.trackCall("embedding", {
-            ...metrics,
-            callPayload: JSON.stringify({
-              type: "manual_filter_search",
-              queryLength: searchQuery.length,
-              limit: clampedSourceCount,
-              sourceFilter: Array.isArray(sourceFilter) ? sourceFilter.join(',') : sourceFilter,
-              request: searchQuery,
-              response: "embedding_vector"
-            })
-          })
-        );
-      }
-      // console.log('Search result scores:', searchResults.map(r => ({ file: r.metadata.fileName, score: r.score })));
-
-      // Context Optimization: Group by file and check if we should load full content
-      const groupedResults: Record<string, typeof searchResults> = {};
-      searchResults.forEach((r) => {
-        const path = r.metadata.filePath;
-        if (path) {
-          if (!groupedResults[path]) groupedResults[path] = [];
-          groupedResults[path].push(r);
-        }
-      });
-
-      const processedFiles = new Set<string>();
-
-      for (const result of searchResults) {
-        const filePath = result.metadata.filePath;
-        if (!filePath || processedFiles.has(filePath)) continue;
-
-        const fileResults = groupedResults[filePath];
-        const totalChunks = result.metadata.totalChunks || 100; // Default to high if missing
-        const source = result.metadata.source;
-
-        // For Goodreads books, Paperless docs, and Google Calendar events, always use chunk content (no file to read)
-        const isVirtualSource =
-          source === "goodreads" || source === "paperless" || source === "google-calendar";
-
-        // Heuristic: Load full file if:
-        // 1. File is small (<= 5 chunks)
-        // 2. We have a significant portion of the file (> 30% of chunks)
-        // 3. NOT a virtual source (Goodreads/Paperless)
-        const isSmallFile = totalChunks <= 5;
-        const hasSignificantPortion = fileResults.length / totalChunks > 0.3;
-
-        if (!isVirtualSource && (isSmallFile || hasSignificantPortion)) {
-          try {
-            const { content: fullContent } = await readFileContent(filePath);
-            contextParts.push(
-              `Document: ${result.metadata.fileName}\n(Full Content)\n${fullContent}`,
-            );
-            processedFiles.add(filePath);
-          } catch (e) {
-            console.error(
-              `Failed to read full file ${filePath}, falling back to chunks`,
-              e,
-            );
-            // Fallback to adding just this chunk (and others will be added as we iterate)
-            contextParts.push(
-              `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
-            );
-          }
-        } else {
-          // Add just this chunk (for virtual sources or when we don't want full content)
-          contextParts.push(
-            `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
-          );
-        }
-      }
-
-      context = contextParts.join("\n\n");
-    } else {
-    }
-
-    // 1.5 Handle web search / research commands and toggle
+    // 1.5 Handle web search / research commands (these bypass RAG entirely)
+    let webContext = "";
     let webSources: any[] = [];
 
     if (webSearchQuery) {
-      // Explicit #search command - replace RAG context with web results
       console.log(`[WebSearch] Explicit web search: "${webSearchQuery.substring(0, 50)}"`);
       const webResponse = await searchWeb(webSearchQuery);
-      const webContext = formatWebResultsAsContext(webResponse);
-      context = webContext;
-      contextParts = [webContext];
+      webContext = formatWebResultsAsContext(webResponse);
       webSources = webResponse.results.map((r) => ({
         fileName: r.title,
         filePath: r.url,
@@ -496,14 +241,10 @@ export async function POST(req: NextRequest) {
         score: r.score || 0,
         source: "web_search",
       }));
-      searchResults = []; // Clear RAG results
     } else if (webResearchQuery) {
-      // Explicit #research command - replace RAG context with Perplexica results
       console.log(`[WebSearch] Explicit deep research: "${webResearchQuery.substring(0, 50)}"`);
       const webResponse = await searchDeep(webResearchQuery);
-      const webContext = formatWebResultsAsContext(webResponse);
-      context = webContext;
-      contextParts = [webContext];
+      webContext = formatWebResultsAsContext(webResponse);
       webSources = webResponse.results.map((r) => ({
         fileName: r.title,
         filePath: r.url,
@@ -511,15 +252,11 @@ export async function POST(req: NextRequest) {
         score: r.score || 0,
         source: "web_research",
       }));
-      searchResults = []; // Clear RAG results
     } else if (webSearchEnabled && isWebSearchConfigured()) {
-      // UI toggle - merge web results with RAG context
-      console.log(`[WebSearch] Web search toggle enabled, supplementing RAG context`);
+      console.log(`[WebSearch] Web search toggle enabled`);
       const webResponse = await searchWeb(query);
       if (webResponse.results.length > 0) {
-        const webContext = formatWebResultsAsContext(webResponse);
-        contextParts.push("\n--- Web Search Results ---\n" + webContext);
-        context = contextParts.join("\n\n");
+        webContext = formatWebResultsAsContext(webResponse);
         webSources = webResponse.results.map((r) => ({
           fileName: r.title,
           filePath: r.url,
@@ -530,49 +267,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Build system prompt using customizable prompts
-    let systemPrompt: string;
+    // 2. Build system prompt — RAG context is now provided via tool results, not upfront
     const userContextString = buildUserContext(
       userProfile.userName,
       userProfile.userBio,
     );
 
-    // Add Matrix-specific formatting instructions
     const matrixFormattingNote = (triggerSource === "matrix" || triggerSource === "scheduled")
       ? `\n\nIMPORTANT: You are responding in a Matrix chat. DO NOT use markdown tables - they don't render correctly. Use bullet lists, numbered lists, or simple text formatting instead. Bold and italic markdown work fine.`
       : "";
 
-    if (sourceFilter === "none") {
-      systemPrompt = prompts.noSourcesSystemPrompt;
-      if (userContextString) {
-        systemPrompt += `\n\n${userContextString}`;
-      }
-      systemPrompt += matrixFormattingNote;
-    } else if (skipRagForTools) {
-      // For tool-only queries (counting, email, reminders), use a prompt that emphasizes tool usage
-      if (isEmailQuery) {
-        systemPrompt =
-          `You are a helpful assistant with access to email tools that can search, list, read, archive, and delete emails ` +
-          `across the user's connected email accounts (Gmail and Zoho Mail). ` +
-          `You MUST use the available email tools (search_email, list_unread_email, get_email_detail, archive_email, delete_email, cleanup_old_email) to fulfill the user's request. ` +
-          `NEVER say you cannot access the user's email - you CAN through these tools. Always call the appropriate tool.`;
-      } else {
-        systemPrompt =
-          `You are a helpful assistant with access to database query tools. ` +
-          `The user has asked a counting or metadata query. You should use the appropriate tool to get accurate results from the database. ` +
-          `Do not make up or estimate numbers - only use the exact counts returned by the tools.`;
-      }
-      if (userContextString) {
-        systemPrompt += `\n\n${userContextString}`;
-      }
-      systemPrompt += matrixFormattingNote;
-    } else {
-      systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, { context });
-      if (userContextString) {
-        systemPrompt += `\n\n${userContextString}`;
-      }
-      systemPrompt += matrixFormattingNote;
+    let systemPrompt = prompts.noSourcesSystemPrompt;
+
+    // If web search provided context, inject it into the prompt
+    if (webContext) {
+      systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, { context: webContext });
     }
+
+    if (userContextString) {
+      systemPrompt += `\n\n${userContextString}`;
+    }
+    systemPrompt += matrixFormattingNote;
 
     // 3. Apply context window management to prevent token overflow
     const maxTokens = contextSettings?.maxContextTokens ?? 8000;
@@ -583,7 +298,7 @@ export async function POST(req: NextRequest) {
     const windowSize = contextSettings?.slidingWindowSize ?? 10;
 
     const { messages: managedMessages, summary } = await manageContext(
-      messages.slice(0, -1), // Exclude current message (we'll add it separately)
+      messages.slice(0, -1),
       systemPrompt,
       maxTokens,
       strategy,
@@ -595,14 +310,12 @@ export async function POST(req: NextRequest) {
       new SystemMessage(systemPrompt),
     ];
 
-    // Add summary if we have one
     if (summary) {
       langchainMessages.push(
         new SystemMessage(`Previous conversation summary:\n${summary}`),
       );
     }
 
-    // Add managed conversation history
     langchainMessages.push(
       ...managedMessages.map((m: any) =>
         m.role === "user"
@@ -620,208 +333,56 @@ export async function POST(req: NextRequest) {
       ));
     }
 
-    // Add current query
     langchainMessages.push(new HumanMessage(query));
 
-    // 4.5 Check if we should retrieve more context (iterative retrieval)
-    // Fast path gets a lightweight check, slow path gets full iterative retrieval
-    let additionalSources: any[] = [];
-    const MAX_TOTAL_CHUNKS = 35; // Match smartRetrieval.ts maxChunks default
-    let upgradedToSlowPath = false;
+    // 5. Set up tools (including RAG as a tool) and check for tool calls before streaming
+    const chatModel = await getChatModel();
 
-    // Fast path escape hatch: quick check if we got zero or very few results
-    if (
-      queryRoute.skipIterativeRetrieval &&
-      searchResults.length > 0 &&
-      searchResults.length < 3
-    ) {
-      console.log(
-        `[QueryRouter] Fast path got only ${searchResults.length} results, checking if upgrade needed`,
-      );
-      try {
-        const fastModel = await getFastChatModel();
-        const escapeCheckStart = Date.now();
-        const escapeCheckMessages = [
-          new SystemMessage(systemPrompt),
-          new HumanMessage(query),
-          new HumanMessage(
-            "Can you answer this question with the provided context? Reply with ONLY 'YES' or 'NO'.",
-          ),
-        ];
-        const escapeCheck = await fastModel.invoke(escapeCheckMessages);
-        const escapeCheckDuration = Date.now() - escapeCheckStart;
-
-        const canAnswer =
-          typeof escapeCheck.content === "string"
-            ? escapeCheck.content.trim().toUpperCase()
-            : "";
-
-        // Track this call
-        const escapeCheckResponse = typeof escapeCheck.content === "string" ? escapeCheck.content : "";
-        const escapeCheckModelName = (fastModel as any).modelName || (fastModel as any).model || (fastModel as any).kwargs?.model || "unknown";
-        await llmTracker.trackCall("iterative_preview", {
-          model: escapeCheckModelName,
-          promptTokens: (escapeCheck as any).usage_metadata?.input_tokens || estimateMessageTokens(escapeCheckMessages),
-          completionTokens: (escapeCheck as any).usage_metadata?.output_tokens || Math.ceil(escapeCheckResponse.length / 4),
-          duration: escapeCheckDuration,
-          callPayload: JSON.stringify({
-            type: "escape_hatch_check",
-            resultCount: searchResults.length,
-            decision: canAnswer.includes("NO") ? "upgrade_to_slow_path" : "continue_fast_path",
-            request: escapeCheckMessages.map(m => ({
-              role: m._getType(),
-              content: typeof m.content === "string" ? m.content.substring(0, 300) : "non-string"
-            })),
-            response: escapeCheckResponse
-          }),
-        });
-
-        if (canAnswer.includes("NO")) {
-          console.log("[QueryRouter] Fast path upgrading to slow path");
-          upgradedToSlowPath = true;
-          queryRoute.skipIterativeRetrieval = false;
-          queryRoute.path = "slow";
-        }
-      } catch (error) {
-        // Continue with fast path on error
-        console.log(
-          "[QueryRouter] Escape hatch check failed, continuing fast path",
-        );
-      }
-    }
-
-    if (
-      !queryRoute.skipIterativeRetrieval &&
-      searchResults.length > 0 &&
-      searchResults.length < MAX_TOTAL_CHUNKS
-    ) {
-      // Only check if we have some results but not at max
-
-      // Quick check with first ~200 chars of a fast preview
-      const fastModel = await getFastChatModel();
-      const previewMessages = [...langchainMessages];
-      previewMessages.push(
-        new HumanMessage(
-          "Respond with ONLY 'NEED_MORE_CONTEXT' if you need additional document chunks to answer thoroughly, or 'SUFFICIENT' if you have enough information. Be conservative - only request more if truly necessary.",
-        ),
-      );
-
-      try {
-        const previewStart = Date.now();
-        const preview = await fastModel.invoke(previewMessages);
-        const previewDuration = Date.now() - previewStart;
-
-        const previewText =
-          typeof preview.content === "string"
-            ? preview.content.trim().toUpperCase()
-            : "";
-
-        // Track this call
-        const previewResponse = typeof preview.content === "string" ? preview.content : "";
-        const previewModelName = (fastModel as any).modelName || (fastModel as any).model || (fastModel as any).kwargs?.model || "unknown";
-        await llmTracker.trackCall("iterative_preview", {
-          model: previewModelName,
-          promptTokens: (preview as any).usage_metadata?.input_tokens || estimateMessageTokens(previewMessages),
-          completionTokens: (preview as any).usage_metadata?.output_tokens || Math.ceil(previewResponse.length / 4),
-          duration: previewDuration,
-          callPayload: JSON.stringify({
-            type: "context_sufficiency_check",
-            currentChunks: searchResults.length,
-            maxChunks: MAX_TOTAL_CHUNKS,
-            decision: previewText.includes("NEED_MORE") ? "retrieve_more" : "sufficient",
-            request: previewMessages.map(m => ({
-              role: m._getType(),
-              content: typeof m.content === "string" ? m.content.substring(0, 300) : "non-string"
-            })),
-            response: previewResponse
-          }),
-        });
-
-        if (previewText.includes("NEED_MORE")) {
-          const analysis = await shouldRetrieveMore(
-            query,
-            previewText,
-            searchResults.length,
-            MAX_TOTAL_CHUNKS,
-          );
-
-          if (analysis.shouldRetrieve && analysis.suggestedCount) {
-            const moreResults = await retrieveAdditionalContext(
-              query,
-              searchResults,
-              sourceFilter === "all" || !sourceFilter ? "all" : sourceFilter,
-              analysis.suggestedCount,
-            );
-
-            if (moreResults.length > 0) {
-              // Add new chunks to context
-              for (const result of moreResults) {
-                const source = result.metadata.source || "synced";
-                contextParts.push(
-                  `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
-                );
-                additionalSources.push({
-                  fileName: result.metadata.fileName,
-                  filePath: result.metadata.filePath,
-                  chunk: result.content,
-                  score: result.score,
-                  source,
-                });
-              }
-
-              // Update context and system prompt
-              context = contextParts.join("\n\n");
-              systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, {
-                context,
-              });
-              if (userContextString) {
-                systemPrompt += `\n\n${userContextString}`;
-              }
-              systemPrompt += matrixFormattingNote;
-
-              // Update messages with new system prompt
-              langchainMessages[0] = new SystemMessage(systemPrompt);
-            }
-          }
-        }
-      } catch (error) {
-        // Continue with normal flow on error
-      }
-    }
-
-    // 5. Set up tools and check for tool calls before streaming
-    const chatModel = await getChatModel(); // Get model instance with current settings
-
-    // Check if model supports tool calling and generate tools
     const modelName =
       (chatModel as any).modelName || (chatModel as any).model || "";
     const supportsTools = shouldEnableIterativeRetrieval(modelName);
 
-    // Skip tools if we have poor search results for general knowledge queries
-    const hasPoorSearchResults = searchResults.length < 3;
-    const isGeneralKnowledgeQuery =
-      !/\b(book|read|document|file|paperless|goodreads|author|rating|shelf)\b/i.test(query);
-    const shouldSkipTools = hasPoorSearchResults && isGeneralKnowledgeQuery && !skipRagForTools;
-
-    if (shouldSkipTools) {
-      console.log(
-        `[Tools] Skipping tool check - general knowledge query with ${searchResults.length} search results`
-      );
-    }
+    // Create the RAG tool with per-request config (exclude when sourceFilter is "none")
+    // Capture search results via callback for source attribution in the response
+    let ragSearchResults: any[] = [];
+    const singleDocPath = typeof documentPath === "string" ? documentPath.trim() : null;
+    const ragTool = sourceFilter !== "none" ? createRagTool({
+      sourceFilter,
+      sourceCount: sourceCount || 35,
+      documentPath: singleDocPath,
+      userName: userProfile.userName,
+      userBio: userProfile.userBio,
+      isFirstMessage,
+      conversationHistory: messages.slice(0, -1),
+      onEmbeddingMetrics: (metrics) => llmTracker.trackCall("embedding", {
+        ...metrics,
+        callPayload: JSON.stringify({ type: "rag_tool_search" }),
+      }),
+      onSearchResults: (results) => { ragSearchResults = results; },
+    }) : null;
 
     let tools: any[] = [];
     let toolResults: string[] = [];
 
-    if (supportsTools && !shouldSkipTools) {
+    if (supportsTools) {
       try {
-        // Get both plugin tools and utility tools
+        // Get plugin tools, utility tools, and RAG tool
         const pluginTools = await generateToolsForConfiguredPlugins();
         const utilityTools = generateUtilityTools();
-        const allTools = [...pluginTools, ...utilityTools];
+        const allTools = [
+          ...pluginTools,
+          ...utilityTools,
+          ...(ragTool ? [ragTool] : []),
+        ];
 
         // Route tool selection based on query intent
         const toolRouting = routeToolSelection(query);
         tools = filterToolsByRouting(allTools, toolRouting);
+
+        // Always include RAG tool if available (it's the LLM's choice to use it)
+        if (ragTool && !tools.some((t: any) => t.name === "search_knowledge_base")) {
+          tools.push(ragTool);
+        }
 
         // Exclude reminder tools for scheduled task execution to prevent re-creation loops
         if (triggerSource === "scheduled") {
@@ -837,12 +398,12 @@ export async function POST(req: NextRequest) {
         if (tools.length > 0) {
           // Add guidance about tool usage
           let toolGuidanceText =
-            `You have access to tools that query databases directly for ACCURATE counts and metadata. ` +
-            `When the user asks "how many" or wants to count items, you MUST use the appropriate search tool ` +
-            `and TRUST THE TOOL'S COUNT RESULT - do NOT count from the context documents. ` +
-            `The context documents are just a semantic search sample (limited to ~20 items). ` +
-            `The tools query the FULL database and return the ACCURATE total count. ` +
-            `ALWAYS report the count from the tool result, not from the context.`;
+            `You have access to tools. For general knowledge questions (jokes, definitions, math, common facts), ` +
+            `answer directly WITHOUT using any tools. ` +
+            `For questions about the user's personal data (their books, documents, calendar, files, notes), ` +
+            `use the search_knowledge_base tool to find relevant information. ` +
+            `When the user asks "how many" or wants to count items, use the appropriate search tool ` +
+            `and TRUST THE TOOL'S COUNT RESULT. The tools query the FULL database and return ACCURATE counts.`;
 
           // Add email-specific guidance when email tools are available
           if (tools.some((t: any) => t.name.includes("email"))) {
@@ -973,71 +534,7 @@ export async function POST(req: NextRequest) {
             if (toolResults.length > 0) {
               const toolResultsText = toolResults.join("\n\n");
 
-              // Check if tool returned 0 results - if so, fall back to RAG search
-              const toolReturnedZero =
-                toolResultsText.includes("Count: 0") ||
-                toolResultsText.includes("count: 0") ||
-                toolResultsText.includes("0 matching results");
-
-              if (toolReturnedZero && skipRagForTools) {
-                // Perform RAG search now
-                if (!sourceFilter || sourceFilter === "all") {
-                  const smartResult = await smartSearch(
-                    query,
-                    undefined,
-                    20,
-                    (metrics) => llmTracker.trackCall("embedding", {
-                      ...metrics,
-                      callPayload: JSON.stringify({
-                        type: "fallback_search_after_tool_zero",
-                        queryLength: query.length,
-                        maxChunks: 20
-                      })
-                    })
-                  );
-                  searchResults = smartResult.results;
-                } else {
-                  searchResults = await search(
-                    query,
-                    20,
-                    sourceFilter,
-                    (metrics) => llmTracker.trackCall("embedding", {
-                      ...metrics,
-                      callPayload: JSON.stringify({
-                        type: "fallback_search_after_tool_zero",
-                        queryLength: query.length,
-                        limit: 20,
-                        sourceFilter: Array.isArray(sourceFilter) ? sourceFilter.join(',') : sourceFilter
-                      })
-                    })
-                  );
-                }
-
-                // Build context from search results
-                for (const result of searchResults) {
-                  contextParts.push(
-                    `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
-                  );
-                }
-                context = contextParts.join("\n\n");
-
-                // Update system prompt to include the RAG context
-                systemPrompt = interpolatePrompt(prompts.ragSystemPrompt, {
-                  context,
-                });
-                if (userContextString) {
-                  systemPrompt += `\n\n${userContextString}`;
-                }
-                systemPrompt += matrixFormattingNote;
-                langchainMessages[0] = new SystemMessage(systemPrompt);
-
-                // Add a note about the fallback
-                langchainMessages.push(
-                  new SystemMessage(
-                    `The metadata query returned no results. However, here is relevant context from semantic search that might help answer the question.`,
-                  ),
-                );
-              } else {
+              {
                 // Check if reminder tool or note tool was used
                 const usedReminderTool = toolCheckResponse.tool_calls?.some((tc: any) =>
                   tc.name === 'create_reminder' || tc.name === 'list_reminders' || tc.name === 'cancel_reminder'
@@ -1105,7 +602,7 @@ export async function POST(req: NextRequest) {
       (m) => typeof m.content === "string" && m.content.includes("Tool 'search_email'") || m.content.toString().includes("Tool 'list_unread_email'")
     );
 
-    if (isEmailQuery && skipRagForTools && !emailToolWasCalled) {
+    if (isEmailQuery && !emailToolWasCalled) {
       console.log("[EmailFallback] LLM did not call email tools, executing directly");
       try {
         const { getPlugin } = await import("@/lib/plugins");
@@ -1182,6 +679,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fallback: If the query likely needs personal data but no tools were called,
+    // auto-execute the RAG tool. This handles weak tool-calling models.
+    const anyToolWasCalled = langchainMessages.some(
+      (m) => typeof m.content === "string" && m.content.includes("Tool '")
+    );
+    const queryLikelyNeedsRag = /\b(my|book|document|file|paper|read|goodreads|calendar|paperless|uploaded|synced|note)\b/i.test(query);
+
+    if (!anyToolWasCalled && queryLikelyNeedsRag && ragTool && sourceFilter !== "none") {
+      console.log("[RAGFallback] LLM did not call any tools for personal-data query, auto-executing RAG");
+      try {
+        const ragResult = await ragTool.invoke({ query, source_filter: undefined });
+        if (ragResult && !ragResult.includes("No relevant documents found")) {
+          langchainMessages.push(
+            new SystemMessage(
+              `Knowledge base search results:\n\n${ragResult}\n\nUse these results to answer the user's question. Cite sources when relevant.`,
+            ),
+          );
+        }
+      } catch (error) {
+        console.error("[RAGFallback] Error:", error);
+      }
+    }
+
     // Now stream the final response (use fresh model without tools to avoid tool-calling in response)
     const parser = new StringOutputParser();
     const finalModel = await getChatModel(); // Fresh instance without tool binding
@@ -1199,26 +719,22 @@ export async function POST(req: NextRequest) {
       isReferenced?: boolean;
     }
 
-    // Only include sources if we actually used RAG context
-    // For tool-only queries (reminders, counting, etc.) skip sources to reduce noise
-    const shouldIncludeSources = !skipRagForTools && searchResults.length > 0;
-
+    // Sources: combine RAG search results (captured via callback) with web search sources
     const sourcesData: {
       type: string;
       sources: SourceData[];
     } = {
       type: "sources",
-      sources: shouldIncludeSources || webSources.length > 0 ? [
-        ...searchResults.map((r) => ({
+      sources: [
+        ...ragSearchResults.map((r: any) => ({
           fileName: r.metadata.fileName,
           filePath: r.metadata.filePath,
           chunk: r.content,
           score: r.score,
           source: r.metadata.source || "synced",
         })),
-        ...additionalSources, // Add any sources from iterative retrieval
-        ...webSources, // Add any web search sources
-      ] : [],
+        ...webSources,
+      ],
     };
 
     // Create assistant message record early so it's saved even if client disconnects (skip for internal requests)

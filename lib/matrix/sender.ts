@@ -1,4 +1,5 @@
 import { matrixClient } from "./client";
+import { getSourceDisplayName } from "@/types/source";
 
 /**
  * Maximum message length before splitting (Matrix typically allows ~64KB, but we'll be conservative)
@@ -29,7 +30,7 @@ function formatSources(sources: any[]): string {
 
       // Add source type if available
       if (source.source) {
-        line += ` (${source.source})`;
+        line += ` (${getSourceDisplayName(source.source)})`;
       }
 
       // Add score if available and significant
