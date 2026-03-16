@@ -117,7 +117,7 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         await sendFormattedMessage(roomId, "⚠️ Please provide a search query. Usage: `#search your query here`");
         return;
       }
-      // Process as web search
+      console.log(`[Matrix] #search command from ${sender} in ${roomId}: "${searchQuery}"`);
       await handleWebCommand(event, roomId, sender, messageText, searchQuery, "search");
       return;
     }
@@ -129,7 +129,7 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         await sendFormattedMessage(roomId, "⚠️ Please provide a research query. Usage: `#research your query here`");
         return;
       }
-      // Process as deep research
+      console.log(`[Matrix] #research command from ${sender} in ${roomId}: "${researchQuery}"`);
       await handleWebCommand(event, roomId, sender, messageText, researchQuery, "research");
       return;
     }
@@ -276,6 +276,8 @@ async function callRagFlow(
     // Get conversation history with 30-minute pruning
     const messages = getPrunedHistory(roomId, query);
 
+    console.log(`[Matrix] callRagFlow: query="${query.substring(0, 80)}", roomId=${roomId}, useRag=${useRag}, webSearchQuery=${!!webSearchQuery}, webResearchQuery=${!!webResearchQuery}, historyMessages=${messages.length}`);
+
     // Call the chat API internally
     const response = await fetch("http://localhost:3000/api/chat", {
       method: "POST",
@@ -296,8 +298,11 @@ async function callRagFlow(
     });
 
     if (!response.ok) {
-      throw new Error(`RAG flow returned ${response.status}`);
+      const errorBody = await response.text().catch(() => "");
+      console.error(`[Matrix] callRagFlow: chat API returned ${response.status}: ${errorBody.substring(0, 200)}`);
+      throw new Error(`RAG flow returned ${response.status}: ${errorBody.substring(0, 100)}`);
     }
+    console.log(`[Matrix] callRagFlow: chat API returned 200, streaming response...`);
 
     // Read the streaming response
     const reader = response.body?.getReader();
@@ -385,6 +390,7 @@ async function handleWebCommand(
 
   try {
     const displayName = await getMatrixUserDisplayName(roomId, sender!);
+    console.log(`[Matrix] handleWebCommand: type=${type}, query="${webQuery}", sender=${displayName}`);
 
     // Add user message to conversation history
     const userMessage: ConversationMessage = {
@@ -399,7 +405,9 @@ async function handleWebCommand(
     // Check room settings
     const room = await prisma.matrixRoom.findUnique({ where: { roomId } });
     const useRag = room?.useRag ?? true;
+    console.log(`[Matrix] handleWebCommand: room found=${!!room}, useRag=${useRag}, passing ${type === "search" ? "webSearchQuery" : "webResearchQuery"} to chat API`);
 
+    const startTime = Date.now();
     const response = await callRagFlow(
       webQuery,
       roomId,
@@ -409,6 +417,8 @@ async function handleWebCommand(
       type === "search" ? webQuery : undefined,
       type === "research" ? webQuery : undefined,
     );
+    const duration = Date.now() - startTime;
+    console.log(`[Matrix] handleWebCommand: got response in ${duration}ms, text length=${response.text.length}, sources=${response.sources?.length ?? 0}`);
 
     // Add assistant response to conversation history
     const assistantMessage: ConversationMessage = {
@@ -421,10 +431,10 @@ async function handleWebCommand(
 
     await sendFormattedMessage(roomId, response.text, response.sources);
   } catch (error) {
-    console.error("[Matrix] Error processing web command:", error);
+    console.error(`[Matrix] Error processing #${type} command:`, error);
     await sendFormattedMessage(
       roomId,
-      "❌ Sorry, I encountered an error processing your web search. Please try again later.",
+      `❌ Sorry, I encountered an error processing your ${type === "research" ? "research" : "web search"}. Please try again later.`,
     );
   } finally {
     clearInterval(typingInterval);

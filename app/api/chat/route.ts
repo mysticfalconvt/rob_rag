@@ -21,7 +21,7 @@ import { shouldEnableIterativeRetrieval } from "@/lib/retrievalTools";
 import { generateUtilityTools } from "@/lib/utilityTools";
 import { LLMRequestTracker } from "@/lib/llmTracking";
 import { routeToolSelection, filterToolsByRouting, explainToolSelection } from "@/lib/toolRouter";
-import { searchWeb, searchDeep, formatWebResultsAsContext, isWebSearchConfigured } from "@/lib/webSearch";
+import { searchWeb, searchDeep, formatWebResultsAsContext, isWebSearchConfigured, isSearXNGConfigured, isPerplexicaConfigured } from "@/lib/webSearch";
 import { createRagTool } from "@/lib/tools/ragTool";
 
 export async function POST(req: NextRequest) {
@@ -231,9 +231,17 @@ export async function POST(req: NextRequest) {
     let webSources: any[] = [];
 
     if (webSearchQuery) {
-      console.log(`[WebSearch] Explicit web search: "${webSearchQuery.substring(0, 50)}"`);
+      console.log(`[WebSearch] Explicit web search triggered: query="${webSearchQuery.substring(0, 80)}", searxng=${isSearXNGConfigured()}, perplexica=${isPerplexicaConfigured()}`);
+      const searchStart = Date.now();
       const webResponse = await searchWeb(webSearchQuery);
+      const searchDuration = Date.now() - searchStart;
+      console.log(`[WebSearch] Web search completed in ${searchDuration}ms: ${webResponse.results.length} results, synthesized=${!!webResponse.synthesizedAnswer}`);
       webContext = formatWebResultsAsContext(webResponse);
+      if (webContext) {
+        console.log(`[WebSearch] Web context built: ${webContext.length} chars`);
+      } else {
+        console.warn(`[WebSearch] Web search returned no usable context`);
+      }
       webSources = webResponse.results.map((r) => ({
         fileName: r.title,
         filePath: r.url,
@@ -242,9 +250,17 @@ export async function POST(req: NextRequest) {
         source: "web_search",
       }));
     } else if (webResearchQuery) {
-      console.log(`[WebSearch] Explicit deep research: "${webResearchQuery.substring(0, 50)}"`);
+      console.log(`[WebSearch] Explicit deep research triggered: query="${webResearchQuery.substring(0, 80)}", perplexica=${isPerplexicaConfigured()}, searxng_fallback=${isSearXNGConfigured()}`);
+      const researchStart = Date.now();
       const webResponse = await searchDeep(webResearchQuery);
+      const researchDuration = Date.now() - researchStart;
+      console.log(`[WebSearch] Deep research completed in ${researchDuration}ms: ${webResponse.results.length} results, synthesized=${!!webResponse.synthesizedAnswer}`);
       webContext = formatWebResultsAsContext(webResponse);
+      if (webContext) {
+        console.log(`[WebSearch] Research context built: ${webContext.length} chars`);
+      } else {
+        console.warn(`[WebSearch] Deep research returned no usable context`);
+      }
       webSources = webResponse.results.map((r) => ({
         fileName: r.title,
         filePath: r.url,
@@ -253,8 +269,9 @@ export async function POST(req: NextRequest) {
         source: "web_research",
       }));
     } else if (webSearchEnabled && isWebSearchConfigured()) {
-      console.log(`[WebSearch] Web search toggle enabled`);
+      console.log(`[WebSearch] Web search toggle enabled, auto-searching: query="${query.substring(0, 80)}"`);
       const webResponse = await searchWeb(query);
+      console.log(`[WebSearch] Auto-search returned ${webResponse.results.length} results`);
       if (webResponse.results.length > 0) {
         webContext = formatWebResultsAsContext(webResponse);
         webSources = webResponse.results.map((r) => ({
@@ -265,6 +282,8 @@ export async function POST(req: NextRequest) {
           source: "web_search",
         }));
       }
+    } else {
+      console.log(`[WebSearch] No web search requested (webSearchQuery=${!!webSearchQuery}, webResearchQuery=${!!webResearchQuery}, webSearchEnabled=${!!webSearchEnabled}, isConfigured=${isWebSearchConfigured()})`);
     }
 
     // 2. Build system prompt — RAG context is now provided via tool results, not upfront
@@ -274,7 +293,16 @@ export async function POST(req: NextRequest) {
     );
 
     const matrixFormattingNote = (triggerSource === "matrix" || triggerSource === "scheduled")
-      ? `\n\nIMPORTANT: You are responding in a Matrix chat. DO NOT use markdown tables - they don't render correctly. Use bullet lists, numbered lists, or simple text formatting instead. Bold and italic markdown work fine.`
+      ? `\n\nIMPORTANT: You are responding in a Matrix chat. DO NOT use markdown tables - they don't render correctly. Use bullet lists, numbered lists, or simple text formatting instead. Bold and italic markdown work fine.` +
+        `\n\nYou are a personal AI assistant running in a Matrix chat room. When the user asks what you can do or what capabilities you have, tell them about ALL of the following:` +
+        `\n- **Chat commands:** Users can type \`#search <query>\` for quick web searches, \`#research <query>\` for in-depth research, and \`#clear\` to reset conversation context.` +
+        `\n- **Knowledge base:** You can search the user's personal documents, books, notes, and files.` +
+        `\n- **Web search & research:** You can search the web for current information and perform deep research on complex topics (also available via the #search and #research commands).` +
+        `\n- **Email:** You can search, read, and manage the user's connected email accounts.` +
+        `\n- **Calendar:** You can look up upcoming events, search by date/attendee/location.` +
+        `\n- **Reminders:** You can create, list, and cancel reminders.` +
+        `\n- **Notes:** You can save information for later retrieval.` +
+        `\n- **Date/time:** You can calculate dates, differences, and provide current date/time info.`
       : "";
 
     let systemPrompt = prompts.noSourcesSystemPrompt;
@@ -404,6 +432,18 @@ export async function POST(req: NextRequest) {
             `use the search_knowledge_base tool to find relevant information. ` +
             `When the user asks "how many" or wants to count items, use the appropriate search tool ` +
             `and TRUST THE TOOL'S COUNT RESULT. The tools query the FULL database and return ACCURATE counts.`;
+
+          // Add web search/research guidance when those tools are available
+          if (tools.some((t: any) => t.name === "web_search")) {
+            toolGuidanceText +=
+              ` You have a web_search tool for looking up current events, news, weather, and real-time information. ` +
+              `Use it when the user asks about recent events, current facts, or anything that requires up-to-date information.`;
+          }
+          if (tools.some((t: any) => t.name === "deep_research")) {
+            toolGuidanceText +=
+              ` You have a deep_research tool for comprehensive, in-depth research on complex topics. ` +
+              `Use it when the user asks for thorough analysis, academic research, or detailed investigation of a subject.`;
+          }
 
           // Add email-specific guidance when email tools are available
           if (tools.some((t: any) => t.name.includes("email"))) {

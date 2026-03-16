@@ -251,12 +251,14 @@ export async function searchPerplexica(query: string, options: WebSearchOptions 
  */
 export async function searchWeb(query: string, options: WebSearchOptions = {}): Promise<WebSearchResponse> {
   if (isSearXNGConfigured()) {
+    console.log(`[WebSearch] searchWeb routing to SearXNG (url=${getSearXNGUrl()})`);
     return searchSearXNG(query, options);
   }
   if (isPerplexicaConfigured()) {
+    console.log(`[WebSearch] searchWeb routing to Perplexica (SearXNG not configured, url=${getPerplexicaUrl()})`);
     return searchPerplexica(query, options);
   }
-  console.warn("[WebSearch] No web search backend configured");
+  console.warn("[WebSearch] searchWeb: No backend configured — SEARXNG_URL and PERPLEXICA_URL are both unset");
   return { results: [] };
 }
 
@@ -265,14 +267,15 @@ export async function searchWeb(query: string, options: WebSearchOptions = {}): 
  */
 export async function searchDeep(query: string, options: WebSearchOptions = {}): Promise<WebSearchResponse> {
   if (isPerplexicaConfigured()) {
+    console.log(`[WebSearch] searchDeep routing to Perplexica (url=${getPerplexicaUrl()})`);
     return searchPerplexica(query, options);
   }
   // Fallback to SearXNG if Perplexica is not available
   if (isSearXNGConfigured()) {
-    console.warn("[WebSearch] Perplexica not configured, falling back to SearXNG for deep research");
+    console.warn(`[WebSearch] searchDeep: Perplexica not configured (PERPLEXICA_URL unset), falling back to SearXNG`);
     return searchSearXNG(query, options);
   }
-  console.warn("[WebSearch] No web search backend configured");
+  console.warn("[WebSearch] searchDeep: No backend configured — PERPLEXICA_URL and SEARXNG_URL are both unset");
   return { results: [] };
 }
 
