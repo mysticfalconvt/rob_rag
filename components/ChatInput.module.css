@@ -4,6 +4,7 @@
 
 .inputWrapper {
   display: flex;
+  align-items: flex-start;
   gap: 0.5rem;
   background: #fff;
   padding: 0.5rem;
@@ -100,8 +101,7 @@
 
 .toggleContainer {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
 }
 
 .toggleButton {
