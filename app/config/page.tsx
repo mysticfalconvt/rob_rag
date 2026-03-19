@@ -10,6 +10,7 @@ import GoodreadsIntegration from "@/components/GoodreadsIntegration";
 import GoogleCalendarConfig from "@/components/GoogleCalendarConfig";
 import EmailConfiguration from "@/components/EmailConfiguration";
 import MatrixConfiguration from "@/components/MatrixConfiguration";
+import PortainerConfiguration from "@/components/PortainerConfiguration";
 import PromptConfiguration from "@/components/PromptConfiguration";
 import UserProfile from "@/components/UserProfile";
 import ContextWindowSettings from "@/components/ContextWindowSettings";
@@ -27,6 +28,10 @@ interface Settings {
   paperlessEnabled: boolean;
   paperlessConfigured: boolean;
   customOcrEnabled: boolean;
+  portainerUrl: string | null;
+  portainerEndpointId: number;
+  portainerEnabled: boolean;
+  portainerConfigured: boolean;
 }
 
 interface User {
@@ -62,6 +67,12 @@ export default function ConfigPage() {
   const [paperlessApiToken, setPaperlessApiToken] = useState("");
   const [paperlessEnabled, setPaperlessEnabled] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+
+  const [portainerUrl, setPortainerUrl] = useState("");
+  const [portainerEndpointId, setPortainerEndpointId] = useState(1);
+  const [portainerApiKey, setPortainerApiKey] = useState("");
+  const [portainerEnabled, setPortainerEnabled] = useState(false);
+  const [isTestingPortainer, setIsTestingPortainer] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -116,6 +127,10 @@ export default function ConfigPage() {
         setPaperlessUrl(data.paperlessUrl || "");
         setPaperlessExternalUrl(data.paperlessExternalUrl || "");
         setPaperlessEnabled(data.paperlessEnabled || false);
+
+        setPortainerUrl(data.portainerUrl || "");
+        setPortainerEndpointId(data.portainerEndpointId || 1);
+        setPortainerEnabled(data.portainerEnabled || false);
 
         // Load synced files config
         if (data.syncedFilesConfig) {
@@ -445,6 +460,72 @@ export default function ConfigPage() {
     }
   };
 
+  const handleTestPortainerConnection = async () => {
+    if (!portainerUrl) {
+      alert("Please enter a Portainer URL");
+      return;
+    }
+
+    setIsTestingPortainer(true);
+    try {
+      // Save settings first so the test connection uses them
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          portainerUrl,
+          portainerApiKey: portainerApiKey || undefined,
+          portainerEndpointId,
+          portainerEnabled: true,
+        }),
+      });
+
+      // Test by hitting the Portainer containers endpoint via our API
+      const testRes = await fetch("/api/docker/test");
+      if (testRes.ok) {
+        const data = await testRes.json();
+        alert(`Connection successful! Found ${data.containerCount} container(s).`);
+      } else {
+        const errorData = await testRes.json().catch(() => ({}));
+        alert(`Connection failed: ${errorData.error || "Check your URL and API key."}`);
+      }
+    } catch (error) {
+      console.error("Error testing Portainer connection:", error);
+      alert("Failed to test connection");
+    } finally {
+      setIsTestingPortainer(false);
+    }
+  };
+
+  const handleSavePortainerSettings = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          portainerUrl: portainerUrl || null,
+          portainerApiKey: portainerApiKey || undefined,
+          portainerEndpointId,
+          portainerEnabled,
+        }),
+      });
+
+      if (res.ok) {
+        await fetchSettings();
+        alert("Portainer settings saved successfully!");
+        setPortainerApiKey("");
+      } else {
+        alert("Failed to save settings");
+      }
+    } catch (error) {
+      console.error("Error saving Portainer settings:", error);
+      alert("Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const hasChanges = !!(
     settings &&
     (selectedEmbeddingModel !== settings.embeddingModel ||
@@ -520,6 +601,22 @@ export default function ConfigPage() {
             <GoogleCalendarConfig />
 
             <EmailConfiguration />
+
+            <PortainerConfiguration
+              portainerUrl={portainerUrl}
+              portainerEndpointId={portainerEndpointId}
+              portainerApiKey={portainerApiKey}
+              portainerEnabled={portainerEnabled}
+              portainerConfigured={settings?.portainerConfigured || false}
+              isTesting={isTestingPortainer}
+              isSaving={isSaving}
+              onUrlChange={setPortainerUrl}
+              onEndpointIdChange={setPortainerEndpointId}
+              onApiKeyChange={setPortainerApiKey}
+              onEnabledChange={setPortainerEnabled}
+              onTest={handleTestPortainerConnection}
+              onSave={handleSavePortainerSettings}
+            />
 
             <MatrixConfiguration />
 

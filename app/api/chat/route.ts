@@ -302,6 +302,7 @@ export async function POST(req: NextRequest) {
         `\n- **Calendar:** You can look up upcoming events, search by date/attendee/location.` +
         `\n- **Reminders:** You can create, list, and cancel reminders.` +
         `\n- **Notes:** You can save information for later retrieval.` +
+        `\n- **Docker/Infrastructure:** You can list running containers, check ports, view container stats/logs, and inspect container details.` +
         `\n- **Date/time:** You can calculate dates, differences, and provide current date/time info.`
       : "";
 
@@ -443,6 +444,14 @@ export async function POST(req: NextRequest) {
             toolGuidanceText +=
               ` You have a deep_research tool for comprehensive, in-depth research on complex topics. ` +
               `Use it when the user asks for thorough analysis, academic research, or detailed investigation of a subject.`;
+          }
+
+          // Add Docker/container guidance when docker tools are available
+          if (tools.some((t: any) => t.name === "list_containers" || t.name === "get_container_details")) {
+            toolGuidanceText +=
+              ` You have Docker/Portainer tools that can list containers, inspect container details, show resource usage (CPU/memory), ` +
+              `view logs, and check exposed ports. Use these when the user asks about their server, Docker containers, ` +
+              `running services, port usage, or container health.`;
           }
 
           // Add email-specific guidance when email tools are available

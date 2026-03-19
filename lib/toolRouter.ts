@@ -19,6 +19,7 @@ export type ToolCategory =
   | "notes"              // Note saving/retrieval
   | "metadata_search"    // Specific metadata searches (by date, attendee, etc.)
   | "email"              // Email queries (inbox, unread, mail, sender)
+  | "docker"             // Docker/container/infrastructure queries
   | "web_search"         // Web search queries (current events, news, online lookups)
   | "deep_research"      // Deep research queries (comprehensive analysis, academic)
   | "all";               // General queries that might need multiple tools
@@ -52,6 +53,9 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   // Email patterns
   const emailKeywords = /\b(email|emails|e-mail|inbox|unread mail|unread email|mailbox|mail from|sender|gmail|zoho)\b/;
   const emailActionKeywords = /\b(archive|delete|cleanup|clean up|trash)\b.*\b(email|emails|mail|message|messages)\b|\b(email|emails|mail|message|messages)\b.*\b(archive|delete|cleanup|clean up|trash)\b/;
+
+  // Docker/container patterns
+  const dockerKeywords = /\b(docker|container|containers|portainer|server infrastructure|running containers|exposed ports?|container logs?|container stats?|memory usage|cpu usage)\b/;
 
   // Web search patterns
   const webSearchKeywords = /\b(search the web|current events|latest news|recent news|trending|2025|2026|google|look up online|what'?s happening|breaking news|stock price|weather forecast)\b/;
@@ -110,6 +114,12 @@ export function routeToolSelection(query: string): ToolRoutingResult {
     reasons.push("detected email-related keywords");
   }
 
+  // Check for docker/container queries
+  if (dockerKeywords.test(lowerQuery)) {
+    categories.push("docker");
+    reasons.push("detected docker/container-related keywords");
+  }
+
   // Check for web search queries
   if (webSearchKeywords.test(lowerQuery)) {
     categories.push("web_search");
@@ -148,6 +158,9 @@ export function routeToolSelection(query: string): ToolRoutingResult {
   }
   if (categories.includes("deep_research")) {
     suggestedTools.push("deep_research");
+  }
+  if (categories.includes("docker")) {
+    suggestedTools.push("list_containers", "get_container_details", "get_container_stats", "get_container_logs", "list_exposed_ports");
   }
   if (categories.includes("email")) {
     if (emailActionKeywords.test(lowerQuery)) {
@@ -233,6 +246,14 @@ export function filterToolsByRouting(
         relevantToolNames.add("search_calendar_by_date");
         relevantToolNames.add("search_calendar_by_attendee");
         relevantToolNames.add("search_calendar_by_location");
+        break;
+
+      case "docker":
+        relevantToolNames.add("list_containers");
+        relevantToolNames.add("get_container_details");
+        relevantToolNames.add("get_container_stats");
+        relevantToolNames.add("get_container_logs");
+        relevantToolNames.add("list_exposed_ports");
         break;
 
       case "email":

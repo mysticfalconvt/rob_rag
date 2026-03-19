@@ -168,6 +168,11 @@ model Settings {
   dailySyncLastRun        DateTime?
   dailySyncLastStatus     String?   // "success" or "failed"
   dailySyncLastError      String?
+  // Portainer / Docker configuration
+  portainerUrl            String?
+  portainerApiKey         String?
+  portainerEndpointId     Int?      @default(1)
+  portainerEnabled        Boolean   @default(false)
   // Matrix configuration
   matrixHomeserver        String?
   matrixAccessToken       String?

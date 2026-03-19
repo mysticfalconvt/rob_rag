@@ -9,12 +9,13 @@ import { paperlessPlugin } from "./paperlessPlugin";
 import { filesPlugin } from "./filesPlugin";
 import { calendarPlugin } from "./calendarPlugin";
 import { emailPlugin } from "./emailPlugin";
+import { dockerPlugin } from "./dockerPlugin";
 
 /**
  * Initialize all plugins
  * Call this on app startup to register all available data sources
  */
-const ALL_PLUGINS = [goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin, emailPlugin];
+const ALL_PLUGINS = [goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin, emailPlugin, dockerPlugin];
 let pluginsLogged = false;
 
 export function initializePlugins(): void {
@@ -46,4 +47,4 @@ export function getPlugin(name: string) {
 export { dataSourceRegistry };
 
 // Export individual plugins for direct import
-export { goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin, emailPlugin };
+export { goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin, emailPlugin, dockerPlugin };

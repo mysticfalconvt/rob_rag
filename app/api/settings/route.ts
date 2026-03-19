@@ -27,6 +27,10 @@ export async function GET(req: NextRequest) {
         paperlessEnabled: false,
         paperlessConfigured: false,
         customOcrEnabled: false,
+        portainerUrl: null,
+        portainerEndpointId: 1,
+        portainerEnabled: false,
+        portainerConfigured: false,
       });
     }
 
@@ -44,6 +48,10 @@ export async function GET(req: NextRequest) {
       customOcrEnabled: settings.customOcrEnabled,
       syncedFilesConfig: settings.syncedFilesConfig,
       dailySyncTime: settings.dailySyncTime,
+      portainerUrl: settings.portainerUrl,
+      portainerEndpointId: settings.portainerEndpointId || 1,
+      portainerEnabled: settings.portainerEnabled,
+      portainerConfigured: !!settings.portainerApiKey,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -74,6 +82,10 @@ export async function POST(req: NextRequest) {
       customOcrEnabled,
       syncedFilesConfig,
       dailySyncTime,
+      portainerUrl,
+      portainerApiKey,
+      portainerEndpointId,
+      portainerEnabled,
     } = await req.json();
 
     // Validate Paperless URL if provided
@@ -95,6 +107,18 @@ export async function POST(req: NextRequest) {
       } catch (_error) {
         return NextResponse.json(
           { error: "Invalid Paperless-ngx External URL format" },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate Portainer URL if provided
+    if (portainerUrl) {
+      try {
+        new URL(portainerUrl);
+      } catch (_error) {
+        return NextResponse.json(
+          { error: "Invalid Portainer URL format" },
           { status: 400 },
         );
       }
@@ -139,6 +163,20 @@ export async function POST(req: NextRequest) {
     }
     if (customOcrEnabled !== undefined) {
       updateData.customOcrEnabled = customOcrEnabled;
+    }
+
+    // Handle Portainer settings
+    if (portainerUrl !== undefined) {
+      updateData.portainerUrl = portainerUrl;
+    }
+    if (portainerApiKey !== undefined) {
+      updateData.portainerApiKey = portainerApiKey;
+    }
+    if (portainerEndpointId !== undefined) {
+      updateData.portainerEndpointId = portainerEndpointId;
+    }
+    if (portainerEnabled !== undefined) {
+      updateData.portainerEnabled = portainerEnabled;
     }
 
     // Handle sync settings
@@ -194,6 +232,10 @@ export async function POST(req: NextRequest) {
       customOcrEnabled: settings.customOcrEnabled,
       syncedFilesConfig: settings.syncedFilesConfig,
       dailySyncTime: settings.dailySyncTime,
+      portainerUrl: settings.portainerUrl,
+      portainerEndpointId: settings.portainerEndpointId || 1,
+      portainerEnabled: settings.portainerEnabled,
+      portainerConfigured: !!settings.portainerApiKey,
     });
   } catch (error) {
     if (error instanceof Error) {
