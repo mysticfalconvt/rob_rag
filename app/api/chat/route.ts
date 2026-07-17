@@ -61,7 +61,15 @@ export async function POST(req: NextRequest) {
       };
     }
 
+    // Newline-delimited JSON event stream. Each line is one JSON object:
+    //   {"type":"token","value":"..."}   — a chunk of the final answer
+    //   {"type":"status", ...}            — a progress/activity event
+    //   {"type":"sources","sources":[...],"conversationId":"..."}  — final trailer
+    // JSON.stringify escapes newlines inside values, so line-splitting is safe.
     const encoder = new TextEncoder();
+    const send = (controller: ReadableStreamDefaultController, obj: unknown) =>
+      controller.enqueue(encoder.encode(`${JSON.stringify(obj)}\n`));
+
     const byteStream = new ReadableStream({
       async start(controller) {
         try {
@@ -75,19 +83,15 @@ export async function POST(req: NextRequest) {
             sourceCount,
             documentPath,
             webIntent,
-            onToken: (delta) => controller.enqueue(encoder.encode(delta)),
+            onToken: (value) => send(controller, { type: "token", value }),
+            onEvent: (event) => send(controller, event),
           });
 
-          // Preserve the existing wire format: a trailing sources sentinel that
-          // the client (hooks/useChat.ts) already knows how to parse.
-          const finalData = {
+          send(controller, {
             type: "sources",
             sources: result.sources,
             conversationId: result.conversationId,
-          };
-          controller.enqueue(
-            encoder.encode(`\n__SOURCES__:${JSON.stringify(finalData)}`),
-          );
+          });
           controller.close();
         } catch (error) {
           console.error("[Chat API] runAgent error:", error);
@@ -97,7 +101,7 @@ export async function POST(req: NextRequest) {
     });
 
     return new NextResponse(byteStream, {
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {

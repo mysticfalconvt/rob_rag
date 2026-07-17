@@ -54,6 +54,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     matrixRoomId,
     webIntent,
     onToken,
+    onEvent,
   } = input;
 
   const lastMessage = messages[messages.length - 1];
@@ -228,6 +229,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       },
       tracker,
       onToken: wrappedOnToken,
+      onEvent,
     });
     finalText = result.finalText;
   } catch (error) {

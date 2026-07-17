@@ -8,6 +8,20 @@ import prisma from './prisma';
 import { SearchResult } from './retrieval';
 
 /**
+ * HNSW search-list size. The default pgvector value (40) gives poor recall on
+ * FILTERED vector searches: with a WHERE clause the index walk can get stuck in a
+ * dominant cluster (here, calendar events are ~70% of all chunks) and miss the
+ * true nearest neighbours — e.g. a search for "boat" returned calendar events
+ * instead of the boat documents. A larger ef_search fixes recall for filtered
+ * queries at a small latency cost. Must be applied on the SAME connection as the
+ * query, so callers wrap the search in a transaction with `SET LOCAL`.
+ */
+const HNSW_EF_SEARCH = Math.min(
+  1000,
+  Math.max(64, Math.floor(Number(process.env.HNSW_EF_SEARCH) || 256)),
+);
+
+/**
  * Convert a number array embedding to PostgreSQL vector format
  * @param embedding - Array of numbers (e.g., [0.1, 0.2, ...])
  * @returns String in format "[0.1,0.2,...]" for use in SQL
@@ -99,57 +113,62 @@ export async function searchWithPgVector(
     // Use cosine distance operator: <=>
     // Returns 0 for identical vectors, 2 for opposite vectors
     // We convert to similarity score: 1 - (distance / 2) to get 0-1 range
-    const results = await prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        content: string;
-        fileName: string;
-        filePath: string;
-        fileType: string | null;
-        source: string;
-        distance: number;
-        // Optional metadata fields
-        userId?: string;
-        userName?: string;
-        bookTitle?: string;
-        bookAuthor?: string;
-        userRating?: number;
-        dateRead?: string;
-        shelves?: string;
-        paperlessId?: number;
-        paperlessTitle?: string;
-        paperlessTags?: string;
-        paperlessCorrespondent?: string;
-        chunkIndex?: number;
-        totalChunks?: number;
-      }>
-    >(`
-      SELECT
-        id,
-        content,
-        "fileName",
-        "filePath",
-        "fileType",
-        source,
-        embedding <=> '${vectorStr}'::vector as distance,
-        "userId",
-        "userName",
-        "bookTitle",
-        "bookAuthor",
-        "userRating",
-        "dateRead",
-        "shelves",
-        "paperlessId",
-        "paperlessTitle",
-        "paperlessTags",
-        "paperlessCorrespondent",
-        "chunkIndex",
-        "totalChunks"
-      FROM "DocumentChunk"
-      ${whereClause}
-      ORDER BY embedding <=> '${vectorStr}'::vector
-      LIMIT ${limit}
-    `);
+    // Run inside a transaction so `SET LOCAL hnsw.ef_search` applies to the query
+    // on the same connection (raises filtered-search recall — see HNSW_EF_SEARCH).
+    const results = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${HNSW_EF_SEARCH}`);
+      return tx.$queryRawUnsafe<
+        Array<{
+          id: string;
+          content: string;
+          fileName: string;
+          filePath: string;
+          fileType: string | null;
+          source: string;
+          distance: number;
+          // Optional metadata fields
+          userId?: string;
+          userName?: string;
+          bookTitle?: string;
+          bookAuthor?: string;
+          userRating?: number;
+          dateRead?: string;
+          shelves?: string;
+          paperlessId?: number;
+          paperlessTitle?: string;
+          paperlessTags?: string;
+          paperlessCorrespondent?: string;
+          chunkIndex?: number;
+          totalChunks?: number;
+        }>
+      >(`
+        SELECT
+          id,
+          content,
+          "fileName",
+          "filePath",
+          "fileType",
+          source,
+          embedding <=> '${vectorStr}'::vector as distance,
+          "userId",
+          "userName",
+          "bookTitle",
+          "bookAuthor",
+          "userRating",
+          "dateRead",
+          "shelves",
+          "paperlessId",
+          "paperlessTitle",
+          "paperlessTags",
+          "paperlessCorrespondent",
+          "chunkIndex",
+          "totalChunks"
+        FROM "DocumentChunk"
+        ${whereClause}
+        ORDER BY embedding <=> '${vectorStr}'::vector
+        LIMIT ${limit}
+      `);
+    });
 
     return results.map((r) => ({
       content: r.content,
@@ -252,52 +271,55 @@ export async function hybridSearch(
     conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   try {
-    const results = await prisma.$queryRawUnsafe<
-      Array<{
-        id: string;
-        content: string;
-        fileName: string;
-        filePath: string;
-        fileType: string | null;
-        source: string;
-        distance: number;
-        userId?: string;
-        userName?: string;
-        bookTitle?: string;
-        bookAuthor?: string;
-        userRating?: number;
-        dateRead?: string;
-        shelves?: string;
-        paperlessId?: number;
-        paperlessTitle?: string;
-        chunkIndex?: number;
-        totalChunks?: number;
-      }>
-    >(`
-      SELECT
-        id,
-        content,
-        "fileName",
-        "filePath",
-        "fileType",
-        source,
-        embedding <=> '${vectorStr}'::vector as distance,
-        "userId",
-        "userName",
-        "bookTitle",
-        "bookAuthor",
-        "userRating",
-        "dateRead",
-        "shelves",
-        "paperlessId",
-        "paperlessTitle",
-        "chunkIndex",
-        "totalChunks"
-      FROM "DocumentChunk"
-      ${whereClause}
-      ORDER BY embedding <=> '${vectorStr}'::vector
-      LIMIT ${limit}
-    `);
+    const results = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${HNSW_EF_SEARCH}`);
+      return tx.$queryRawUnsafe<
+        Array<{
+          id: string;
+          content: string;
+          fileName: string;
+          filePath: string;
+          fileType: string | null;
+          source: string;
+          distance: number;
+          userId?: string;
+          userName?: string;
+          bookTitle?: string;
+          bookAuthor?: string;
+          userRating?: number;
+          dateRead?: string;
+          shelves?: string;
+          paperlessId?: number;
+          paperlessTitle?: string;
+          chunkIndex?: number;
+          totalChunks?: number;
+        }>
+      >(`
+        SELECT
+          id,
+          content,
+          "fileName",
+          "filePath",
+          "fileType",
+          source,
+          embedding <=> '${vectorStr}'::vector as distance,
+          "userId",
+          "userName",
+          "bookTitle",
+          "bookAuthor",
+          "userRating",
+          "dateRead",
+          "shelves",
+          "paperlessId",
+          "paperlessTitle",
+          "chunkIndex",
+          "totalChunks"
+        FROM "DocumentChunk"
+        ${whereClause}
+        ORDER BY embedding <=> '${vectorStr}'::vector
+        LIMIT ${limit}
+      `);
+    });
 
     return results.map((r) => ({
       content: r.content,

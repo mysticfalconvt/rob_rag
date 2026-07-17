@@ -64,6 +64,25 @@ export interface RunAgentInput {
 
   /** Streaming callback for final-answer tokens. */
   onToken?: (delta: string) => void | Promise<void>;
+
+  /**
+   * Streaming callback for progress/activity events (tool calls, phases). Used by
+   * the web UI to show "what's going on" live. Matrix/scheduler omit this and just
+   * use the final text.
+   */
+  onEvent?: (event: AgentEvent) => void | Promise<void>;
+}
+
+/** A progress event describing what the agent is doing mid-run. */
+export interface AgentEvent {
+  type: "status";
+  kind: "thinking" | "tool_start" | "tool_end";
+  /** Human-friendly description, e.g. "Searching your knowledge base". */
+  label: string;
+  /** The tool name, when kind is tool_start/tool_end. */
+  tool?: string;
+  /** Whether the tool call succeeded (kind === "tool_end"). */
+  ok?: boolean;
 }
 
 export interface RunAgentResult {

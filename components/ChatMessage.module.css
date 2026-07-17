@@ -44,6 +44,58 @@
   word-wrap: break-word;
 }
 
+/* Activity trace (tool calls / progress) shown above the answer */
+.activity {
+  list-style: none;
+  margin: 0 0 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85em;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #6b7280;
+}
+
+.stepActive {
+  color: #1f2937;
+}
+
+.step > span {
+  overflow-wrap: anywhere;
+}
+
+.stepIconRunning {
+  color: #3b82f6;
+}
+
+.stepIconDone {
+  color: #10b981;
+}
+
+.stepIconError {
+  color: #ef4444;
+}
+
+@media (prefers-color-scheme: dark) {
+  .activity {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .step {
+    color: #9ca3af;
+  }
+  .stepActive {
+    color: #ededed;
+  }
+}
+
 /* Markdown list styles — keep bullets/numbers inside the content box */
 .content ul,
 .content ol {

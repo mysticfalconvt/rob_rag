@@ -8,7 +8,7 @@ import type { DynamicStructuredTool } from "@langchain/core/tools";
 import type { ChatOpenAI } from "@langchain/openai";
 import { estimateMessageTokens } from "../ai";
 import type { LLMRequestTracker } from "../llmTracking";
-import type { AgentToolConfigurable } from "./types";
+import type { AgentEvent, AgentToolConfigurable } from "./types";
 
 /**
  * Maximum number of model turns. A "turn" is one model call; a turn either
@@ -16,6 +16,48 @@ import type { AgentToolConfigurable } from "./types";
  * The cap guards against runaway loops on models that never stop calling tools.
  */
 const MAX_ITERATIONS = 6;
+
+/**
+ * Turn a tool name + args into a friendly progress label for the web UI.
+ */
+function toolLabel(name: string, args: any): string {
+  const q =
+    typeof args?.query === "string"
+      ? args.query
+      : Array.isArray(args?.tags)
+        ? args.tags.join(", ")
+        : typeof args?.correspondent === "string"
+          ? args.correspondent
+          : "";
+  const suffix = q ? ` for “${q.slice(0, 60)}”` : "";
+
+  if (name === "search_knowledge_base")
+    return `Searching your knowledge base${suffix}`;
+  if (name.startsWith("search_paperless"))
+    return `Searching Paperless documents${suffix}`;
+  if (name.startsWith("search_goodreads"))
+    return `Searching your books${suffix}`;
+  if (name === "search_uploaded_files" || name === "search_files_by_type")
+    return `Searching your files${suffix}`;
+  if (name.startsWith("search_calendar") || name === "get_upcoming_events")
+    return "Checking your calendar";
+  if (name === "web_search") return `Searching the web${suffix}`;
+  if (name === "deep_research") return `Researching the web${suffix}`;
+  if (name.includes("email")) return "Checking your email";
+  if (
+    name.startsWith("list_container") ||
+    name.startsWith("get_container") ||
+    name === "list_exposed_ports"
+  )
+    return "Checking Docker containers";
+  if (name === "create_reminder") return "Setting a reminder";
+  if (name === "list_reminders" || name === "cancel_reminder")
+    return "Checking your reminders";
+  if (name === "get_current_datetime" || name.startsWith("calculate_date"))
+    return "Checking the date";
+  if (name === "save_assistant_response") return "Saving a note";
+  return `Using ${name}`;
+}
 
 /**
  * Run a bounded ReAct-style tool-calling loop.
@@ -36,11 +78,17 @@ export async function runToolLoop(args: {
   toolConfig: { configurable: AgentToolConfigurable };
   tracker: LLMRequestTracker;
   onToken?: (delta: string) => void | Promise<void>;
+  onEvent?: (event: AgentEvent) => void | Promise<void>;
 }): Promise<{ finalText: string }> {
-  const { model, tools, messages, toolConfig, tracker, onToken } = args;
+  const { model, tools, messages, toolConfig, tracker, onToken, onEvent } =
+    args;
   const modelName =
     (model as any).modelName || (model as any).model || "unknown";
   const convo: BaseMessage[] = [...messages];
+
+  if (tools.length > 0 && onEvent) {
+    await onEvent({ type: "status", kind: "thinking", label: "Thinking…" });
+  }
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     // On the last permitted iteration, bind no tools so the model is forced to
@@ -128,6 +176,16 @@ export async function runToolLoop(args: {
         continue;
       }
 
+      const label = toolLabel(tc.name, tc.args);
+      if (onEvent) {
+        await onEvent({
+          type: "status",
+          kind: "tool_start",
+          tool: tc.name,
+          label,
+        });
+      }
+
       try {
         const result = await tool.invoke(tc.args, toolConfig);
         const resultStr =
@@ -153,6 +211,15 @@ export async function runToolLoop(args: {
             response: resultStr.substring(0, 2000),
           }),
         });
+        if (onEvent) {
+          await onEvent({
+            type: "status",
+            kind: "tool_end",
+            tool: tc.name,
+            label,
+            ok: true,
+          });
+        }
       } catch (error) {
         const errorMsg =
           error instanceof Error ? error.message : "Unknown error";
@@ -176,6 +243,15 @@ export async function runToolLoop(args: {
           }),
           error: errorMsg,
         });
+        if (onEvent) {
+          await onEvent({
+            type: "status",
+            kind: "tool_end",
+            tool: tc.name,
+            label,
+            ok: false,
+          });
+        }
       }
     }
   }

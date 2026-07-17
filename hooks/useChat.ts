@@ -4,10 +4,18 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Source } from "@/types/source";
 
+export interface ActivityStep {
+  tool?: string;
+  label: string;
+  status: "running" | "done" | "error";
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
+  /** Live activity trace (tool calls / progress) for assistant messages. */
+  steps?: ActivityStep[];
 }
 
 export function useChat(
@@ -108,103 +116,104 @@ export function useChat(
       if (!reader) return;
       readerRef.current = reader;
 
-      const assistantMessage: Message = { role: "assistant", content: "" };
-      setMessages((prev) => [...prev, assistantMessage]);
+      // Push the assistant message up front so activity steps can stream into it
+      // before the first answer token arrives.
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "", steps: [] },
+      ]);
 
+      // Local accumulators mirrored into the last message on each event.
+      let content = "";
+      let steps: ActivityStep[] = [];
+      const patchLast = (patch: Partial<Message>) =>
+        setMessages((prev) => {
+          const next = [...prev];
+          const i = next.length - 1;
+          next[i] = { ...next[i], ...patch };
+          return next;
+        });
+
+      const markRunningDone = () => {
+        let changed = false;
+        steps = steps.map((s) => {
+          if (s.status === "running") {
+            changed = true;
+            return { ...s, status: "done" as const };
+          }
+          return s;
+        });
+        return changed;
+      };
+
+      const handleEvent = (ev: any) => {
+        if (ev.type === "token") {
+          if (steps.some((s) => s.status === "running")) markRunningDone();
+          content += ev.value ?? "";
+          patchLast({ content, steps });
+        } else if (ev.type === "status") {
+          if (ev.kind === "thinking") {
+            steps = [...steps, { label: ev.label, status: "running" }];
+          } else if (ev.kind === "tool_start") {
+            markRunningDone();
+            steps = [
+              ...steps,
+              { tool: ev.tool, label: ev.label, status: "running" },
+            ];
+          } else if (ev.kind === "tool_end") {
+            // Mark the matching running step done/error.
+            let matched = false;
+            steps = steps.map((s) => {
+              if (!matched && s.status === "running" && s.tool === ev.tool) {
+                matched = true;
+                return {
+                  ...s,
+                  status:
+                    ev.ok === false ? ("error" as const) : ("done" as const),
+                };
+              }
+              return s;
+            });
+          }
+          patchLast({ steps });
+        } else if (ev.type === "sources") {
+          markRunningDone();
+          patchLast({ sources: ev.sources, steps });
+          if (ev.conversationId && !currentConversationId) {
+            setCurrentConversationId(ev.conversationId);
+            const params = new URLSearchParams();
+            params.set("conversation", ev.conversationId);
+            if (documentPath) params.set("document", documentPath);
+            router.push(`/?${params.toString()}`);
+          }
+        }
+      };
+
+      const decoder = new TextDecoder();
       let buffer = "";
-      let foundSourcesMarker = false;
+      const drain = (flush: boolean) => {
+        const lines = buffer.split("\n");
+        buffer = flush ? "" : (lines.pop() ?? "");
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          try {
+            handleEvent(JSON.parse(trimmed));
+          } catch {
+            // Ignore malformed/partial lines.
+          }
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          // Stream ended - try to parse sources if we found the marker
-          if (foundSourcesMarker && buffer.includes("__SOURCES__:")) {
-            const [contentPart, sourcesPart] = buffer.split("__SOURCES__:");
-
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const lastIndex = newMessages.length - 1;
-              newMessages[lastIndex] = {
-                ...newMessages[lastIndex],
-                content: contentPart.trim(),
-              };
-              return newMessages;
-            });
-
-            try {
-              console.log(
-                "[useChat] Parsing sources at stream end, raw data:",
-                sourcesPart,
-              );
-              const sourcesData = JSON.parse(sourcesPart);
-              console.log("[useChat] Parsed sources:", sourcesData);
-              console.log(
-                "[useChat] Sources array length:",
-                sourcesData.sources?.length,
-              );
-
-              setMessages((prev) => {
-                const newMessages = [...prev];
-                const lastIndex = newMessages.length - 1;
-                newMessages[lastIndex] = {
-                  ...newMessages[lastIndex],
-                  sources: sourcesData.sources,
-                };
-                console.log(
-                  "[useChat] Updated message with sources:",
-                  newMessages[lastIndex],
-                );
-                return newMessages;
-              });
-
-              if (sourcesData.conversationId && !currentConversationId) {
-                setCurrentConversationId(sourcesData.conversationId);
-                const params = new URLSearchParams();
-                params.set("conversation", sourcesData.conversationId);
-                if (documentPath) params.set("document", documentPath);
-                router.push(`/?${params.toString()}`);
-              }
-            } catch (e) {
-              console.error("Failed to parse sources:", e);
-              console.error("Raw sources part:", sourcesPart);
-            }
-          }
+          buffer += decoder.decode();
+          drain(true);
           break;
         }
-
-        const text = new TextDecoder().decode(value);
-        buffer += text;
-
-        // Check if we found the sources marker
-        if (!foundSourcesMarker && buffer.includes("__SOURCES__:")) {
-          foundSourcesMarker = true;
-          // Don't break - continue reading to get complete JSON
-        }
-
-        // Only update content if we haven't found sources marker yet
-        if (!foundSourcesMarker) {
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            newMessages[lastIndex] = {
-              ...newMessages[lastIndex],
-              content: buffer,
-            };
-            return newMessages;
-          });
-        } else {
-          // Update content without sources part
-          const contentPart = buffer.split("__SOURCES__:")[0];
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            newMessages[lastIndex] = {
-              ...newMessages[lastIndex],
-              content: contentPart.trim(),
-            };
-            return newMessages;
-          });
-        }
+        buffer += decoder.decode(value, { stream: true });
+        drain(false);
       }
     } catch (error: any) {
       if (error.name === "AbortError") {
