@@ -1,10 +1,19 @@
 // Suppress matrix-js-sdk multiple entrypoint warning
 // This can happen in Next.js dev mode with hot reloading
-if (typeof globalThis !== 'undefined') {
+if (typeof globalThis !== "undefined") {
   (globalThis as any).__js_sdk_entrypoint = false;
 }
 
-import { createClient, MatrixClient, ClientEvent, SyncState, RoomMemberEvent, MatrixEvent, RoomMember, Room } from "matrix-js-sdk";
+import {
+  ClientEvent,
+  createClient,
+  type MatrixClient,
+  type MatrixEvent,
+  type Room,
+  type RoomMember,
+  RoomMemberEvent,
+  type SyncState,
+} from "matrix-js-sdk";
 import prisma from "../prisma";
 
 /**
@@ -17,10 +26,13 @@ class MatrixClientManager {
   private isStarting = false; // Track if initialization is in progress
   private isPrepared = false; // Track if client is synced and ready
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
   private reconnectDelay = 5000; // Start with 5 seconds
+  private maxReconnectDelay = 5 * 60 * 1000; // Cap backoff at 5 minutes
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private onReadyCallback: (() => void) | null = null;
+  // Persistent across reconnects: these fire on EVERY sync PREPARED (i.e. on the
+  // initial connect AND after every reconnect), so consumers like the message
+  // handler get re-attached to each new client instance.
+  private readyListeners: Array<() => void> = [];
 
   /**
    * Initialize the Matrix client with settings from database
@@ -57,15 +69,28 @@ class MatrixClientManager {
       }
 
       if (!settings.matrixHomeserver || !settings.matrixAccessToken) {
-        console.log("[Matrix] Matrix not configured (missing homeserver or token)");
+        console.log(
+          "[Matrix] Matrix not configured (missing homeserver or token)",
+        );
         this.isStarting = false;
         return;
       }
 
-      console.log(`[Matrix] Initializing client (${settings.matrixHomeserver}, user: ${settings.matrixUserId || "not set"})`);
+      console.log(
+        `[Matrix] Initializing client (${settings.matrixHomeserver}, user: ${settings.matrixUserId || "not set"})`,
+      );
 
       // Create client with suppressed HTTP request logging
-      const silentLogger = { debug() {}, info() {}, warn() {}, error() {}, trace() {}, getChild() { return silentLogger; } };
+      const silentLogger = {
+        debug() {},
+        info() {},
+        warn() {},
+        error() {},
+        trace() {},
+        getChild() {
+          return silentLogger;
+        },
+      };
       this.client = createClient({
         baseUrl: settings.matrixHomeserver,
         accessToken: settings.matrixAccessToken,
@@ -131,10 +156,14 @@ class MatrixClientManager {
           console.error("[Matrix] Failed to sync rooms:", error);
         }
 
-        // Call the ready callback if set
-        if (this.onReadyCallback) {
-          // Invoke ready callback
-          this.onReadyCallback();
+        // Invoke ALL ready listeners on every PREPARED (initial connect and
+        // after each reconnect) so consumers re-attach to the new client.
+        for (const cb of this.readyListeners) {
+          try {
+            cb();
+          } catch (error) {
+            console.error("[Matrix] ready listener threw:", error);
+          }
         }
       } else if (state === "ERROR") {
         console.error("[Matrix] Sync error occurred");
@@ -144,64 +173,83 @@ class MatrixClientManager {
     });
 
     // Handle room invites
-    this.client.on(RoomMemberEvent.Membership as any, async (event: MatrixEvent, member: RoomMember) => {
-      if (
-        member.membership === "invite" &&
-        member.userId === this.client?.getUserId()
-      ) {
-        console.log(`[Matrix] Received invite to room: ${member.roomId}`);
-        try {
-          await this.client?.joinRoom(member.roomId);
-          console.log(`[Matrix] Joined room: ${member.roomId}`);
+    this.client.on(
+      RoomMemberEvent.Membership as any,
+      async (event: MatrixEvent, member: RoomMember) => {
+        if (
+          member.membership === "invite" &&
+          member.userId === this.client?.getUserId()
+        ) {
+          console.log(`[Matrix] Received invite to room: ${member.roomId}`);
+          try {
+            await this.client?.joinRoom(member.roomId);
+            console.log(`[Matrix] Joined room: ${member.roomId}`);
 
-          // Add room to database
-          const room = this.client?.getRoom(member.roomId);
-          if (room) {
-            await prisma.matrixRoom.upsert({
-              where: { roomId: member.roomId },
-              create: {
-                roomId: member.roomId,
-                name: room.name || "Unnamed Room",
-                description: room.getCanonicalAlias() || undefined,
-                enabled: true,
-              },
-              update: {},
-            });
-          }
-        } catch (error: any) {
-          // Handle specific Matrix errors
-          if (error?.errcode === 'M_UNKNOWN' && error?.httpStatus === 404) {
-            console.warn(`[Matrix] Room ${member.roomId} is unreachable (404) - attempting to leave/forget`);
-
-            // Try to leave/forget the room to stop getting invites
-            try {
-              await this.client?.leave(member.roomId);
-              console.log(`[Matrix] Left unreachable room ${member.roomId}`);
-            } catch (leaveError: any) {
-              console.error(`[Matrix] Failed to leave unreachable room:`, leaveError);
-              // If leave fails, try to forget it
-              try {
-                await this.client?.forget(member.roomId);
-                console.log(`[Matrix] Forgot unreachable room ${member.roomId}`);
-              } catch (forgetError) {
-                console.error(`[Matrix] Failed to forget unreachable room:`, forgetError);
-              }
-            }
-
-            // Clean up database entry for unreachable room
-            try {
-              await prisma.matrixRoom.deleteMany({
-                where: { roomId: member.roomId }
+            // Add room to database
+            const room = this.client?.getRoom(member.roomId);
+            if (room) {
+              await prisma.matrixRoom.upsert({
+                where: { roomId: member.roomId },
+                create: {
+                  roomId: member.roomId,
+                  name: room.name || "Unnamed Room",
+                  description: room.getCanonicalAlias() || undefined,
+                  enabled: true,
+                },
+                update: {},
               });
-            } catch (dbError) {
-              console.error(`[Matrix] Failed to clean up unreachable room from database:`, dbError);
             }
-          } else {
-            console.error(`[Matrix] Failed to join room ${member.roomId}:`, error);
+          } catch (error: any) {
+            // Handle specific Matrix errors
+            if (error?.errcode === "M_UNKNOWN" && error?.httpStatus === 404) {
+              console.warn(
+                `[Matrix] Room ${member.roomId} is unreachable (404) - attempting to leave/forget`,
+              );
+
+              // Try to leave/forget the room to stop getting invites
+              try {
+                await this.client?.leave(member.roomId);
+                console.log(`[Matrix] Left unreachable room ${member.roomId}`);
+              } catch (leaveError: any) {
+                console.error(
+                  `[Matrix] Failed to leave unreachable room:`,
+                  leaveError,
+                );
+                // If leave fails, try to forget it
+                try {
+                  await this.client?.forget(member.roomId);
+                  console.log(
+                    `[Matrix] Forgot unreachable room ${member.roomId}`,
+                  );
+                } catch (forgetError) {
+                  console.error(
+                    `[Matrix] Failed to forget unreachable room:`,
+                    forgetError,
+                  );
+                }
+              }
+
+              // Clean up database entry for unreachable room
+              try {
+                await prisma.matrixRoom.deleteMany({
+                  where: { roomId: member.roomId },
+                });
+              } catch (dbError) {
+                console.error(
+                  `[Matrix] Failed to clean up unreachable room from database:`,
+                  dbError,
+                );
+              }
+            } else {
+              console.error(
+                `[Matrix] Failed to join room ${member.roomId}:`,
+                error,
+              );
+            }
           }
         }
-      }
-    });
+      },
+    );
 
     // Note: Message handling is done in messageHandler.ts to keep separation of concerns
   }
@@ -214,15 +262,13 @@ class MatrixClientManager {
       return; // Already scheduled
     }
 
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(
-        `[Matrix] Max reconnect attempts (${this.maxReconnectAttempts}) reached. Giving up.`,
-      );
-      return;
-    }
-
     this.reconnectAttempts++;
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+    // Exponential backoff, capped — never permanently give up. A long-running
+    // bot must keep trying to recover from homeserver outages / token blips.
+    const delay = Math.min(
+      this.reconnectDelay * 2 ** Math.min(this.reconnectAttempts - 1, 10),
+      this.maxReconnectDelay,
+    );
 
     console.log(
       `[Matrix] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay / 1000}s`,
@@ -230,7 +276,9 @@ class MatrixClientManager {
 
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
-      console.log(`[Matrix] Attempting reconnect #${this.reconnectAttempts}...`);
+      console.log(
+        `[Matrix] Attempting reconnect #${this.reconnectAttempts}...`,
+      );
 
       try {
         await this.stop();
@@ -261,7 +309,8 @@ class MatrixClientManager {
     }
 
     this.client = null;
-    this.onReadyCallback = null;
+    // NOTE: readyListeners are intentionally kept across stop()/reconnect so the
+    // message handler is re-attached when the new client reaches PREPARED.
   }
 
   /**
@@ -286,16 +335,22 @@ class MatrixClientManager {
   }
 
   /**
-   * Set a callback to be called when the client is ready (PREPARED state)
-   * If already ready, calls immediately
+   * Register a callback to run when the client is ready (sync PREPARED).
+   * Registered once and kept for the lifetime of the process — it fires on the
+   * initial connect and again after every reconnect (each new client instance),
+   * so consumers (e.g. the message handler) re-attach to the current client.
+   * If already prepared, also fires immediately.
    */
   onReady(callback: () => void): void {
+    if (!this.readyListeners.includes(callback)) {
+      this.readyListeners.push(callback);
+    }
     if (this.isPrepared) {
-      // Already ready, call immediately
-      callback();
-    } else {
-      // Set callback for when it becomes ready
-      this.onReadyCallback = callback;
+      try {
+        callback();
+      } catch (error) {
+        console.error("[Matrix] ready listener threw:", error);
+      }
     }
   }
 
@@ -311,7 +366,10 @@ class MatrixClientManager {
       await this.client.sendTextMessage(roomId, content);
       console.log(`[Matrix] Sent message to room ${roomId}`);
     } catch (error) {
-      console.error(`[Matrix] Failed to send message to room ${roomId}:`, error);
+      console.error(
+        `[Matrix] Failed to send message to room ${roomId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -398,14 +456,14 @@ class MatrixClientManager {
     // Clean up database entries for rooms we're no longer in
     try {
       const dbRooms = await prisma.matrixRoom.findMany({
-        select: { roomId: true }
+        select: { roomId: true },
       });
 
       for (const dbRoom of dbRooms) {
         if (!joinedRoomIds.has(dbRoom.roomId)) {
           console.log(`[Matrix] Removing stale room: ${dbRoom.roomId}`);
           await prisma.matrixRoom.delete({
-            where: { roomId: dbRoom.roomId }
+            where: { roomId: dbRoom.roomId },
           });
         }
       }
@@ -435,14 +493,18 @@ class MatrixClientManager {
 
         // If we're in "invite" state, try to validate the room
         if (myMembership === "invite") {
-          console.log(`[Matrix] Found invite for room ${roomId}, attempting to join or clean up...`);
+          console.log(
+            `[Matrix] Found invite for room ${roomId}, attempting to join or clean up...`,
+          );
 
           try {
             await this.client.joinRoom(roomId);
             console.log(`[Matrix] Successfully joined room ${roomId}`);
           } catch (error: any) {
-            if (error?.httpStatus === 404 || error?.errcode === 'M_UNKNOWN') {
-              console.warn(`[Matrix] Room ${roomId} is unreachable, leaving/forgetting...`);
+            if (error?.httpStatus === 404 || error?.errcode === "M_UNKNOWN") {
+              console.warn(
+                `[Matrix] Room ${roomId} is unreachable, leaving/forgetting...`,
+              );
 
               try {
                 await this.client.leave(roomId);
@@ -453,14 +515,19 @@ class MatrixClientManager {
               try {
                 await this.client.forget(roomId);
                 cleanedCount++;
-                console.log(`[Matrix] Cleaned up unreachable invite for ${roomId}`);
+                console.log(
+                  `[Matrix] Cleaned up unreachable invite for ${roomId}`,
+                );
               } catch (forgetError) {
-                console.error(`[Matrix] Failed to forget room ${roomId}:`, forgetError);
+                console.error(
+                  `[Matrix] Failed to forget room ${roomId}:`,
+                  forgetError,
+                );
               }
 
               // Remove from database
               await prisma.matrixRoom.deleteMany({
-                where: { roomId }
+                where: { roomId },
               });
             }
           }
