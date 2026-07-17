@@ -1,5 +1,5 @@
-import { matrixClient } from "./client";
 import { getSourceDisplayName } from "@/types/source";
+import { matrixClient } from "./client";
 
 /**
  * Maximum message length before splitting (Matrix typically allows ~64KB, but we'll be conservative)
@@ -103,6 +103,8 @@ export async function sendFormattedMessage(
   roomId: string,
   message: string,
   sources?: any[],
+  /** When set, send the reply inside this Matrix thread (thread root event id). */
+  threadRootId?: string,
 ): Promise<void> {
   try {
     const client = matrixClient.getClient();
@@ -119,6 +121,20 @@ export async function sendFormattedMessage(
     // Split message if too long
     const chunks = splitMessage(fullMessage, MAX_MESSAGE_LENGTH);
 
+    // Optional thread relation so the reply lands in a thread rather than the
+    // main timeline. `is_falling_back` + `m.in_reply_to` keeps non-threaded
+    // clients able to render it as a reply.
+    const threadRelation = threadRootId
+      ? {
+          "m.relates_to": {
+            rel_type: "m.thread",
+            event_id: threadRootId,
+            is_falling_back: true,
+            "m.in_reply_to": { event_id: threadRootId },
+          },
+        }
+      : {};
+
     // Send each chunk
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
@@ -129,6 +145,7 @@ export async function sendFormattedMessage(
         body: prefix + chunk,
         format: "org.matrix.custom.html",
         formatted_body: prefix + convertMarkdownToHtml(chunk),
+        ...threadRelation,
       });
 
       // Small delay between chunks to avoid rate limiting
@@ -142,7 +159,7 @@ export async function sendFormattedMessage(
     // Check if it's an encryption error
     if (error instanceof Error && error.message.includes("encryption")) {
       const friendlyError = new Error(
-        "This room uses encryption which is not currently supported. Please use an unencrypted room or disable encryption for this room."
+        "This room uses encryption which is not currently supported. Please use an unencrypted room or disable encryption for this room.",
       );
       console.error("[Matrix] Encryption not supported:", error);
       throw friendlyError;
@@ -184,7 +201,10 @@ function convertMarkdownToHtml(markdown: string): string {
 /**
  * Send a simple text message (no formatting)
  */
-export async function sendTextMessage(roomId: string, message: string): Promise<void> {
+export async function sendTextMessage(
+  roomId: string,
+  message: string,
+): Promise<void> {
   const client = matrixClient.getClient();
   if (!client) {
     throw new Error("Matrix client not available");
@@ -197,13 +217,19 @@ export async function sendTextMessage(roomId: string, message: string): Promise<
 /**
  * Send an error message with standard formatting
  */
-export async function sendErrorMessage(roomId: string, error: string): Promise<void> {
+export async function sendErrorMessage(
+  roomId: string,
+  error: string,
+): Promise<void> {
   await sendFormattedMessage(roomId, `❌ **Error:** ${error}`);
 }
 
 /**
  * Send a success message with standard formatting
  */
-export async function sendSuccessMessage(roomId: string, message: string): Promise<void> {
+export async function sendSuccessMessage(
+  roomId: string,
+  message: string,
+): Promise<void> {
   await sendFormattedMessage(roomId, `✅ ${message}`);
 }

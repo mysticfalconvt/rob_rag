@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Card from "./Card";
 import styles from "./GoogleCalendarConfig.module.css"; // Reuse styles
 
@@ -11,6 +11,8 @@ interface MatrixRoom {
   description?: string;
   enabled: boolean;
   useRag?: boolean;
+  useThreads?: boolean;
+  mentionsOnly?: boolean;
   memberCount?: number;
   alias?: string;
   isJoined?: boolean;
@@ -163,15 +165,39 @@ export default function MatrixConfiguration() {
     }
   };
 
+  const patchRoomField = async (
+    roomId: string,
+    field: "useThreads" | "mentionsOnly",
+    value: boolean,
+  ) => {
+    try {
+      const res = await fetch("/api/matrix/rooms", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId, [field]: value }),
+      });
+      if (res.ok) {
+        await fetchRooms();
+      } else {
+        alert("Failed to update room");
+      }
+    } catch (error) {
+      alert("Failed to update room");
+    }
+  };
+
   const handleRemoveRoom = async (roomId: string) => {
     if (!confirm("Remove this room from tracking?")) {
       return;
     }
 
     try {
-      const res = await fetch(`/api/matrix/rooms?roomId=${encodeURIComponent(roomId)}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/matrix/rooms?roomId=${encodeURIComponent(roomId)}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (res.ok) {
         await fetchRooms();
@@ -266,8 +292,8 @@ export default function MatrixConfiguration() {
             </button>
           </div>
           <small>
-            Bot user access token from Element (Settings → Help & About → Advanced → Access Token).
-            Leave blank to keep current token.
+            Bot user access token from Element (Settings → Help & About →
+            Advanced → Access Token). Leave blank to keep current token.
           </small>
         </div>
 
@@ -287,14 +313,35 @@ export default function MatrixConfiguration() {
           <label>Allowed Matrix Users:</label>
           <div style={{ marginBottom: "8px" }}>
             {allowedUsers.map((user, index) => (
-              <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "4px", alignItems: "center" }}>
-                <code style={{ flex: 1, padding: "4px 8px", background: "#f5f5f5", borderRadius: "4px" }}>
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginBottom: "4px",
+                  alignItems: "center",
+                }}
+              >
+                <code
+                  style={{
+                    flex: 1,
+                    padding: "4px 8px",
+                    background: "#f5f5f5",
+                    borderRadius: "4px",
+                  }}
+                >
                   {user}
                 </code>
                 <button
                   type="button"
-                  onClick={() => setAllowedUsers(allowedUsers.filter((_, i) => i !== index))}
-                  style={{ padding: "4px 8px", background: "#dc3545", color: "white" }}
+                  onClick={() =>
+                    setAllowedUsers(allowedUsers.filter((_, i) => i !== index))
+                  }
+                  style={{
+                    padding: "4px 8px",
+                    background: "#dc3545",
+                    color: "white",
+                  }}
                   disabled={isSaving}
                 >
                   Remove
@@ -323,7 +370,10 @@ export default function MatrixConfiguration() {
             <button
               type="button"
               onClick={() => {
-                if (allowedUserInput.trim() && !allowedUsers.includes(allowedUserInput.trim())) {
+                if (
+                  allowedUserInput.trim() &&
+                  !allowedUsers.includes(allowedUserInput.trim())
+                ) {
                   setAllowedUsers([...allowedUsers, allowedUserInput.trim()]);
                   setAllowedUserInput("");
                 }
@@ -335,8 +385,8 @@ export default function MatrixConfiguration() {
             </button>
           </div>
           <small>
-            Only these Matrix user IDs will use your RobRAG profile. Others will use generic Matrix profile.
-            Example: @rboskind:matrix.rboskind.com
+            Only these Matrix user IDs will use your RobRAG profile. Others will
+            use generic Matrix profile. Example: @rboskind:matrix.rboskind.com
           </small>
         </div>
 
@@ -347,8 +397,8 @@ export default function MatrixConfiguration() {
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
               disabled={isSaving}
-            />
-            {" "}Enable Matrix Integration
+            />{" "}
+            Enable Matrix Integration
           </label>
         </div>
 
@@ -386,7 +436,13 @@ export default function MatrixConfiguration() {
       </div>
 
       <div className={styles.section} style={{ marginTop: "32px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <h3>Tracked Rooms</h3>
           <button
             onClick={handleSyncRooms}
@@ -401,7 +457,10 @@ export default function MatrixConfiguration() {
           <p>Loading rooms...</p>
         ) : rooms.length === 0 ? (
           <div>
-            <p>No rooms yet. Invite the bot to a room or click "Sync Rooms" to discover existing rooms.</p>
+            <p>
+              No rooms yet. Invite the bot to a room or click "Sync Rooms" to
+              discover existing rooms.
+            </p>
           </div>
         ) : (
           <div className={styles.roomsGrid}>
@@ -414,7 +473,9 @@ export default function MatrixConfiguration() {
                       {room.isJoined ? (
                         <span className={styles.statusJoined}>✓ Joined</span>
                       ) : (
-                        <span className={styles.statusNotJoined}>✗ Not joined</span>
+                        <span className={styles.statusNotJoined}>
+                          ✗ Not joined
+                        </span>
                       )}
                     </div>
                     <p className={styles.roomCardId}>
@@ -422,7 +483,8 @@ export default function MatrixConfiguration() {
                     </p>
                     {room.memberCount !== undefined && (
                       <p className={styles.roomCardMembers}>
-                        {room.memberCount} {room.memberCount === 1 ? "member" : "members"}
+                        {room.memberCount}{" "}
+                        {room.memberCount === 1 ? "member" : "members"}
                       </p>
                     )}
                   </div>
@@ -447,7 +509,9 @@ export default function MatrixConfiguration() {
                     <input
                       type="checkbox"
                       checked={room.enabled}
-                      onChange={() => handleToggleRoom(room.roomId, room.enabled)}
+                      onChange={() =>
+                        handleToggleRoom(room.roomId, room.enabled)
+                      }
                     />
                     <span>Enabled</span>
                   </label>
@@ -455,10 +519,42 @@ export default function MatrixConfiguration() {
                     <input
                       type="checkbox"
                       checked={room.useRag ?? true}
-                      onChange={() => handleToggleRag(room.roomId, room.useRag ?? true)}
+                      onChange={() =>
+                        handleToggleRag(room.roomId, room.useRag ?? true)
+                      }
                       title="Enable RAG for document search"
                     />
                     <span>RAG</span>
+                  </label>
+                  <label className={styles.toggleLabel}>
+                    <input
+                      type="checkbox"
+                      checked={room.useThreads ?? false}
+                      onChange={() =>
+                        patchRoomField(
+                          room.roomId,
+                          "useThreads",
+                          !(room.useThreads ?? false),
+                        )
+                      }
+                      title="Reply in a Matrix thread instead of the main timeline"
+                    />
+                    <span>Threads</span>
+                  </label>
+                  <label className={styles.toggleLabel}>
+                    <input
+                      type="checkbox"
+                      checked={room.mentionsOnly ?? false}
+                      onChange={() =>
+                        patchRoomField(
+                          room.roomId,
+                          "mentionsOnly",
+                          !(room.mentionsOnly ?? false),
+                        )
+                      }
+                      title="Only respond when the bot is mentioned"
+                    />
+                    <span>Mentions only</span>
                   </label>
                 </div>
               </div>
@@ -468,18 +564,34 @@ export default function MatrixConfiguration() {
 
         <div style={{ marginTop: "16px", fontSize: "0.9em", color: "#666" }}>
           <p>
-            <strong>To add rooms:</strong> Invite your bot user to a room. The bot will automatically
-            join and add it to this list.
+            <strong>To add rooms:</strong> Invite your bot user to a room. The
+            bot will automatically join and add it to this list.
           </p>
           <p>
-            <strong>Enabled rooms:</strong> The bot will respond to messages in enabled rooms.
+            <strong>Enabled rooms:</strong> The bot will respond to messages in
+            enabled rooms.
           </p>
           <p>
-            <strong>RAG toggle:</strong> When enabled, the bot searches your documents for context. When disabled, the bot uses only the LLM without document search. Like in-app chat, #clear clears conversation context.
+            <strong>RAG toggle:</strong> When enabled, the bot searches your
+            documents for context. When disabled, the bot uses only the LLM
+            without document search. Like in-app chat, #clear clears
+            conversation context.
+          </p>
+          <p>
+            <strong>Threads:</strong> When enabled, the bot replies inside a
+            Matrix thread (each new message starts its own thread, with its own
+            conversation history). Replies to messages already in a thread
+            always stay in that thread, regardless of this setting.
+          </p>
+          <p>
+            <strong>Mentions only:</strong> When enabled, the bot ignores
+            messages in this room unless it is mentioned (via an @mention or by
+            name). Useful for busy rooms. #commands still work.
           </p>
           <p style={{ color: "#d63031" }}>
-            <strong>⚠️ Encryption:</strong> Encrypted rooms are not currently supported. Please use
-            unencrypted rooms or disable encryption in room settings (Security & Privacy → Encryption).
+            <strong>⚠️ Encryption:</strong> Encrypted rooms are not currently
+            supported. Please use unencrypted rooms or disable encryption in
+            room settings (Security & Privacy → Encryption).
           </p>
         </div>
       </div>

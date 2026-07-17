@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { requireAuth } from "@/lib/session";
-import prisma from "@/lib/prisma";
 import { matrixClient } from "@/lib/matrix/client";
+import prisma from "@/lib/prisma";
+import { requireAuth } from "@/lib/session";
 
 /**
  * GET /api/matrix/rooms
@@ -130,7 +130,15 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { roomId, name, description, enabled, useRag } = body;
+    const {
+      roomId,
+      name,
+      description,
+      enabled,
+      useRag,
+      useThreads,
+      mentionsOnly,
+    } = body;
 
     if (!roomId) {
       return NextResponse.json(
@@ -147,6 +155,8 @@ export async function PATCH(req: NextRequest) {
         description: description !== undefined ? description : undefined,
         enabled: enabled !== undefined ? enabled : undefined,
         useRag: useRag !== undefined ? useRag : undefined,
+        useThreads: useThreads !== undefined ? useThreads : undefined,
+        mentionsOnly: mentionsOnly !== undefined ? mentionsOnly : undefined,
       },
     });
 

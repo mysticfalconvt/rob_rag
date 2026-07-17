@@ -87,8 +87,18 @@ async function runMatrixTurn(opts: {
   messageText: string;
   useRag: boolean;
   webIntent?: "search" | "research";
+  /** Thread root event id — reply in this thread and scope history to it. */
+  threadRootId?: string;
 }): Promise<void> {
-  const { roomId, sender, displayName, messageText, useRag, webIntent } = opts;
+  const {
+    roomId,
+    sender,
+    displayName,
+    messageText,
+    useRag,
+    webIntent,
+    threadRootId,
+  } = opts;
 
   const { userId, userProfile } = await resolveMatrixIdentity(
     sender,
@@ -98,6 +108,7 @@ async function runMatrixTurn(opts: {
     channel: "matrix",
     userId,
     matrixRoomId: roomId,
+    matrixThreadId: threadRootId ?? null,
     firstMessageText: messageText,
   });
   const history = await loadConversationHistory(conversationId);
@@ -117,7 +128,47 @@ async function runMatrixTurn(opts: {
     roomId,
     scrubToolSyntax(result.text),
     result.sources,
+    threadRootId,
   );
+}
+
+/**
+ * Resolve the thread to reply in. If the incoming message is already in a
+ * thread, always reply there. Otherwise, only start a new thread (rooted at the
+ * message) when the room has threading enabled.
+ */
+function resolveThreadRoot(
+  content: any,
+  eventId: string,
+  useThreads: boolean,
+): string | undefined {
+  const rel = content?.["m.relates_to"];
+  if (rel?.rel_type === "m.thread" && rel.event_id) {
+    return rel.event_id;
+  }
+  return useThreads ? eventId : undefined;
+}
+
+/** Whether this message mentions the bot (explicit m.mentions or by name). */
+function isBotMentioned(
+  roomId: string,
+  content: any,
+  messageText: string,
+): boolean {
+  const client = matrixClient.getClient();
+  const botUserId = client?.getUserId();
+  if (!botUserId) return false;
+
+  const mentioned = content?.["m.mentions"]?.user_ids;
+  if (Array.isArray(mentioned) && mentioned.includes(botUserId)) return true;
+
+  const localpart = botUserId.replace(/^@/, "").split(":")[0];
+  const displayName = client?.getRoom(roomId)?.getMember(botUserId)?.name;
+  const needles = [botUserId, localpart, displayName]
+    .filter((s): s is string => !!s)
+    .map((s) => s.toLowerCase());
+  const body = messageText.toLowerCase();
+  return needles.some((n) => n.length > 1 && body.includes(n));
 }
 
 /**
@@ -152,6 +203,11 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
     const trimmedMessage = messageText.trim();
     const lowerTrimmed = trimmedMessage.toLowerCase();
 
+    // Room settings (may be null for an unregistered room — commands still work).
+    const room = await prisma.matrixRoom.findUnique({ where: { roomId } });
+    const useThreads = room?.useThreads ?? false;
+    const threadRootId = resolveThreadRoot(content, eventId, useThreads);
+
     // #clear — start a fresh conversation for this sender in this room.
     if (lowerTrimmed === "#clear") {
       const displayName = await getMatrixUserDisplayName(roomId, sender);
@@ -160,6 +216,8 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       await sendFormattedMessage(
         roomId,
         "✅ Context cleared. Starting fresh conversation.",
+        undefined,
+        threadRootId,
       );
       return;
     }
@@ -171,10 +229,12 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         await sendFormattedMessage(
           roomId,
           "⚠️ Please provide a search query. Usage: `#search your query here`",
+          undefined,
+          threadRootId,
         );
         return;
       }
-      await handleWebCommand(roomId, sender, q, "search");
+      await handleWebCommand(roomId, sender, q, "search", threadRootId);
       return;
     }
     if (lowerTrimmed.startsWith("#research ")) {
@@ -183,16 +243,22 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         await sendFormattedMessage(
           roomId,
           "⚠️ Please provide a research query. Usage: `#research your query here`",
+          undefined,
+          threadRootId,
         );
         return;
       }
-      await handleWebCommand(roomId, sender, q, "research");
+      await handleWebCommand(roomId, sender, q, "research", threadRootId);
       return;
     }
 
-    // Regular message — check the room is enabled.
-    const room = await prisma.matrixRoom.findUnique({ where: { roomId } });
+    // Regular message — room must be registered + enabled.
     if (!room || !room.enabled) return;
+
+    // Mention-only rooms: ignore messages that don't mention the bot.
+    if (room.mentionsOnly && !isBotMentioned(roomId, content, messageText)) {
+      return;
+    }
 
     const useRag = room.useRag ?? true;
 
@@ -200,6 +266,8 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       await sendFormattedMessage(
         roomId,
         "⚠️ Rate limit exceeded. Please wait a moment before sending more messages.",
+        undefined,
+        threadRootId,
       );
       return;
     }
@@ -215,7 +283,14 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
 
     try {
       const displayName = await getMatrixUserDisplayName(roomId, sender);
-      await runMatrixTurn({ roomId, sender, displayName, messageText, useRag });
+      await runMatrixTurn({
+        roomId,
+        sender,
+        displayName,
+        messageText,
+        useRag,
+        threadRootId,
+      });
     } catch (error) {
       console.error("[Matrix] Error processing message:", error);
       await sendFormattedMessage(
@@ -258,6 +333,7 @@ async function handleWebCommand(
   sender: string,
   webQuery: string,
   type: "search" | "research",
+  threadRootId?: string,
 ): Promise<void> {
   await matrixClient.sendTyping(roomId, true);
   const typingInterval = setInterval(async () => {
@@ -279,12 +355,15 @@ async function handleWebCommand(
       messageText: webQuery,
       useRag,
       webIntent: type,
+      threadRootId,
     });
   } catch (error) {
     console.error(`[Matrix] Error processing #${type} command:`, error);
     await sendFormattedMessage(
       roomId,
       `❌ Sorry, I encountered an error processing your ${type === "research" ? "research" : "web search"}. Please try again later.`,
+      undefined,
+      threadRootId,
     );
   } finally {
     clearInterval(typingInterval);

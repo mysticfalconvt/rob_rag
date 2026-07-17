@@ -117,6 +117,7 @@ model Conversation {
   topics       String?
   channel      String    @default("web")
   matrixRoomId String?
+  matrixThreadId String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   user         AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -428,14 +429,16 @@ model EmailAccount {
 }
 
 model MatrixRoom {
-  id          String   @id @default(uuid())
-  roomId      String   @unique
-  name        String
-  description String?
-  enabled     Boolean  @default(true)
-  useRag      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  roomId       String   @unique
+  name         String
+  description  String?
+  enabled      Boolean  @default(true)
+  useRag       Boolean  @default(true)
+  useThreads   Boolean  @default(false)
+  mentionsOnly Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([enabled])
   @@index([roomId])

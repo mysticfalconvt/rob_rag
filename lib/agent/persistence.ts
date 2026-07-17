@@ -15,10 +15,18 @@ export async function resolveConversation(opts: {
   userId: string;
   conversationId?: string | null;
   matrixRoomId?: string;
+  /** When set, scope the conversation to a Matrix thread (its own history). */
+  matrixThreadId?: string | null;
   firstMessageText: string;
 }): Promise<string> {
-  const { channel, userId, conversationId, matrixRoomId, firstMessageText } =
-    opts;
+  const {
+    channel,
+    userId,
+    conversationId,
+    matrixRoomId,
+    matrixThreadId = null,
+    firstMessageText,
+  } = opts;
 
   if (conversationId) {
     const conversation = await prisma.conversation.findUnique({
@@ -36,8 +44,10 @@ export async function resolveConversation(opts: {
     (firstMessageText.length > 50 ? "..." : "");
 
   if ((channel === "matrix" || channel === "scheduled") && matrixRoomId) {
+    // A threaded message gets its own per-thread conversation; unthreaded
+    // messages share the room-level conversation (matrixThreadId = null).
     const existing = await prisma.conversation.findFirst({
-      where: { matrixRoomId, userId, channel },
+      where: { matrixRoomId, userId, channel, matrixThreadId },
       orderBy: { updatedAt: "desc" },
       select: { id: true },
     });
@@ -49,6 +59,7 @@ export async function resolveConversation(opts: {
         title: title || "Matrix conversation",
         channel,
         matrixRoomId,
+        matrixThreadId,
       },
     });
     return created.id;
