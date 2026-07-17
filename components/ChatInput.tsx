@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import styles from "./ChatInput.module.css";
 import SettingsDialog from "./SettingsDialog";
 
@@ -20,13 +20,8 @@ interface ChatInputProps {
   goodreadsUsers: GoodreadsUser[];
   conversationId: string | null;
   isSaving: boolean;
-  /** When true (e.g. single-doc chat), default RAG mode on so the first message uses document context */
-  defaultUseRag?: boolean;
-  useWebSearch: boolean;
-  webSearchAvailable: boolean;
   onChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
-  onDirectLLMSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   onToggleSettings: () => void;
   onToggleUploaded: () => void;
@@ -35,7 +30,6 @@ interface ChatInputProps {
   onToggleGoodreadsUser: (userId: string) => void;
   onSaveConversation: () => void;
   onDeleteConversation: () => void;
-  onToggleWebSearch: () => void;
 }
 
 export default function ChatInput({
@@ -48,12 +42,8 @@ export default function ChatInput({
   goodreadsUsers,
   conversationId,
   isSaving,
-  defaultUseRag = false,
-  useWebSearch,
-  webSearchAvailable,
   onChange,
   onSubmit,
-  onDirectLLMSubmit,
   onCancel,
   onToggleSettings,
   onToggleUploaded,
@@ -62,9 +52,7 @@ export default function ChatInput({
   onToggleGoodreadsUser,
   onSaveConversation,
   onDeleteConversation,
-  onToggleWebSearch,
 }: ChatInputProps) {
-  const [useRAG, setUseRAG] = useState(defaultUseRag);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -77,11 +65,7 @@ export default function ChatInput({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (useRAG) {
-      onSubmit(e);
-    } else {
-      onDirectLLMSubmit(e);
-    }
+    onSubmit(e);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -107,38 +91,6 @@ export default function ChatInput({
             rows={1}
             className={styles.textarea}
           />
-          <div className={styles.toggleContainer}>
-            <div className={`${styles.toggleButton} ${useRAG ? styles.toggleButtonActive : ''}`} title={useRAG ? "RAG mode (with tools)" : "Direct LLM mode (no RAG, no tools)"}>
-              <div className={styles.toggleIconContainer}>
-                <i className="fas fa-brain"></i>
-              </div>
-              <label className={styles.toggleLabel}>
-                <input
-                  type="checkbox"
-                  checked={useRAG}
-                  onChange={(e) => setUseRAG(e.target.checked)}
-                  className={styles.toggleInput}
-                />
-                <span className={styles.toggleSwitch}></span>
-              </label>
-            </div>
-            {webSearchAvailable && (
-              <div className={`${styles.toggleButton} ${useWebSearch ? styles.toggleButtonActive : ''}`} title={useWebSearch ? "Web search enabled - results from the web will supplement your documents" : "Web search disabled"}>
-                <div className={styles.toggleIconContainer}>
-                  <i className="fas fa-globe"></i>
-                </div>
-                <label className={styles.toggleLabel}>
-                  <input
-                    type="checkbox"
-                    checked={useWebSearch}
-                    onChange={() => onToggleWebSearch()}
-                    className={styles.toggleInput}
-                  />
-                  <span className={styles.toggleSwitch}></span>
-                </label>
-              </div>
-            )}
-          </div>
           <button
             type="button"
             className={styles.menuButton}
@@ -157,7 +109,7 @@ export default function ChatInput({
               <i className="fas fa-stop"></i>
             </button>
           ) : (
-            <button type="submit" disabled={!value.trim()} title={useRAG ? "Send with RAG" : "Send to LLM"}>
+            <button type="submit" disabled={!value.trim()} title="Send">
               <i className="fas fa-paper-plane"></i>
             </button>
           )}

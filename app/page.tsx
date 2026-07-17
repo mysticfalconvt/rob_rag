@@ -3,8 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import ChatHeader from "@/components/ChatHeader";
-import ChatMessage from "@/components/ChatMessage";
 import ChatInput from "@/components/ChatInput";
+import ChatMessage from "@/components/ChatMessage";
 import SourceFilterBar from "@/components/SourceFilterBar";
 import Toast from "@/components/Toast";
 import { useChat } from "@/hooks/useChat";
@@ -17,11 +17,17 @@ function ChatPageContent() {
   const conversationId = searchParams.get("conversation");
   const documentPath = searchParams.get("document");
   const documentDisplayName = documentPath
-    ? decodeURIComponent(documentPath).split("/").filter(Boolean).pop() || "document"
+    ? decodeURIComponent(documentPath).split("/").filter(Boolean).pop() ||
+      "document"
     : null;
 
-  const { messages, isLoading, currentConversationId, sendMessage, sendDirectLLM, cancelRequest } =
-    useChat(conversationId, documentPath);
+  const {
+    messages,
+    isLoading,
+    currentConversationId,
+    sendMessage,
+    cancelRequest,
+  } = useChat(conversationId, documentPath);
   const { isSaving, saveConversation, deleteConversation } =
     useConversationActions(currentConversationId);
 
@@ -32,8 +38,6 @@ function ChatPageContent() {
   const [goodreadsUsers, setGoodreadsUsers] = useState<
     Array<{ id: string; name: string; enabled: boolean }>
   >([]);
-  const [useWebSearch, setUseWebSearch] = useState(false);
-  const [webSearchAvailable, setWebSearchAvailable] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -48,22 +52,6 @@ function ChatPageContent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  useEffect(() => {
-    // Check if web search is available
-    const checkWebSearch = async () => {
-      try {
-        const res = await fetch("/api/web-search/status");
-        if (res.ok) {
-          const data = await res.json();
-          setWebSearchAvailable(data.available);
-        }
-      } catch (error) {
-        console.error("Error checking web search status:", error);
-      }
-    };
-    checkWebSearch();
-  }, []);
 
   useEffect(() => {
     // Fetch Goodreads users
@@ -139,15 +127,7 @@ function ChatPageContent() {
     if (!input.trim() || isLoading) return;
 
     const sourceFilter = getSourceFilter();
-    await sendMessage(input, sourceFilter, documentPath || undefined, useWebSearch);
-    setInput("");
-  };
-
-  const handleDirectLLMSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    await sendDirectLLM(input);
+    await sendMessage(input, sourceFilter, documentPath || undefined);
     setInput("");
   };
 
@@ -182,17 +162,22 @@ function ChatPageContent() {
         showMenu={false}
         isSaving={false}
         appName={config.APP_NAME}
-        onToggleMenu={() => { }}
-        onSaveConversation={() => { }}
-        onDeleteConversation={() => { }}
+        onToggleMenu={() => {}}
+        onSaveConversation={() => {}}
+        onDeleteConversation={() => {}}
       />
 
       {documentPath && (
         <div className={styles.documentBanner}>
           <span className={styles.documentBannerText}>
-            <i className="fas fa-file-alt"></i> Chatting about: {documentDisplayName}
+            <i className="fas fa-file-alt"></i> Chatting about:{" "}
+            {documentDisplayName}
           </span>
-          <a href="/" className={styles.documentBannerClear} title="Start a normal chat">
+          <a
+            href="/"
+            className={styles.documentBannerClear}
+            title="Start a normal chat"
+          >
             <i className="fas fa-times"></i> Clear
           </a>
         </div>
@@ -244,12 +229,8 @@ function ChatPageContent() {
           goodreadsUsers={goodreadsUsers}
           conversationId={currentConversationId}
           isSaving={isSaving}
-          defaultUseRag={!!documentPath}
-          useWebSearch={useWebSearch}
-          webSearchAvailable={webSearchAvailable}
           onChange={setInput}
           onSubmit={handleSubmit}
-          onDirectLLMSubmit={handleDirectLLMSubmit}
           onCancel={cancelRequest}
           onToggleSettings={() => setShowSettings(!showSettings)}
           onToggleUploaded={() => setUseUploaded(!useUploaded)}
@@ -258,7 +239,6 @@ function ChatPageContent() {
           onToggleGoodreadsUser={handleToggleGoodreadsUser}
           onSaveConversation={handleSaveConversation}
           onDeleteConversation={handleDeleteConversation}
-          onToggleWebSearch={() => setUseWebSearch(!useWebSearch)}
         />
       </div>
 

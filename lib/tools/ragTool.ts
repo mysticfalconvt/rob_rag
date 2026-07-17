@@ -1,19 +1,16 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { search, SearchResult } from "../retrieval";
-import { smartSearch } from "../smartRetrieval";
+import { rephraseQuestionIfNeeded } from "../contextBuilder";
 import { readFileContent } from "../files";
 import {
-  buildSearchQueryWithUserContext,
-  rephraseQuestionIfNeeded,
-} from "../contextBuilder";
-import { routeQuery } from "../queryRouter";
-import {
-  shouldRetrieveMore,
   retrieveAdditionalContext,
+  shouldRetrieveMore,
 } from "../iterativeRetrieval";
 import type { LLMCallMetrics } from "../llmTracking";
 import prisma from "../prisma";
+import { routeQuery } from "../queryRouter";
+import { type SearchResult, search } from "../retrieval";
+import { smartSearch } from "../smartRetrieval";
 
 export interface RagToolConfig {
   sourceFilter: string | string[] | undefined;
@@ -43,34 +40,58 @@ export function createRagTool(config: RagToolConfig): DynamicStructuredTool {
       `Do NOT use this for general knowledge questions you can answer directly (jokes, definitions, math, common facts). ` +
       `When in doubt about whether the user is asking about personal data, use this tool.`,
     schema: z.object({
-      query: z.string().describe(
-        "The search query to find relevant documents. Rephrase the user's question as a clear search query."
-      ),
-      source_filter: z.enum(["all", "goodreads", "paperless", "uploaded", "synced", "google-calendar"])
+      query: z
+        .string()
+        .describe(
+          "The search query to find relevant documents. Rephrase the user's question as a clear search query.",
+        ),
+      source_filter: z
+        .enum([
+          "all",
+          "goodreads",
+          "paperless",
+          "uploaded",
+          "synced",
+          "google-calendar",
+        ])
         .optional()
         .describe(
           "Optional: filter to search only a specific data source. Use 'goodreads' for books, " +
-          "'paperless' for Paperless documents, 'google-calendar' for calendar events, etc. " +
-          "Default is to search all sources."
+            "'paperless' for Paperless documents, 'google-calendar' for calendar events, etc. " +
+            "Default is to search all sources.",
         ),
     }),
     func: async ({ query, source_filter }) => {
       try {
-        console.log(`[RAGTool] Searching knowledge base: "${query.substring(0, 80)}"`);
+        console.log(
+          `[RAGTool] Searching knowledge base: "${query.substring(0, 80)}"`,
+        );
 
         // Determine effective source filter (UI filter takes precedence)
-        const effectiveFilter = resolveSourceFilter(config.sourceFilter, source_filter);
+        const effectiveFilter = resolveSourceFilter(
+          config.sourceFilter,
+          source_filter,
+        );
 
         // Single-document mode
         if (config.documentPath) {
-          return await searchSingleDocument(config.documentPath, query, config.onEmbeddingMetrics);
+          return await searchSingleDocument(
+            config.documentPath,
+            query,
+            config.onEmbeddingMetrics,
+          );
         }
 
-        // Enhance search query
+        // Enhance the search query for follow-up questions only (resolve
+        // pronouns/references against history).
+        //
+        // We deliberately do NOT inject the user's name/bio into the embedding
+        // query. Doing so poisons semantic search: e.g. prefixing "User: Rob
+        // Boskind\nBackground: ..." to "boat" made the nearest chunks calendar
+        // events named "Rob ..." instead of the user's boat documents. User
+        // context belongs in the system prompt, not the retrieval query.
         let searchQuery = query;
-        if (config.isFirstMessage) {
-          searchQuery = buildSearchQueryWithUserContext(query, config.userName, config.userBio);
-        } else {
+        if (!config.isFirstMessage) {
           const { rephrased, wasRephrased } = await rephraseQuestionIfNeeded(
             query,
             config.conversationHistory,
@@ -81,23 +102,45 @@ export function createRagTool(config: RagToolConfig): DynamicStructuredTool {
         }
 
         // Route query for fast/slow path
-        const queryRoute = routeQuery(query, config.isFirstMessage, config.conversationHistory);
+        const queryRoute = routeQuery(
+          query,
+          config.isFirstMessage,
+          config.conversationHistory,
+        );
 
         // Execute search
-        const clampedSourceCount = Math.max(1, Math.min(35, config.sourceCount));
+        const clampedSourceCount = Math.max(
+          1,
+          Math.min(35, config.sourceCount),
+        );
         let searchResults: SearchResult[];
 
         if (!effectiveFilter || effectiveFilter === "all") {
           if (queryRoute.path === "fast") {
             console.log("[RAGTool] Fast path: direct search");
-            searchResults = await search(searchQuery, 10, "all", config.onEmbeddingMetrics);
+            searchResults = await search(
+              searchQuery,
+              10,
+              "all",
+              config.onEmbeddingMetrics,
+            );
           } else {
             console.log("[RAGTool] Slow path: smart search");
-            const smartResult = await smartSearch(searchQuery, undefined, clampedSourceCount, config.onEmbeddingMetrics);
+            const smartResult = await smartSearch(
+              searchQuery,
+              undefined,
+              clampedSourceCount,
+              config.onEmbeddingMetrics,
+            );
             searchResults = smartResult.results;
           }
         } else {
-          searchResults = await search(searchQuery, clampedSourceCount, effectiveFilter as any, config.onEmbeddingMetrics);
+          searchResults = await search(
+            searchQuery,
+            clampedSourceCount,
+            effectiveFilter as any,
+            config.onEmbeddingMetrics,
+          );
         }
 
         if (searchResults.length === 0) {
@@ -126,7 +169,9 @@ export function createRagTool(config: RagToolConfig): DynamicStructuredTool {
         }
 
         const context = contextParts.join("\n\n");
-        console.log(`[RAGTool] Returning ${searchResults.length} results, ${context.length} chars`);
+        console.log(
+          `[RAGTool] Returning ${searchResults.length} results, ${context.length} chars`,
+        );
         return context;
       } catch (error) {
         console.error("[RAGTool] Error:", error);
@@ -192,7 +237,13 @@ async function searchSingleDocument(
   }
 
   // Chunk search scoped to document
-  const results = await search(query, 25, undefined, onEmbeddingMetrics, documentPath);
+  const results = await search(
+    query,
+    25,
+    undefined,
+    onEmbeddingMetrics,
+    documentPath,
+  );
   if (results.length === 0) {
     return `No relevant sections found in document: ${docDisplayName}`;
   }
@@ -203,7 +254,9 @@ async function searchSingleDocument(
     const filePath = result.metadata.filePath;
     if (!filePath || processedFiles.has(filePath)) continue;
     processedFiles.add(filePath);
-    parts.push(`Document: ${result.metadata.fileName}\nContent: ${result.content}`);
+    parts.push(
+      `Document: ${result.metadata.fileName}\nContent: ${result.content}`,
+    );
   }
   return parts.join("\n\n");
 }
@@ -219,7 +272,9 @@ async function searchSingleDocument(
  * Full-file loading is capped at 20k chars per file and 3 files max to avoid
  * overwhelming the context window.
  */
-async function buildContextFromResults(searchResults: SearchResult[]): Promise<string[]> {
+async function buildContextFromResults(
+  searchResults: SearchResult[],
+): Promise<string[]> {
   const contextParts: string[] = [];
   const FULL_CONTENT_MAX_CHARS = 20000; // ~5k tokens per file
   const MAX_FULL_FILES = 3;
@@ -236,9 +291,11 @@ async function buildContextFromResults(searchResults: SearchResult[]): Promise<s
   });
 
   // Compute average score across all results for score-based full-doc loading
-  const avgScore = searchResults.length > 0
-    ? searchResults.reduce((sum, r) => sum + r.score, 0) / searchResults.length
-    : 0;
+  const avgScore =
+    searchResults.length > 0
+      ? searchResults.reduce((sum, r) => sum + r.score, 0) /
+        searchResults.length
+      : 0;
 
   const processedFiles = new Set<string>();
 
@@ -251,7 +308,9 @@ async function buildContextFromResults(searchResults: SearchResult[]): Promise<s
     const source = result.metadata.source;
 
     const isVirtualSource =
-      source === "goodreads" || source === "paperless" || source === "google-calendar";
+      source === "goodreads" ||
+      source === "paperless" ||
+      source === "google-calendar";
 
     // Existing heuristics
     const isSmallFile = totalChunks <= 5;
@@ -271,10 +330,15 @@ async function buildContextFromResults(searchResults: SearchResult[]): Promise<s
       try {
         const { content: fullContent } = await readFileContent(filePath);
         if (fullContent.length <= FULL_CONTENT_MAX_CHARS) {
-          const reason = hasHighScoreChunk && !isSmallFile && !hasSignificantPortion
-            ? "high relevance score"
-            : isSmallFile ? "small file" : "significant chunk coverage";
-          console.log(`[RAGTool] Loading full document: ${result.metadata.fileName} (${reason}, score: ${bestFileScore.toFixed(3)} vs avg: ${avgScore.toFixed(3)})`);
+          const reason =
+            hasHighScoreChunk && !isSmallFile && !hasSignificantPortion
+              ? "high relevance score"
+              : isSmallFile
+                ? "small file"
+                : "significant chunk coverage";
+          console.log(
+            `[RAGTool] Loading full document: ${result.metadata.fileName} (${reason}, score: ${bestFileScore.toFixed(3)} vs avg: ${avgScore.toFixed(3)})`,
+          );
           contextParts.push(
             `Document: ${result.metadata.fileName}\n(Full Content)\n${fullContent}`,
           );
@@ -323,7 +387,10 @@ async function tryIterativeRetrieval(
     );
 
     if (analysis.shouldRetrieve && analysis.suggestedCount) {
-      const iterativeFilter = sourceFilter === "all" || !sourceFilter ? "all" as const : sourceFilter as string[];
+      const iterativeFilter =
+        sourceFilter === "all" || !sourceFilter
+          ? ("all" as const)
+          : (sourceFilter as string[]);
       const moreResults = await retrieveAdditionalContext(
         query,
         searchResults,
@@ -338,7 +405,9 @@ async function tryIterativeRetrieval(
       }
 
       if (additionalParts.length > 0) {
-        console.log(`[RAGTool] Iterative retrieval added ${additionalParts.length} more chunks`);
+        console.log(
+          `[RAGTool] Iterative retrieval added ${additionalParts.length} more chunks`,
+        );
       }
     }
   } catch (error) {

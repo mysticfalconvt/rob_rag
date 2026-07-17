@@ -1,7 +1,7 @@
-import prisma from "./prisma";
 import { CronExpressionParser } from "cron-parser";
-import { sendFormattedMessage } from "./matrix/sender";
 import { config as appConfig } from "./config";
+import { sendFormattedMessage } from "./matrix/sender";
+import prisma from "./prisma";
 
 /**
  * Background scheduler for periodic tasks
@@ -175,7 +175,9 @@ class BackgroundScheduler {
 
         if (isSimpleReminder) {
           // Simple notification - just send the reminder text directly
-          const reminderText = task.query.replace("SIMPLE_REMINDER:", "").trim();
+          const reminderText = task.query
+            .replace("SIMPLE_REMINDER:", "")
+            .trim();
           const message = `🔔 **Reminder**\n\n${reminderText}`;
 
           await sendFormattedMessage(task.matrixRoomId, message);
@@ -187,71 +189,33 @@ class BackgroundScheduler {
             reminderText,
           };
         } else {
-          // Query reminder - call RAG flow
-          const internalServiceKey = process.env.INTERNAL_SERVICE_KEY;
-          if (!internalServiceKey) {
-            throw new Error("INTERNAL_SERVICE_KEY not configured");
-          }
+          // Query reminder — run the unified agent in-process (no HTTP self-call).
+          const { runAgent } = await import("./agent/runAgent");
+          const { resolveScheduledIdentity } = await import("./agent/identity");
 
-          // Send the query directly — no prefix that could trigger reminder keyword detection
-          const ragResponse = await fetch("http://localhost:3000/api/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              messages: [{ role: "user", content: task.query }],
-              triggerSource: "scheduled",
-              internalServiceKey,
-              matrixRoomId: task.matrixRoomId,
-            }),
+          const { userId, userProfile } = await resolveScheduledIdentity();
+          const result = await runAgent({
+            messages: [{ role: "user", content: task.query }],
+            channel: "scheduled",
+            userId,
+            userProfile,
+            matrixRoomId: task.matrixRoomId,
           });
 
-          if (!ragResponse.ok) {
-            throw new Error(`RAG flow returned ${ragResponse.status}`);
-          }
-
-          // Read streaming response
-          const reader = ragResponse.body?.getReader();
-          if (!reader) {
-            throw new Error("No response body");
-          }
-
-          let fullResponse = "";
-          let sources: any[] = [];
-          const decoder = new TextDecoder();
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value, { stream: true });
-
-            if (chunk.includes("__SOURCES__:")) {
-              const parts = chunk.split("__SOURCES__:");
-              fullResponse += parts[0];
-
-              if (parts[1]) {
-                try {
-                  const sourcesData = JSON.parse(parts[1]);
-                  sources = sourcesData.sources || [];
-                } catch (e) {
-                  console.error("[Scheduler] Failed to parse sources:", e);
-                }
-              }
-            } else {
-              fullResponse += chunk;
-            }
-          }
-
-          response = fullResponse.trim();
+          response = result.text.trim();
 
           // Send to Matrix room
-          await sendFormattedMessage(task.matrixRoomId, response, sources);
+          await sendFormattedMessage(
+            task.matrixRoomId,
+            response,
+            result.sources,
+          );
 
           metadata = {
             roomId: task.matrixRoomId,
             query: task.query,
             type: "query_reminder",
-            sourceCount: sources.length,
+            sourceCount: result.sources.length,
           };
         }
       } else {
@@ -287,7 +251,9 @@ class BackgroundScheduler {
     let isOneTimeTask = false;
 
     try {
-      const interval = CronExpressionParser.parse(task.schedule, { tz: appConfig.USER_TIMEZONE });
+      const interval = CronExpressionParser.parse(task.schedule, {
+        tz: appConfig.USER_TIMEZONE,
+      });
       nextRun = interval.next().toDate();
 
       // Check if this is a one-time cron (has specific date fields like day and month)
@@ -300,7 +266,10 @@ class BackgroundScheduler {
         isOneTimeTask = /^\d+$/.test(dayOfMonth) && /^\d+$/.test(month);
       }
     } catch (err) {
-      console.error(`[Scheduler] Failed to calculate nextRun for task ${task.id}:`, err);
+      console.error(
+        `[Scheduler] Failed to calculate nextRun for task ${task.id}:`,
+        err,
+      );
     }
 
     // Update task last run info
@@ -329,7 +298,7 @@ class BackgroundScheduler {
 export const backgroundScheduler = new BackgroundScheduler();
 
 // Auto-start in production (but not during build)
-if (typeof window === 'undefined' && process.env.NODE_ENV === 'production') {
+if (typeof window === "undefined" && process.env.NODE_ENV === "production") {
   // Delay start to ensure database is ready
   setTimeout(() => {
     backgroundScheduler.start();

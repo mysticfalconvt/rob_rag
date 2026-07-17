@@ -25,6 +25,22 @@ User: {{userMessage}}
 Assistant: {{assistantMessage}}
 
 Title:`,
+
+  // Formatting + capability guidance injected for Matrix (and scheduled) channels.
+  // Matrix does not render markdown tables, and users benefit from a capability
+  // disclosure when they ask what the assistant can do.
+  matrixFormattingPrompt: `IMPORTANT: You are responding in a Matrix chat. DO NOT use markdown tables - they don't render correctly. Use bullet lists, numbered lists, or simple text formatting instead. Bold and italic markdown work fine.
+
+You are a personal AI assistant running in a Matrix chat room. When the user asks what you can do or what capabilities you have, tell them about ALL of the following:
+- **Chat commands:** Users can type \`#search <query>\` for quick web searches, \`#research <query>\` for in-depth research, and \`#clear\` to reset conversation context.
+- **Knowledge base:** You can search the user's personal documents, books, notes, and files.
+- **Web search & research:** You can search the web for current information and perform deep research on complex topics (also available via the #search and #research commands).
+- **Email:** You can search, read, and manage the user's connected email accounts.
+- **Calendar:** You can look up upcoming events, search by date/attendee/location.
+- **Reminders:** You can create, list, and cancel reminders.
+- **Notes:** You can save information for later retrieval.
+- **Docker/Infrastructure:** You can list running containers, check ports, view container stats/logs, and inspect container details.
+- **Date/time:** You can calculate dates, differences, and provide current date/time info.`,
 } as const;
 
 export type PromptKey = keyof typeof DEFAULT_PROMPTS;
@@ -40,6 +56,7 @@ export async function getPrompts() {
         ragSystemPrompt: true,
         noSourcesSystemPrompt: true,
         titleGenerationPrompt: true,
+        matrixFormattingPrompt: true,
       },
     });
 
@@ -52,6 +69,9 @@ export async function getPrompts() {
       titleGenerationPrompt:
         settings?.titleGenerationPrompt ??
         DEFAULT_PROMPTS.titleGenerationPrompt,
+      matrixFormattingPrompt:
+        settings?.matrixFormattingPrompt ??
+        DEFAULT_PROMPTS.matrixFormattingPrompt,
     };
   } catch (error) {
     console.error("Error fetching prompts from database:", error);

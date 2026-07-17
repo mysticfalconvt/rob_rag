@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import type { Source } from "@/types/source";
 
 interface Message {
@@ -20,8 +20,11 @@ export function useChat(
   const [currentConversationId, setCurrentConversationId] = useState<
     string | null
   >(conversationId);
-  const [abortControllerRef, setAbortController] = useState<AbortController | null>(null);
-  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const [abortControllerRef, setAbortController] =
+    useState<AbortController | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(
+    null,
+  );
 
   useEffect(() => {
     const loadConversation = async () => {
@@ -65,7 +68,6 @@ export function useChat(
       | "none"
       | string[],
     documentPath?: string | null,
-    webSearchEnabled?: boolean,
   ) => {
     if (!input.trim() || isLoading) return;
 
@@ -83,7 +85,6 @@ export function useChat(
         sourceFilter,
       };
       if (documentPath) body.documentPath = documentPath;
-      if (webSearchEnabled) body.webSearchEnabled = true;
 
       // Detect #search and #research command prefixes
       const trimmedInput = input.trim();
@@ -210,132 +211,10 @@ export function useChat(
         // Request was cancelled - remove the incomplete assistant message
         setMessages((prev) => {
           const newMessages = [...prev];
-          if (newMessages[newMessages.length - 1]?.role === "assistant" &&
-            newMessages[newMessages.length - 1]?.content === "") {
-            newMessages.pop();
-          }
-          return newMessages;
-        });
-      } else {
-        console.error("Error:", error);
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "Sorry, something went wrong." },
-        ]);
-      }
-    } finally {
-      setIsLoading(false);
-      setAbortController(null);
-      readerRef.current = null;
-    }
-  };
-
-  const sendDirectLLM = async (input: string) => {
-    if (!input.trim() || isLoading) return;
-
-    const abortController = new AbortController();
-    setAbortController(abortController);
-
-    const userMessage: Message = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setIsLoading(true);
-
-    try {
-      const response = await fetch("/api/chat-direct", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: abortController.signal,
-        body: JSON.stringify({
-          messages: [...messages, userMessage],
-          conversationId: currentConversationId,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Failed to send message");
-
-      const reader = response.body?.getReader();
-      if (!reader) return;
-      readerRef.current = reader;
-
-      const assistantMessage: Message = { role: "assistant", content: "" };
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      let buffer = "";
-      let foundSourcesMarker = false;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          // Stream ended - try to parse metadata if we found the marker
-          if (foundSourcesMarker && buffer.includes("__SOURCES__:")) {
-            const [contentPart, metadataPart] = buffer.split("__SOURCES__:");
-
-            setMessages((prev) => {
-              const newMessages = [...prev];
-              const lastIndex = newMessages.length - 1;
-              newMessages[lastIndex] = {
-                ...newMessages[lastIndex],
-                content: contentPart.trim(),
-              };
-              return newMessages;
-            });
-
-            try {
-              const metadata = JSON.parse(metadataPart);
-              if (metadata.conversationId && !currentConversationId) {
-                setCurrentConversationId(metadata.conversationId);
-                const params = new URLSearchParams();
-                params.set("conversation", metadata.conversationId);
-                if (documentPath) params.set("document", documentPath);
-                router.push(`/?${params.toString()}`);
-              }
-            } catch (e) {
-              console.error("Failed to parse metadata:", e);
-            }
-          }
-          break;
-        }
-
-        const text = new TextDecoder().decode(value);
-        buffer += text;
-
-        // Check if we found the sources marker
-        if (!foundSourcesMarker && buffer.includes("__SOURCES__:")) {
-          foundSourcesMarker = true;
-        }
-
-        // Only update content if we haven't found sources marker yet
-        if (!foundSourcesMarker) {
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            newMessages[lastIndex] = {
-              ...newMessages[lastIndex],
-              content: buffer,
-            };
-            return newMessages;
-          });
-        } else {
-          // Update content without metadata part
-          const contentPart = buffer.split("__SOURCES__:")[0];
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            newMessages[lastIndex] = {
-              ...newMessages[lastIndex],
-              content: contentPart.trim(),
-            };
-            return newMessages;
-          });
-        }
-      }
-    } catch (error: any) {
-      if (error.name === "AbortError") {
-        // Request was cancelled - remove the incomplete assistant message
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          if (newMessages[newMessages.length - 1]?.role === "assistant" &&
-            newMessages[newMessages.length - 1]?.content === "") {
+          if (
+            newMessages[newMessages.length - 1]?.role === "assistant" &&
+            newMessages[newMessages.length - 1]?.content === ""
+          ) {
             newMessages.pop();
           }
           return newMessages;
@@ -373,7 +252,6 @@ export function useChat(
     isLoading,
     currentConversationId,
     sendMessage,
-    sendDirectLLM,
     cancelRequest,
   };
 }

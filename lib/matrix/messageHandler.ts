@@ -1,6 +1,13 @@
-import { MatrixEvent, Room, RoomEvent } from "matrix-js-sdk";
-import { matrixClient } from "./client";
+import { type MatrixEvent, type Room, RoomEvent } from "matrix-js-sdk";
+import { resolveMatrixIdentity } from "../agent/identity";
+import {
+  loadConversationHistory,
+  resolveConversation,
+  startFreshMatrixConversation,
+} from "../agent/persistence";
+import { runAgent } from "../agent/runAgent";
 import prisma from "../prisma";
+import { matrixClient } from "./client";
 import { sendFormattedMessage } from "./sender";
 
 /**
@@ -11,19 +18,6 @@ const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const RATE_LIMIT_MAX = 10; // Max 10 messages per minute per room
 
 /**
- * Conversation history per room
- * Stores messages with timestamps for context management
- */
-interface ConversationMessage {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-}
-
-const roomConversations = new Map<string, ConversationMessage[]>();
-const CONTEXT_WINDOW = 30 * 60 * 1000; // 30 minutes in milliseconds
-
-/**
  * Check if a room is rate limited
  */
 function isRateLimited(roomId: string): boolean {
@@ -31,8 +25,10 @@ function isRateLimited(roomId: string): boolean {
   const limit = roomRateLimits.get(roomId);
 
   if (!limit || now > limit.resetTime) {
-    // Reset or create new limit
-    roomRateLimits.set(roomId, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+    roomRateLimits.set(roomId, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW,
+    });
     return false;
   }
 
@@ -45,15 +41,84 @@ function isRateLimited(roomId: string): boolean {
 }
 
 /**
- * Track processed events to prevent duplicates
- * Uses globalThis to survive across Next.js module re-evaluations
+ * Track processed events to prevent duplicates.
+ * Uses globalThis to survive across Next.js module re-evaluations.
  */
 const _global = globalThis as any;
 if (!_global.__robrag_processedEvents) {
   _global.__robrag_processedEvents = new Set<string>();
 }
 const processedEvents: Set<string> = _global.__robrag_processedEvents;
-const EVENT_CACHE_SIZE = 1000; // Keep track of last 1000 events
+const EVENT_CACHE_SIZE = 1000;
+
+/**
+ * Light safety net: strip any tool-call syntax a weak model might leak into
+ * prose. The real tool-calling loop keeps tool syntax out of the answer, so this
+ * should almost never fire — kept as insurance during rollout.
+ */
+function scrubToolSyntax(text: string): string {
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/commentary\s+to=\S+\s+code\{[^}]*\}/g, "").trim();
+  cleaned = cleaned
+    .replace(
+      /<\/?(?:tool_call|function_call|tool_use)[^>]*>[\s\S]*?<\/(?:tool_call|function_call|tool_use)>/g,
+      "",
+    )
+    .trim();
+  cleaned = cleaned
+    .replace(
+      /\{"(?:name|tool)":\s*"[^"]+",\s*"(?:arguments|parameters|input)":\s*\{[^}]*\}\s*\}/g,
+      "",
+    )
+    .trim();
+  if (!cleaned || cleaned.length < 5) {
+    return "I've processed your request, but encountered an issue generating a response. Please try again.";
+  }
+  return cleaned;
+}
+
+/**
+ * Run one turn through the unified agent for a Matrix message and reply.
+ */
+async function runMatrixTurn(opts: {
+  roomId: string;
+  sender: string;
+  displayName: string;
+  messageText: string;
+  useRag: boolean;
+  webIntent?: "search" | "research";
+}): Promise<void> {
+  const { roomId, sender, displayName, messageText, useRag, webIntent } = opts;
+
+  const { userId, userProfile } = await resolveMatrixIdentity(
+    sender,
+    displayName,
+  );
+  const conversationId = await resolveConversation({
+    channel: "matrix",
+    userId,
+    matrixRoomId: roomId,
+    firstMessageText: messageText,
+  });
+  const history = await loadConversationHistory(conversationId);
+
+  const result = await runAgent({
+    messages: [...history, { role: "user", content: messageText }],
+    channel: "matrix",
+    userId,
+    userProfile,
+    conversationId,
+    matrixRoomId: roomId,
+    sourceFilter: useRag ? undefined : "none",
+    webIntent,
+  });
+
+  await sendFormattedMessage(
+    roomId,
+    scrubToolSyntax(result.text),
+    result.sources,
+  );
+}
 
 /**
  * Process an incoming Matrix message
@@ -61,26 +126,19 @@ const EVENT_CACHE_SIZE = 1000; // Keep track of last 1000 events
 async function handleMessage(event: MatrixEvent): Promise<void> {
   try {
     const client = matrixClient.getClient();
-    if (!client) {
-      return;
-    }
+    if (!client) return;
 
     const eventId = event.getId();
-    if (!eventId) {
-      return;
-    }
+    if (!eventId) return;
 
-    // Check if we've already processed this event
-    if (processedEvents.has(eventId)) {
-      return;
-    }
-
-    // Add to processed events (with size limit)
+    if (processedEvents.has(eventId)) return;
     processedEvents.add(eventId);
     if (processedEvents.size > EVENT_CACHE_SIZE) {
-      // Remove oldest entries
-      const toRemove = Array.from(processedEvents).slice(0, processedEvents.size - EVENT_CACHE_SIZE);
-      toRemove.forEach(id => processedEvents.delete(id));
+      const toRemove = Array.from(processedEvents).slice(
+        0,
+        processedEvents.size - EVENT_CACHE_SIZE,
+      );
+      toRemove.forEach((id) => processedEvents.delete(id));
     }
 
     const roomId = event.getRoomId();
@@ -88,64 +146,56 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
     const content = event.getContent();
     const messageText = content.body;
 
-    if (!roomId || !sender || !messageText) {
-      return;
-    }
+    if (!roomId || !sender || !messageText) return;
+    if (sender === client.getUserId()) return; // ignore our own messages
 
-    // Ignore messages from ourselves
-    if (sender === client.getUserId()) {
-      return;
-    }
-
-    // Message received
-
-    // Check for #clear command first
-    if (messageText.trim().toLowerCase() === "#clear") {
-      roomConversations.delete(roomId);
-      // Context cleared
-      await sendFormattedMessage(roomId, "✅ Context cleared. Starting fresh conversation.");
-      return;
-    }
-
-    // Check for #search command
     const trimmedMessage = messageText.trim();
     const lowerTrimmed = trimmedMessage.toLowerCase();
 
+    // #clear — start a fresh conversation for this sender in this room.
+    if (lowerTrimmed === "#clear") {
+      const displayName = await getMatrixUserDisplayName(roomId, sender);
+      const { userId } = await resolveMatrixIdentity(sender, displayName);
+      await startFreshMatrixConversation(userId, roomId);
+      await sendFormattedMessage(
+        roomId,
+        "✅ Context cleared. Starting fresh conversation.",
+      );
+      return;
+    }
+
+    // #search / #research web commands.
     if (lowerTrimmed.startsWith("#search ")) {
-      const searchQuery = trimmedMessage.substring(8).trim();
-      if (!searchQuery) {
-        await sendFormattedMessage(roomId, "⚠️ Please provide a search query. Usage: `#search your query here`");
+      const q = trimmedMessage.substring(8).trim();
+      if (!q) {
+        await sendFormattedMessage(
+          roomId,
+          "⚠️ Please provide a search query. Usage: `#search your query here`",
+        );
         return;
       }
-      console.log(`[Matrix] #search command from ${sender} in ${roomId}: "${searchQuery}"`);
-      await handleWebCommand(event, roomId, sender, messageText, searchQuery, "search");
+      await handleWebCommand(roomId, sender, q, "search");
       return;
     }
-
-    // Check for #research command
     if (lowerTrimmed.startsWith("#research ")) {
-      const researchQuery = trimmedMessage.substring(10).trim();
-      if (!researchQuery) {
-        await sendFormattedMessage(roomId, "⚠️ Please provide a research query. Usage: `#research your query here`");
+      const q = trimmedMessage.substring(10).trim();
+      if (!q) {
+        await sendFormattedMessage(
+          roomId,
+          "⚠️ Please provide a research query. Usage: `#research your query here`",
+        );
         return;
       }
-      console.log(`[Matrix] #research command from ${sender} in ${roomId}: "${researchQuery}"`);
-      await handleWebCommand(event, roomId, sender, messageText, researchQuery, "research");
+      await handleWebCommand(roomId, sender, q, "research");
       return;
     }
 
-    // Check if room is enabled
-    const room = await prisma.matrixRoom.findUnique({
-      where: { roomId },
-    });
-
-    if (!room || !room.enabled) {
-      return;
-    }
+    // Regular message — check the room is enabled.
+    const room = await prisma.matrixRoom.findUnique({ where: { roomId } });
+    if (!room || !room.enabled) return;
 
     const useRag = room.useRag ?? true;
 
-    // Check rate limiting
     if (isRateLimited(roomId)) {
       await sendFormattedMessage(
         roomId,
@@ -154,48 +204,18 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
       return;
     }
 
-    // Send typing indicator and keep it alive
     await matrixClient.sendTyping(roomId, true);
-
-    // Set up interval to renew typing indicator every 10 seconds
     const typingInterval = setInterval(async () => {
       try {
         await matrixClient.sendTyping(roomId, true);
       } catch (error) {
         console.error("[Matrix] Error sending typing indicator:", error);
       }
-    }, 10000); // Renew every 10 seconds
+    }, 10000);
 
     try {
-      // Get user display name for better context
       const displayName = await getMatrixUserDisplayName(roomId, sender);
-
-      // Add user message to conversation history
-      const userMessage: ConversationMessage = {
-        role: "user",
-        content: messageText,
-        timestamp: Date.now(),
-      };
-
-      // Get existing conversation history
-      const history = roomConversations.get(roomId) || [];
-      history.push(userMessage);
-      roomConversations.set(roomId, history);
-
-      // Call the RAG flow with conversation context
-      const response = await callRagFlow(messageText, roomId, sender, displayName, useRag);
-
-      // Add assistant response to conversation history
-      const assistantMessage: ConversationMessage = {
-        role: "assistant",
-        content: response.text,
-        timestamp: Date.now(),
-      };
-      history.push(assistantMessage);
-      roomConversations.set(roomId, history);
-
-      // Send the response
-      await sendFormattedMessage(roomId, response.text, response.sources);
+      await runMatrixTurn({ roomId, sender, displayName, messageText, useRag });
     } catch (error) {
       console.error("[Matrix] Error processing message:", error);
       await sendFormattedMessage(
@@ -203,7 +223,6 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         "❌ Sorry, I encountered an error processing your message. Please try again later.",
       );
     } finally {
-      // Stop typing indicator and clear interval
       clearInterval(typingInterval);
       await matrixClient.sendTyping(roomId, false);
     }
@@ -215,12 +234,14 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
 /**
  * Get user display name from Matrix
  */
-async function getMatrixUserDisplayName(roomId: string, userId: string): Promise<string> {
+async function getMatrixUserDisplayName(
+  roomId: string,
+  userId: string,
+): Promise<string> {
   try {
     const client = matrixClient.getClient();
     const room = client?.getRoom(roomId);
     if (!room) return userId;
-
     const member = room.getMember(userId);
     return member?.name || member?.rawDisplayName || userId;
   } catch (error) {
@@ -230,155 +251,14 @@ async function getMatrixUserDisplayName(roomId: string, userId: string): Promise
 }
 
 /**
- * Get pruned conversation history for a room
- * Removes messages older than 30 minutes but always includes the latest message
- */
-function getPrunedHistory(roomId: string, currentMessage: string): Array<{ role: string; content: string }> {
-  const history = roomConversations.get(roomId) || [];
-  const now = Date.now();
-  const cutoffTime = now - CONTEXT_WINDOW;
-
-  // Prune messages older than 30 minutes
-  const prunedHistory = history.filter(msg => msg.timestamp > cutoffTime);
-
-  // Convert to chat API format
-  const messages = prunedHistory.map(msg => ({
-    role: msg.role,
-    content: msg.content,
-  }));
-
-  // Always include the current message (it's already added to history before this call)
-  // The last message in history is the current user message, so it's already included
-
-  // Context built: messages.length messages after pruning
-
-  return messages;
-}
-
-/**
- * Call the RAG flow via internal API
- */
-async function callRagFlow(
-  query: string,
-  roomId: string,
-  sender: string,
-  displayName: string,
-  useRag: boolean,
-  webSearchQuery?: string,
-  webResearchQuery?: string,
-): Promise<{ text: string; sources?: any[] }> {
-  try {
-    const internalServiceKey = process.env.INTERNAL_SERVICE_KEY;
-    if (!internalServiceKey) {
-      throw new Error("INTERNAL_SERVICE_KEY not configured");
-    }
-
-    // Get conversation history with 30-minute pruning
-    const messages = getPrunedHistory(roomId, query);
-
-    console.log(`[Matrix] callRagFlow: query="${query.substring(0, 80)}", roomId=${roomId}, useRag=${useRag}, webSearchQuery=${!!webSearchQuery}, webResearchQuery=${!!webResearchQuery}, historyMessages=${messages.length}`);
-
-    // Call the chat API internally
-    const response = await fetch("http://localhost:3000/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages,
-        triggerSource: "matrix",
-        matrixRoomId: roomId,
-        matrixSender: sender,
-        matrixDisplayName: displayName,
-        internalServiceKey,
-        sourceFilter: useRag ? undefined : "none", // Disable RAG if useRag is false
-        ...(webSearchQuery && { webSearchQuery }),
-        ...(webResearchQuery && { webResearchQuery }),
-      }),
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => "");
-      console.error(`[Matrix] callRagFlow: chat API returned ${response.status}: ${errorBody.substring(0, 200)}`);
-      throw new Error(`RAG flow returned ${response.status}: ${errorBody.substring(0, 100)}`);
-    }
-    console.log(`[Matrix] callRagFlow: chat API returned 200, streaming response...`);
-
-    // Read the streaming response
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("No response body");
-    }
-
-    let fullResponse = "";
-    let sources: any[] = [];
-
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-
-      // Check for sources marker
-      if (chunk.includes("__SOURCES__:")) {
-        const parts = chunk.split("__SOURCES__:");
-        fullResponse += parts[0];
-
-        if (parts[1]) {
-          try {
-            const sourcesData = JSON.parse(parts[1]);
-            sources = sourcesData.sources || [];
-          } catch (e) {
-            console.error("[Matrix] Failed to parse sources:", e);
-          }
-        }
-      } else {
-        fullResponse += chunk;
-      }
-    }
-
-    // Strip any hallucinated tool-call syntax that leaked into the response
-    let cleanedResponse = fullResponse.trim();
-    // Remove patterns like: commentary to=container.exec code{"cmd":...}
-    cleanedResponse = cleanedResponse.replace(/commentary\s+to=\S+\s+code\{[^}]*\}/g, "").trim();
-    // Remove patterns like: <tool_call>...</tool_call> or <function_call>...</function_call>
-    cleanedResponse = cleanedResponse.replace(/<\/?(?:tool_call|function_call|tool_use)[^>]*>[\s\S]*?<\/(?:tool_call|function_call|tool_use)>/g, "").trim();
-    // Remove bare JSON tool call blocks that start with {"name": or {"tool":
-    cleanedResponse = cleanedResponse.replace(/\{"(?:name|tool)":\s*"[^"]+",\s*"(?:arguments|parameters|input)":\s*\{[^}]*\}\s*\}/g, "").trim();
-
-    if (cleanedResponse !== fullResponse.trim()) {
-      console.log("[Matrix] Stripped hallucinated tool-call syntax from response");
-    }
-
-    // If the response was entirely tool-call garbage, return a fallback
-    if (!cleanedResponse || cleanedResponse.length < 5) {
-      cleanedResponse = "I've processed your request, but encountered an issue generating a response. Please try again.";
-    }
-
-    return {
-      text: cleanedResponse,
-      sources,
-    };
-  } catch (error) {
-    console.error("[Matrix] Error calling RAG flow:", error);
-    throw error;
-  }
-}
-
-/**
  * Handle #search and #research web commands
  */
 async function handleWebCommand(
-  event: MatrixEvent,
   roomId: string,
   sender: string,
-  originalMessage: string,
   webQuery: string,
   type: "search" | "research",
 ): Promise<void> {
-  // Send typing indicator and keep it alive
   await matrixClient.sendTyping(roomId, true);
   const typingInterval = setInterval(async () => {
     try {
@@ -389,47 +269,17 @@ async function handleWebCommand(
   }, 10000);
 
   try {
-    const displayName = await getMatrixUserDisplayName(roomId, sender!);
-    console.log(`[Matrix] handleWebCommand: type=${type}, query="${webQuery}", sender=${displayName}`);
-
-    // Add user message to conversation history
-    const userMessage: ConversationMessage = {
-      role: "user",
-      content: originalMessage,
-      timestamp: Date.now(),
-    };
-    const history = roomConversations.get(roomId) || [];
-    history.push(userMessage);
-    roomConversations.set(roomId, history);
-
-    // Check room settings
+    const displayName = await getMatrixUserDisplayName(roomId, sender);
     const room = await prisma.matrixRoom.findUnique({ where: { roomId } });
     const useRag = room?.useRag ?? true;
-    console.log(`[Matrix] handleWebCommand: room found=${!!room}, useRag=${useRag}, passing ${type === "search" ? "webSearchQuery" : "webResearchQuery"} to chat API`);
-
-    const startTime = Date.now();
-    const response = await callRagFlow(
-      webQuery,
+    await runMatrixTurn({
       roomId,
-      sender!,
+      sender,
       displayName,
+      messageText: webQuery,
       useRag,
-      type === "search" ? webQuery : undefined,
-      type === "research" ? webQuery : undefined,
-    );
-    const duration = Date.now() - startTime;
-    console.log(`[Matrix] handleWebCommand: got response in ${duration}ms, text length=${response.text.length}, sources=${response.sources?.length ?? 0}`);
-
-    // Add assistant response to conversation history
-    const assistantMessage: ConversationMessage = {
-      role: "assistant",
-      content: response.text,
-      timestamp: Date.now(),
-    };
-    history.push(assistantMessage);
-    roomConversations.set(roomId, history);
-
-    await sendFormattedMessage(roomId, response.text, response.sources);
+      webIntent: type,
+    });
   } catch (error) {
     console.error(`[Matrix] Error processing #${type} command:`, error);
     await sendFormattedMessage(
@@ -443,8 +293,10 @@ async function handleWebCommand(
 }
 
 // Use globalThis to survive across Next.js module re-evaluations in production
-if (_global.__robrag_handlerInitialized === undefined) _global.__robrag_handlerInitialized = false;
-if (_global.__robrag_registeredClient === undefined) _global.__robrag_registeredClient = null;
+if (_global.__robrag_handlerInitialized === undefined)
+  _global.__robrag_handlerInitialized = false;
+if (_global.__robrag_registeredClient === undefined)
+  _global.__robrag_registeredClient = null;
 
 /**
  * Initialize message handler
@@ -454,18 +306,26 @@ export function initializeMessageHandler(): void {
   const client = matrixClient.getClient();
 
   if (!client) {
-    console.error("[Matrix] Cannot initialize message handler: client not ready");
+    console.error(
+      "[Matrix] Cannot initialize message handler: client not ready",
+    );
     return;
   }
 
-  // Check if already initialized for this specific client instance
-  if (_global.__robrag_handlerInitialized && _global.__robrag_registeredClient === client) {
-    console.log("[Matrix] Message handler already initialized for this client, skipping");
+  if (
+    _global.__robrag_handlerInitialized &&
+    _global.__robrag_registeredClient === client
+  ) {
+    console.log(
+      "[Matrix] Message handler already initialized for this client, skipping",
+    );
     return;
   }
 
-  // Remove old listener if client changed
-  if (_global.__robrag_registeredClient && _global.__robrag_registeredClient !== client) {
+  if (
+    _global.__robrag_registeredClient &&
+    _global.__robrag_registeredClient !== client
+  ) {
     console.log("[Matrix] Client changed, removing old listener");
     try {
       _global.__robrag_registeredClient.removeAllListeners(RoomEvent.Timeline);
@@ -476,24 +336,16 @@ export function initializeMessageHandler(): void {
 
   console.log("[Matrix] Registering message handler");
 
-  // Listen for timeline events (new messages)
-  client.on(RoomEvent.Timeline as any, async (event: MatrixEvent, room: Room | undefined) => {
-    // Only process message events
-    if (event.getType() !== "m.room.message") {
-      return;
-    }
-
-    // Only process text messages
-    const content = event.getContent();
-    if (content.msgtype !== "m.text") {
-      return;
-    }
-
-    // Handle the message
-    await handleMessage(event);
-  });
+  client.on(
+    RoomEvent.Timeline as any,
+    async (event: MatrixEvent, _room: Room | undefined) => {
+      if (event.getType() !== "m.room.message") return;
+      const content = event.getContent();
+      if (content.msgtype !== "m.text") return;
+      await handleMessage(event);
+    },
+  );
 
   _global.__robrag_handlerInitialized = true;
   _global.__robrag_registeredClient = client;
-  // Message handler initialized
 }

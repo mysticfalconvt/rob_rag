@@ -1,11 +1,11 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
-  searchWeb,
-  searchDeep,
   formatWebResultsAsContext,
-  isSearXNGConfigured,
   isPerplexicaConfigured,
+  isSearXNGConfigured,
+  searchDeep,
+  searchWeb,
 } from "../webSearch";
 
 /**
@@ -26,15 +26,23 @@ This returns web search results that you should synthesize into a helpful answer
     timeRange: z
       .enum(["day", "week", "month", "year", "all"])
       .optional()
-      .describe("Time range filter for results. Use 'day' for today's news, 'week' for recent events, etc."),
+      .describe(
+        "Time range filter for results. Use 'day' for today's news, 'week' for recent events, etc.",
+      ),
   }),
-  func: async ({ query, timeRange }) => {
+  func: async ({ query, timeRange }, config) => {
     try {
       const response = await searchWeb(query, { timeRange: timeRange as any });
 
       if (response.results.length === 0) {
         return "No web search results found for this query. Try rephrasing or broadening your search.";
       }
+
+      // Report structured results for source attribution.
+      (config as any)?.configurable?.sourceCollector?.addWebResults(
+        response.results,
+        "web_search",
+      );
 
       return formatWebResultsAsContext(response);
     } catch (error) {
@@ -58,15 +66,23 @@ export const deepResearchTool = new DynamicStructuredTool({
 
 This returns a synthesized research summary with source citations.`,
   schema: z.object({
-    query: z.string().describe("The research question or topic to investigate in depth"),
+    query: z
+      .string()
+      .describe("The research question or topic to investigate in depth"),
   }),
-  func: async ({ query }) => {
+  func: async ({ query }, config) => {
     try {
       const response = await searchDeep(query);
 
       if (response.results.length === 0 && !response.synthesizedAnswer) {
         return "No research results found for this query. Try rephrasing or broadening your search.";
       }
+
+      // Report structured results for source attribution.
+      (config as any)?.configurable?.sourceCollector?.addWebResults(
+        response.results,
+        "web_research",
+      );
 
       return formatWebResultsAsContext(response);
     } catch (error) {
