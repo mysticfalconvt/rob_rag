@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import {
+  getSourceDisplayName,
+  getSourceIcon,
+  type Source,
+} from "@/types/source";
 import styles from "./SourceCitation.module.css";
-import { type Source, getSourceIcon, getSourceDisplayName } from "@/types/source";
 
 interface SourceCitationProps {
   sources: Source[];
@@ -56,7 +60,30 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
       </div>
       <div className={styles.sources}>
         {sourcesToShow.map((source, index) => {
-          const _encodedPath = encodeURIComponent(source.filePath);
+          // Web results have an http(s) URL as their path — link out to the
+          // actual page in a new tab. Everything else is an internal document,
+          // linked to the in-app file viewer.
+          const isExternal = /^https?:\/\//i.test(source.filePath);
+          let host = "";
+          if (isExternal) {
+            try {
+              host = new URL(source.filePath).hostname.replace(/^www\./, "");
+            } catch {
+              host = "";
+            }
+          }
+
+          const inner = (
+            <>
+              <span className={styles.icon}>
+                {getSourceIcon(source.source)}
+              </span>
+              <span className={styles.fileName}>{source.fileName}</span>
+              <span className={styles.score}>
+                {isExternal ? host : `${(source.score * 100).toFixed(0)}%`}
+              </span>
+            </>
+          );
 
           return (
             <div
@@ -65,18 +92,23 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
             >
-              <Link
-                href={`/files/${encodeURIComponent(source.filePath)}?chunk=${encodeURIComponent(source.chunk)}`}
-                className={styles.sourceLink}
-              >
-                <span className={styles.icon}>
-                  {getSourceIcon(source.source)}
-                </span>
-                <span className={styles.fileName}>{source.fileName}</span>
-                <span className={styles.score}>
-                  {(source.score * 100).toFixed(0)}%
-                </span>
-              </Link>
+              {isExternal ? (
+                <a
+                  href={source.filePath}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.sourceLink}
+                >
+                  {inner}
+                </a>
+              ) : (
+                <Link
+                  href={`/files/${encodeURIComponent(source.filePath)}?chunk=${encodeURIComponent(source.chunk)}`}
+                  className={styles.sourceLink}
+                >
+                  {inner}
+                </Link>
+              )}
 
               {hoveredIndex === index && (
                 <div className={styles.tooltip}>
@@ -85,7 +117,8 @@ export default function SourceCitation({ sources }: SourceCitationProps) {
                       {source.fileName}
                     </span>
                     <span className={styles.tooltipScore}>
-                      {getSourceDisplayName(source.source)} &middot; {(source.score * 100).toFixed(1)}%
+                      {getSourceDisplayName(source.source)} &middot;{" "}
+                      {(source.score * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className={styles.tooltipContent}>

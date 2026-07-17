@@ -58,7 +58,22 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             ))}
           </ul>
         )}
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            // Render answer links as real, visible links that open in a new tab.
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.inlineLink}
+              >
+                {children}
+              </a>
+            ),
+          }}
+        >
           {message.content}
         </ReactMarkdown>
         {message.role === "assistant" && message.sources && (

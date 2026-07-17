@@ -162,6 +162,33 @@
   font-weight: 600;
 }
 
+/* Links inside answers — make them clearly clickable */
+.content a,
+.inlineLink {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.content a:hover,
+.inlineLink:hover {
+  color: #1d4ed8;
+  text-decoration-thickness: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .content a,
+  .inlineLink {
+    color: #60a5fa;
+  }
+  .content a:hover,
+  .inlineLink:hover {
+    color: #93c5fd;
+  }
+}
+
 /* Headings inside messages */
 .content h1,
 .content h2,

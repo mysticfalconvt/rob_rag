@@ -4,8 +4,8 @@
  * Helper functions for working with pgvector embeddings in PostgreSQL
  */
 
-import prisma from './prisma';
-import { SearchResult } from './retrieval';
+import prisma from "./prisma";
+import type { SearchResult } from "./retrieval";
 
 /**
  * HNSW search-list size. The default pgvector value (40) gives poor recall on
@@ -22,12 +22,39 @@ const HNSW_EF_SEARCH = Math.min(
 );
 
 /**
+ * pgvector 0.8+ iterative index scan mode. Complements the ef_search bump: it
+ * keeps scanning the HNSW graph when a filter is selective and the first batch
+ * doesn't yield enough matching rows (e.g. searching within a single small
+ * source). "strict_order" preserves exact distance ordering. Set the env var to
+ * "off" for pgvector < 0.8 (where this GUC does not exist). Whitelisted so the
+ * value is safe to interpolate into SQL.
+ */
+const HNSW_ITERATIVE_SCAN = (() => {
+  const v = (process.env.HNSW_ITERATIVE_SCAN || "strict_order").toLowerCase();
+  return ["off", "strict_order", "relaxed_order"].includes(v)
+    ? v
+    : "strict_order";
+})();
+
+/** Apply per-query HNSW tuning on the current (transaction) connection. */
+async function applyHnswTuning(tx: {
+  $executeRawUnsafe: (sql: string) => Promise<unknown>;
+}): Promise<void> {
+  await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${HNSW_EF_SEARCH}`);
+  if (HNSW_ITERATIVE_SCAN !== "off") {
+    await tx.$executeRawUnsafe(
+      `SET LOCAL hnsw.iterative_scan = ${HNSW_ITERATIVE_SCAN}`,
+    );
+  }
+}
+
+/**
  * Convert a number array embedding to PostgreSQL vector format
  * @param embedding - Array of numbers (e.g., [0.1, 0.2, ...])
  * @returns String in format "[0.1,0.2,...]" for use in SQL
  */
 export function embeddingToSql(embedding: number[]): string {
-  return `[${embedding.join(',')}]`;
+  return `[${embedding.join(",")}]`;
 }
 
 /**
@@ -36,16 +63,17 @@ export function embeddingToSql(embedding: number[]): string {
  * and only show the custom_ocr version
  * @param filePathFilter - Optional: restrict results to this document path only
  */
-function buildSourceWhereClause(sourceFilter?:
-  | 'all'
-  | 'uploaded'
-  | 'synced'
-  | 'paperless'
-  | 'goodreads'
-  | 'custom_ocr'
-  | 'none'
-  | string[],
-  filePathFilter?: string
+function buildSourceWhereClause(
+  sourceFilter?:
+    | "all"
+    | "uploaded"
+    | "synced"
+    | "paperless"
+    | "goodreads"
+    | "custom_ocr"
+    | "none"
+    | string[],
+  filePathFilter?: string,
 ): string {
   const conditions: string[] = [];
 
@@ -56,10 +84,10 @@ function buildSourceWhereClause(sourceFilter?:
   }
 
   // Handle source filtering
-  if (sourceFilter && sourceFilter !== 'all' && sourceFilter !== 'none') {
+  if (sourceFilter && sourceFilter !== "all" && sourceFilter !== "none") {
     if (Array.isArray(sourceFilter)) {
       // Multiple sources
-      const sources = sourceFilter.map((s) => `'${s}'`).join(',');
+      const sources = sourceFilter.map((s) => `'${s}'`).join(",");
       conditions.push(`source IN (${sources})`);
     } else {
       // Single source
@@ -79,7 +107,7 @@ function buildSourceWhereClause(sourceFilter?:
      ))
   `);
 
-  return conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  return conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 }
 
 /**
@@ -94,13 +122,13 @@ export async function searchWithPgVector(
   queryEmbedding: number[],
   limit: number = 5,
   sourceFilter?:
-    | 'all'
-    | 'uploaded'
-    | 'synced'
-    | 'paperless'
-    | 'goodreads'
-    | 'custom_ocr'
-    | 'none'
+    | "all"
+    | "uploaded"
+    | "synced"
+    | "paperless"
+    | "goodreads"
+    | "custom_ocr"
+    | "none"
     | string[],
   filePathFilter?: string,
 ): Promise<SearchResult[]> {
@@ -116,7 +144,7 @@ export async function searchWithPgVector(
     // Run inside a transaction so `SET LOCAL hnsw.ef_search` applies to the query
     // on the same connection (raises filtered-search recall — see HNSW_EF_SEARCH).
     const results = await prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${HNSW_EF_SEARCH}`);
+      await applyHnswTuning(tx);
       return tx.$queryRawUnsafe<
         Array<{
           id: string;
@@ -196,7 +224,7 @@ export async function searchWithPgVector(
       score: 1 - r.distance / 2,
     }));
   } catch (error) {
-    console.error('[pgvector] Error searching:', error);
+    console.error("[pgvector] Error searching:", error);
     throw error;
   }
 }
@@ -225,7 +253,7 @@ export async function hybridSearch(
 
   if (filters.source) {
     if (Array.isArray(filters.source)) {
-      const sources = filters.source.map((s) => `'${s}'`).join(',');
+      const sources = filters.source.map((s) => `'${s}'`).join(",");
       conditions.push(`source IN (${sources})`);
     } else {
       conditions.push(`source = '${filters.source}'`);
@@ -268,11 +296,11 @@ export async function hybridSearch(
   `);
 
   const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   try {
     const results = await prisma.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`SET LOCAL hnsw.ef_search = ${HNSW_EF_SEARCH}`);
+      await applyHnswTuning(tx);
       return tx.$queryRawUnsafe<
         Array<{
           id: string;
@@ -343,8 +371,25 @@ export async function hybridSearch(
       score: 1 - r.distance / 2,
     }));
   } catch (error) {
-    console.error('[pgvector] Error in hybrid search:', error);
+    console.error("[pgvector] Error in hybrid search:", error);
     throw error;
+  }
+}
+
+/**
+ * List the distinct sources present in the knowledge base (e.g. "paperless",
+ * "google-calendar", "goodreads", "uploaded"). Used to fan out a balanced
+ * per-source search so a dominant source can't crowd out the others.
+ */
+export async function listSources(): Promise<string[]> {
+  try {
+    const rows = await prisma.$queryRawUnsafe<Array<{ source: string }>>(
+      `SELECT DISTINCT source FROM "DocumentChunk" WHERE source IS NOT NULL`,
+    );
+    return rows.map((r) => r.source).filter(Boolean);
+  } catch (error) {
+    console.error("[pgvector] Error listing sources:", error);
+    return [];
   }
 }
 
@@ -364,7 +409,7 @@ export async function countChunks(filters: {
 
   if (filters.source) {
     if (Array.isArray(filters.source)) {
-      const sources = filters.source.map((s) => `'${s}'`).join(',');
+      const sources = filters.source.map((s) => `'${s}'`).join(",");
       conditions.push(`source IN (${sources})`);
     } else {
       conditions.push(`source = '${filters.source}'`);
@@ -396,7 +441,7 @@ export async function countChunks(filters: {
   }
 
   const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
   try {
     const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
@@ -405,7 +450,7 @@ export async function countChunks(filters: {
 
     return Number(result[0].count);
   } catch (error) {
-    console.error('[pgvector] Error counting chunks:', error);
+    console.error("[pgvector] Error counting chunks:", error);
     return 0;
   }
 }
@@ -464,21 +509,21 @@ export async function insertChunk(data: {
         "embeddingVersion", "lastEmbedded", "createdAt", "updatedAt"
       ) VALUES (
         '${id}', '${data.content.replace(/'/g, "''")}', '${embeddingStr}'::vector,
-        '${data.source}', '${data.fileName.replace(/'/g, "''")}', '${data.filePath.replace(/'/g, "''")}', ${data.fileType ? `'${data.fileType.replace(/'/g, "''")}'` : 'NULL'},
+        '${data.source}', '${data.fileName.replace(/'/g, "''")}', '${data.filePath.replace(/'/g, "''")}', ${data.fileType ? `'${data.fileType.replace(/'/g, "''")}'` : "NULL"},
         ${data.chunkIndex || 0}, ${data.totalChunks || 1},
-        ${data.fileId ? `'${data.fileId}'` : 'NULL'}, ${data.bookId ? `'${data.bookId}'` : 'NULL'}, ${data.eventId ? `'${data.eventId}'` : 'NULL'},
-        ${data.userId ? `'${data.userId}'` : 'NULL'}, ${data.userName ? `'${data.userName.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.bookTitle ? `'${data.bookTitle.replace(/'/g, "''")}'` : 'NULL'}, ${data.bookAuthor ? `'${data.bookAuthor.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.userRating || 'NULL'}, ${data.dateRead ? `'${data.dateRead}'` : 'NULL'},
-        ${data.readDates ? `'${data.readDates}'` : 'NULL'}, ${data.readCount || 'NULL'},
-        ${data.shelves ? `'${data.shelves.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.paperlessId || 'NULL'}, ${data.paperlessTitle ? `'${data.paperlessTitle.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.paperlessTags ? `'${data.paperlessTags.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.paperlessCorrespondent ? `'${data.paperlessCorrespondent.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.documentDate ? `'${data.documentDate}'` : 'NULL'},
-        ${data.eventTitle ? `'${data.eventTitle.replace(/'/g, "''")}'` : 'NULL'}, ${data.eventStartTime ? `'${data.eventStartTime}'` : 'NULL'},
-        ${data.eventEndTime ? `'${data.eventEndTime}'` : 'NULL'}, ${data.eventLocation ? `'${data.eventLocation.replace(/'/g, "''")}'` : 'NULL'},
-        ${data.eventAttendees ? `'${data.eventAttendees.replace(/'/g, "''")}'` : 'NULL'}, ${data.calendarName ? `'${data.calendarName.replace(/'/g, "''")}'` : 'NULL'},
+        ${data.fileId ? `'${data.fileId}'` : "NULL"}, ${data.bookId ? `'${data.bookId}'` : "NULL"}, ${data.eventId ? `'${data.eventId}'` : "NULL"},
+        ${data.userId ? `'${data.userId}'` : "NULL"}, ${data.userName ? `'${data.userName.replace(/'/g, "''")}'` : "NULL"},
+        ${data.bookTitle ? `'${data.bookTitle.replace(/'/g, "''")}'` : "NULL"}, ${data.bookAuthor ? `'${data.bookAuthor.replace(/'/g, "''")}'` : "NULL"},
+        ${data.userRating || "NULL"}, ${data.dateRead ? `'${data.dateRead}'` : "NULL"},
+        ${data.readDates ? `'${data.readDates}'` : "NULL"}, ${data.readCount || "NULL"},
+        ${data.shelves ? `'${data.shelves.replace(/'/g, "''")}'` : "NULL"},
+        ${data.paperlessId || "NULL"}, ${data.paperlessTitle ? `'${data.paperlessTitle.replace(/'/g, "''")}'` : "NULL"},
+        ${data.paperlessTags ? `'${data.paperlessTags.replace(/'/g, "''")}'` : "NULL"},
+        ${data.paperlessCorrespondent ? `'${data.paperlessCorrespondent.replace(/'/g, "''")}'` : "NULL"},
+        ${data.documentDate ? `'${data.documentDate}'` : "NULL"},
+        ${data.eventTitle ? `'${data.eventTitle.replace(/'/g, "''")}'` : "NULL"}, ${data.eventStartTime ? `'${data.eventStartTime}'` : "NULL"},
+        ${data.eventEndTime ? `'${data.eventEndTime}'` : "NULL"}, ${data.eventLocation ? `'${data.eventLocation.replace(/'/g, "''")}'` : "NULL"},
+        ${data.eventAttendees ? `'${data.eventAttendees.replace(/'/g, "''")}'` : "NULL"}, ${data.calendarName ? `'${data.calendarName.replace(/'/g, "''")}'` : "NULL"},
         1, NOW(), NOW(), NOW()
       )
       ON CONFLICT (id) DO UPDATE SET
@@ -490,7 +535,7 @@ export async function insertChunk(data: {
 
     return id;
   } catch (error) {
-    console.error('[pgvector] Error inserting chunk:', error);
+    console.error("[pgvector] Error inserting chunk:", error);
     throw error;
   }
 }

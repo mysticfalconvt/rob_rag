@@ -9,8 +9,7 @@ import {
 import type { LLMCallMetrics } from "../llmTracking";
 import prisma from "../prisma";
 import { routeQuery } from "../queryRouter";
-import { type SearchResult, search } from "../retrieval";
-import { smartSearch } from "../smartRetrieval";
+import { balancedSearch, type SearchResult, search } from "../retrieval";
 
 export interface RagToolConfig {
   sourceFilter: string | string[] | undefined;
@@ -101,7 +100,8 @@ export function createRagTool(config: RagToolConfig): DynamicStructuredTool {
           }
         }
 
-        // Route query for fast/slow path
+        // Route query (used to decide whether iterative retrieval is worthwhile
+        // on the single-source path).
         const queryRoute = routeQuery(
           query,
           config.isFirstMessage,
@@ -114,27 +114,20 @@ export function createRagTool(config: RagToolConfig): DynamicStructuredTool {
           Math.min(35, config.sourceCount),
         );
         let searchResults: SearchResult[];
+        let didBalanced = false;
 
         if (!effectiveFilter || effectiveFilter === "all") {
-          if (queryRoute.path === "fast") {
-            console.log("[RAGTool] Fast path: direct search");
-            searchResults = await search(
-              searchQuery,
-              10,
-              "all",
-              config.onEmbeddingMetrics,
-            );
-          } else {
-            console.log("[RAGTool] Slow path: smart search");
-            const smartResult = await smartSearch(
-              searchQuery,
-              undefined,
-              clampedSourceCount,
-              config.onEmbeddingMetrics,
-            );
-            searchResults = smartResult.results;
-          }
+          // Balanced multi-source search: pull the best few from EACH source so a
+          // dominant source (e.g. calendar events) can't crowd out the source
+          // that holds the answer.
+          console.log("[RAGTool] Balanced multi-source search");
+          searchResults = await balancedSearch(
+            searchQuery,
+            config.onEmbeddingMetrics,
+          );
+          didBalanced = true;
         } else {
+          // Specific source(s) requested — search just those.
           searchResults = await search(
             searchQuery,
             clampedSourceCount,
@@ -155,8 +148,14 @@ export function createRagTool(config: RagToolConfig): DynamicStructuredTool {
         // Context optimization: group by file, load full content for small files
         const contextParts = await buildContextFromResults(searchResults);
 
-        // Iterative retrieval: check if we need more context (slow path only)
-        if (!queryRoute.skipIterativeRetrieval && searchResults.length < 35) {
+        // Iterative retrieval: only for the single-source path. The balanced
+        // multi-source search already spans every source, so topping it up would
+        // just reintroduce source imbalance.
+        if (
+          !didBalanced &&
+          !queryRoute.skipIterativeRetrieval &&
+          searchResults.length < 35
+        ) {
           const additionalContext = await tryIterativeRetrieval(
             query,
             searchResults,

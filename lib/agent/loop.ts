@@ -187,7 +187,16 @@ export async function runToolLoop(args: {
       }
 
       try {
-        const result = await tool.invoke(tc.args, toolConfig);
+        // NOTE: call `.func` (not `.invoke`) so `toolConfig.configurable`
+        // reaches the tool as its 2nd argument. LangChain's `.invoke(input,
+        // config)` does NOT forward `configurable` to a 2-arg tool function, so
+        // tools that depend on it (web sourceCollector, email/calendar userId,
+        // reminder matrixRoomId, note history) would silently get undefined.
+        // (Cast: `.func`'s declared 2nd param is a CallbackManager, but at
+        // runtime a plain RunnableConfig is delivered as the tool's 2nd arg.)
+        const result = await (
+          tool.func as (input: any, config: any) => Promise<string>
+        )(tc.args, toolConfig);
         const resultStr =
           typeof result === "string" ? result : JSON.stringify(result);
         convo.push(

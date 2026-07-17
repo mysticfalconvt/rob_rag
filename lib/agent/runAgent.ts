@@ -316,6 +316,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     } catch (error) {
       console.error("[runAgent] source analysis failed:", error);
     }
+    // Always surface web sources as citations: if the agent searched the web to
+    // answer, the user should see where the data came from. (Embedding-based
+    // relevance is unreliable for short web snippets vs a synthesized answer.)
+    sources = sources.map((s) =>
+      s.source === "web_search" || s.source === "web_research"
+        ? { ...s, isReferenced: true }
+        : s,
+    );
   }
   await updateAssistantMessage(assistantMessage.id, finalText, sources).catch(
     () => {},
