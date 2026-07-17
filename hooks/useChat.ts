@@ -217,16 +217,26 @@ export function useChat(
       }
     } catch (error: any) {
       if (error.name === "AbortError") {
-        // Request was cancelled - remove the incomplete assistant message
+        // Request was cancelled — keep the assistant bubble but mark it stopped
+        // (and stop any spinning activity steps) instead of blanking it out.
         setMessages((prev) => {
-          const newMessages = [...prev];
-          if (
-            newMessages[newMessages.length - 1]?.role === "assistant" &&
-            newMessages[newMessages.length - 1]?.content === ""
-          ) {
-            newMessages.pop();
+          const next = [...prev];
+          const i = next.length - 1;
+          const last = next[i];
+          if (last?.role === "assistant") {
+            const steps = (last.steps || []).map((s) =>
+              s.status === "running" ? { ...s, status: "done" as const } : s,
+            );
+            const note = "_⏹ Stopped by user._";
+            next[i] = {
+              ...last,
+              content: last.content?.trim()
+                ? `${last.content}\n\n${note}`
+                : note,
+              steps,
+            };
           }
-          return newMessages;
+          return next;
         });
       } else {
         console.error("Error:", error);

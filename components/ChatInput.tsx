@@ -86,8 +86,11 @@ export default function ChatInput({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type your message... (Shift+Enter for newline)"
-            disabled={isLoading}
+            placeholder={
+              isLoading
+                ? "Type your next message… (send once the reply finishes)"
+                : "Type your message... (Shift+Enter for newline)"
+            }
             rows={1}
             className={styles.textarea}
           />

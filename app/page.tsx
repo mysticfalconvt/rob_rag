@@ -126,9 +126,12 @@ function ChatPageContent() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const sourceFilter = getSourceFilter();
-    await sendMessage(input, sourceFilter, documentPath || undefined);
+    // Clear the box immediately — the text is now shown in the chat — so the
+    // user can start composing their next message while the reply streams.
+    const text = input;
     setInput("");
+    const sourceFilter = getSourceFilter();
+    await sendMessage(text, sourceFilter, documentPath || undefined);
   };
 
   const handleSaveConversation = async () => {
