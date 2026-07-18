@@ -58,9 +58,26 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   } = input;
 
   const lastMessage = messages[messages.length - 1];
-  const query = lastMessage?.content ?? "";
+  const query = lastMessage?.content ?? ""; // raw text — for storage, RAG, tools
+  const lastAuthor = lastMessage?.authorName;
   const isFirstMessage = messages.length === 1;
-  const history = messages.slice(0, -1);
+  const history = messages.slice(0, -1); // raw — for RAG rephrase context
+
+  // Attribute multi-speaker turns for the MODEL only (storage stays raw). In a
+  // shared Matrix room/thread this lets the agent tell who said what.
+  const attribute = (m: {
+    role: string;
+    content: string;
+    authorName?: string;
+  }) =>
+    m.role === "user" && m.authorName
+      ? `${m.authorName}: ${m.content}`
+      : m.content;
+  const attributedHistory = history.map((m) => ({
+    role: m.role,
+    content: attribute(m),
+  }));
+  const attributedQuery = attribute(lastMessage);
 
   // 1. Prompts + context settings.
   const [prompts, contextSettings] = await Promise.all([
@@ -84,7 +101,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     matrixRoomId,
     firstMessageText: query,
   });
-  const userMessage = await saveUserMessage(convId, query);
+  const userMessage = await saveUserMessage(convId, query, lastAuthor);
 
   // 3. LLM request tracker.
   const tracker = new LLMRequestTracker({
@@ -169,7 +186,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     | "smart";
   const windowSize = contextSettings?.slidingWindowSize ?? 10;
   const { messages: managedMessages, summary } = await manageContext(
-    history,
+    attributedHistory,
     systemPrompt,
     maxTokens,
     strategy,
@@ -190,7 +207,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         : new AIMessage(m.content),
     ),
   );
-  langchainMessages.push(new HumanMessage(query));
+  langchainMessages.push(new HumanMessage(attributedQuery));
 
   // 8. Assistant message row (saved incrementally so it survives disconnects).
   const assistantMessage = await createAssistantMessage(convId);

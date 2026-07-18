@@ -28,8 +28,16 @@ export interface AgentUserProfile {
 }
 
 export interface RunAgentInput {
-  /** Full turn history including the latest user message (last element). */
-  messages: { role: "user" | "assistant"; content: string }[];
+  /**
+   * Full turn history including the latest user message (last element).
+   * `authorName` (Matrix) attributes multi-speaker turns so the agent can tell
+   * who said what and reply to anyone; omitted for single-user (web) chats.
+   */
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    authorName?: string;
+  }[];
   channel: Channel;
   /** Resolved real AuthUser id (never "system" — Matrix senders are resolved to real rows). */
   userId: string;

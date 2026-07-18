@@ -33,7 +33,12 @@ export async function resolveConversation(opts: {
       where: { id: conversationId },
       select: { userId: true },
     });
-    if (!conversation || conversation.userId !== userId) {
+    if (!conversation) {
+      throw new Error("Conversation not found or access denied");
+    }
+    // Web conversations are private to their owner; Matrix room/thread
+    // conversations are shared across participants, so skip the ownership check.
+    if (channel === "web" && conversation.userId !== userId) {
       throw new Error("Conversation not found or access denied");
     }
     return conversationId;
@@ -44,10 +49,11 @@ export async function resolveConversation(opts: {
     (firstMessageText.length > 50 ? "..." : "");
 
   if ((channel === "matrix" || channel === "scheduled") && matrixRoomId) {
-    // A threaded message gets its own per-thread conversation; unthreaded
-    // messages share the room-level conversation (matrixThreadId = null).
+    // Matrix conversations are SHARED across participants, keyed by
+    // (room, thread). A threaded message gets its own per-thread conversation;
+    // unthreaded messages share the room-level conversation (matrixThreadId=null).
     const existing = await prisma.conversation.findFirst({
-      where: { matrixRoomId, userId, channel, matrixThreadId },
+      where: { matrixRoomId, channel, matrixThreadId },
       orderBy: { updatedAt: "desc" },
       select: { id: true },
     });
@@ -112,22 +118,34 @@ export async function findMatrixThreadConversation(
 export async function loadConversationHistory(
   conversationId: string,
   limit = 20,
-): Promise<{ role: "user" | "assistant"; content: string }[]> {
+): Promise<
+  { role: "user" | "assistant"; content: string; authorName?: string }[]
+> {
   const messages = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "asc" },
-    select: { role: true, content: true },
+    select: { role: true, content: true, authorName: true },
   });
   const recent = messages.slice(-limit);
   return recent.map((m) => ({
     role: m.role === "assistant" ? "assistant" : "user",
     content: m.content,
+    authorName: m.authorName ?? undefined,
   }));
 }
 
-export async function saveUserMessage(conversationId: string, content: string) {
+export async function saveUserMessage(
+  conversationId: string,
+  content: string,
+  authorName?: string,
+) {
   return prisma.message.create({
-    data: { conversationId, role: "user", content },
+    data: {
+      conversationId,
+      role: "user",
+      content,
+      authorName: authorName ?? null,
+    },
   });
 }
 

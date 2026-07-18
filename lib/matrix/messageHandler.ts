@@ -80,8 +80,64 @@ function scrubToolSyntax(text: string): string {
   return cleaned;
 }
 
+/** How many recent messages to consider for the main-timeline depth decision. */
+const MAIN_HISTORY_LOOKBACK = 10;
+/** How many recent messages to load for a thread (manageContext trims by tokens). */
+const THREAD_HISTORY_LIMIT = 40;
+
+/**
+ * Decide how many of the most-recent room messages are relevant context for the
+ * new message. A fresh/unrelated question needs 0 (just itself); a follow-up
+ * needs the recent turns. Returns a count in [0, history.length]. Defaults to
+ * including everything on failure (safer than losing context).
+ */
+async function selectMainContextDepth(
+  history: { role: string; content: string; authorName?: string }[],
+  newMessage: string,
+  botName: string,
+): Promise<number> {
+  if (history.length <= 2) return history.length;
+  try {
+    const numbered = history
+      .map((m, i) => {
+        const who = m.role === "assistant" ? botName : m.authorName || "User";
+        return `${i + 1}. ${who}: ${m.content.slice(0, 200)}`;
+      })
+      .join("\n");
+    const prompt = `A new message just arrived in a shared chat room. Below are the ${history.length} most recent prior messages (oldest first). Decide how many of the MOST RECENT of them are relevant context for understanding/answering the new message.
+
+- If the new message starts a fresh, self-contained topic, answer 0.
+- If it's a follow-up, include just enough recent messages (e.g. 3-5).
+- Include more only if the new message clearly depends on a longer back-and-forth.
+
+Prior messages:
+${numbered}
+
+New message: ${newMessage}
+
+Answer with ONLY JSON: {"include": <integer 0-${history.length}>}`;
+    const model = await getFastChatModel();
+    const resp = await model.invoke([new HumanMessage(prompt)]);
+    const text = typeof resp.content === "string" ? resp.content : "";
+    const match = text.match(/\{[\s\S]*?\}/);
+    if (!match) return history.length;
+    const n = Number(JSON.parse(match[0])?.include);
+    if (!Number.isFinite(n)) return history.length;
+    return Math.max(0, Math.min(history.length, Math.floor(n)));
+  } catch (error) {
+    console.error(
+      "[Matrix] context-depth selection failed, using full history:",
+      error,
+    );
+    return history.length;
+  }
+}
+
 /**
  * Run one turn through the unified agent for a Matrix message and reply.
+ * History is SHARED per room/thread and attributed by speaker. For the main
+ * timeline a fast LLM trims history to the relevant recent messages; for a
+ * thread the whole thread is sent (token-trimmed by the agent's context window).
  */
 async function runMatrixTurn(opts: {
   roomId: string;
@@ -92,6 +148,8 @@ async function runMatrixTurn(opts: {
   webIntent?: "search" | "research";
   /** Thread root event id — reply in this thread and scope history to it. */
   threadRootId?: string;
+  /** True when replying inside an existing thread (send the whole thread). */
+  fullThreadHistory?: boolean;
 }): Promise<void> {
   const {
     roomId,
@@ -101,6 +159,7 @@ async function runMatrixTurn(opts: {
     useRag,
     webIntent,
     threadRootId,
+    fullThreadHistory,
   } = opts;
 
   const { userId, userProfile } = await resolveMatrixIdentity(
@@ -114,10 +173,34 @@ async function runMatrixTurn(opts: {
     matrixThreadId: threadRootId ?? null,
     firstMessageText: messageText,
   });
-  const history = await loadConversationHistory(conversationId);
+
+  let history = await loadConversationHistory(
+    conversationId,
+    fullThreadHistory ? THREAD_HISTORY_LIMIT : MAIN_HISTORY_LOOKBACK,
+  );
+
+  // Main timeline: trim to the relevant recent messages. Threads: keep the whole
+  // thread (the agent's context window handles truncation if it gets long).
+  if (!fullThreadHistory && history.length > 0) {
+    const botName =
+      matrixClient
+        .getClient()
+        ?.getRoom(roomId)
+        ?.getMember(matrixClient.getClient()?.getUserId() || "")?.name ||
+      "the assistant";
+    const depth = await selectMainContextDepth(history, messageText, botName);
+    history = history.slice(history.length - depth);
+  }
 
   const result = await runAgent({
-    messages: [...history, { role: "user", content: messageText }],
+    messages: [
+      ...history.map((m) => ({
+        role: m.role,
+        content: m.content,
+        authorName: m.authorName,
+      })),
+      { role: "user" as const, content: messageText, authorName: displayName },
+    ],
     channel: "matrix",
     userId,
     userProfile,
@@ -369,6 +452,9 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
         messageText,
         useRag,
         threadRootId,
+        // In an existing thread → send the whole thread; on the main timeline →
+        // let the depth selector trim to relevant recent messages.
+        fullThreadHistory: relatesTo?.rel_type === "m.thread",
       });
     } catch (error) {
       console.error("[Matrix] Error processing message:", error);
