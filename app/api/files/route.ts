@@ -31,8 +31,51 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Check if files need re-indexing (only for local files)
-    // For Goodreads files, enrich with book metadata
+    // Batch-load enrichment data up front instead of querying per file (the
+    // old per-row findUnique/findFirst calls were an N+1 that scaled with the
+    // page size).
+
+    // Goodreads: one query for all books referenced on this page.
+    const goodreadsBookIds = files
+      .filter((f) => f.source === "goodreads")
+      .map((f) => f.filePath.split("/").pop())
+      .filter((id): id is string => Boolean(id));
+
+    const goodreadsBooks = goodreadsBookIds.length
+      ? await prisma.goodreadsBook.findMany({
+          where: { id: { in: goodreadsBookIds } },
+          include: { user: { select: { name: true } } },
+        })
+      : [];
+    const goodreadsById = new Map(goodreadsBooks.map((b) => [b.id, b]));
+
+    // Google Calendar: one query for all event chunks referenced on this page.
+    const calendarPaths = files
+      .filter((f) => f.source === "google-calendar")
+      .map((f) => f.filePath);
+
+    const calendarChunks = calendarPaths.length
+      ? await prisma.documentChunk.findMany({
+          where: { filePath: { in: calendarPaths } },
+          select: {
+            filePath: true,
+            eventTitle: true,
+            eventStartTime: true,
+            eventLocation: true,
+            calendarName: true,
+          },
+        })
+      : [];
+    // Keep the first chunk seen per path (mirrors the old findFirst behavior).
+    const calendarByPath = new Map<string, (typeof calendarChunks)[number]>();
+    for (const chunk of calendarChunks) {
+      if (!calendarByPath.has(chunk.filePath)) {
+        calendarByPath.set(chunk.filePath, chunk);
+      }
+    }
+
+    // Check if files need re-indexing (only for local files); enrich the rest
+    // from the batched maps above (no further DB round-trips).
     const filesWithStatus = await Promise.all(
       files.map(async (file) => {
         // Skip file system check for Paperless-ngx, Custom OCR, Goodreads, and Google Calendar
@@ -46,35 +89,18 @@ export async function GET(req: NextRequest) {
           // Enrich Goodreads files with book metadata
           if (file.source === "goodreads") {
             const bookId = file.filePath.split("/").pop();
-            if (bookId) {
-              const book = await prisma.goodreadsBook.findUnique({
-                where: { id: bookId },
-                include: {
-                  user: {
-                    select: { name: true },
-                  },
-                },
-              });
-              if (book) {
-                result.goodreadsTitle = book.title;
-                result.goodreadsAuthor = book.author;
-                result.goodreadsRating = book.userRating;
-                result.userName = book.user.name;
-              }
+            const book = bookId ? goodreadsById.get(bookId) : undefined;
+            if (book) {
+              result.goodreadsTitle = book.title;
+              result.goodreadsAuthor = book.author;
+              result.goodreadsRating = book.userRating;
+              result.userName = book.user.name;
             }
           }
 
           // Enrich Google Calendar files with event metadata from DocumentChunk
           if (file.source === "google-calendar") {
-            const chunk = await prisma.documentChunk.findFirst({
-              where: { filePath: file.filePath },
-              select: {
-                eventTitle: true,
-                eventStartTime: true,
-                eventLocation: true,
-                calendarName: true,
-              },
-            });
+            const chunk = calendarByPath.get(file.filePath);
             if (chunk) {
               result.eventTitle = chunk.eventTitle;
               result.eventStartTime = chunk.eventStartTime;

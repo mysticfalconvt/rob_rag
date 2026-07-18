@@ -1,6 +1,15 @@
 .container {
   max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
+  /* Anchor to the viewport height (minus <main>'s 2rem top+bottom padding) so
+     the page itself never scrolls — only the table area does. The shared
+     layout uses min-height:100vh (a floor, not a cap), which isn't a definite
+     height, so we set one here rather than relying on flex-grow. */
+  height: calc(100dvh - 4rem);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .header {
@@ -84,7 +93,10 @@
   background: #fff;
   border-radius: 0.75rem;
   border: 1px solid #e5e5e5;
-  overflow: hidden;
+  /* Grow to fill the remaining vertical space and scroll internally. */
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .table {
@@ -308,6 +320,8 @@
 @media (max-width: 768px) {
   .container {
     padding-top: calc(3.5rem + 1rem);
+    /* <main> padding is 1rem (2rem total) on mobile. */
+    height: calc(100dvh - 2rem);
   }
 
   .header {

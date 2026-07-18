@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import FilesHeader from "@/components/FilesHeader";
 import FileFilterBar from "@/components/FileFilterBar";
 import TagFilter from "@/components/TagFilter";
@@ -33,32 +34,23 @@ interface IndexedFile {
   calendarName?: string;
 }
 
-// Fetch all files in chunks
+// Fetch all files in large pages. The server caps `limit` at 500, so use that
+// to minimize the number of round-trips, and don't sleep between pages.
 async function fetchAllFiles(): Promise<IndexedFile[]> {
   const allFiles: IndexedFile[] = [];
   let offset = 0;
-  const chunkSize = 100;
+  const chunkSize = 500;
   let hasMore = true;
 
   while (hasMore) {
-    try {
-      const res = await fetch(`/api/files?offset=${offset}&limit=${chunkSize}`);
-      if (res.ok) {
-        const chunk = await res.json();
-        if (chunk.length > 0) {
-          allFiles.push(...chunk);
-          offset += chunk.length;
-          hasMore = chunk.length === chunkSize;
-          // Small delay to avoid blocking
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } else {
-          hasMore = false;
-        }
-      } else {
-        hasMore = false;
-      }
-    } catch (error) {
-      console.error("Error fetching files chunk:", error);
+    const res = await fetch(`/api/files?offset=${offset}&limit=${chunkSize}`);
+    if (!res.ok) break;
+    const chunk = await res.json();
+    if (chunk.length > 0) {
+      allFiles.push(...chunk);
+      offset += chunk.length;
+      hasMore = chunk.length === chunkSize;
+    } else {
       hasMore = false;
     }
   }
@@ -87,14 +79,13 @@ export default function FilesPage() {
 
   const tableParentRef = useRef<HTMLDivElement>(null);
 
-  // Use TanStack Query for data fetching and caching
+  // Use TanStack Query for data fetching and caching. Inherit the global
+  // defaults from providers.tsx (staleTime 5m, refetchOnMount false, IndexedDB
+  // persistence) so navigating back to this page shows the cached list
+  // instantly instead of re-running the full fetch every time.
   const { data: files = [], isLoading, isRefetching } = useQuery({
     queryKey: ['files'],
     queryFn: fetchAllFiles,
-    staleTime: 30 * 1000, // 30 seconds - refetch if data is older than 30s
-    gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache for 10 minutes
-    refetchOnWindowFocus: true, // Refetch when user returns to the tab
-    refetchOnMount: true, // Always refetch when component mounts
   });
 
   // Save scroll position when navigating away
@@ -136,7 +127,7 @@ export default function FilesPage() {
   }, [isLoading, files.length]);
 
 
-  const handleSort = (
+  const handleSort = useCallback((
     column: "source" | "fileName" | "chunkCount" | "status" | "lastIndexed",
   ) => {
     if (sortColumn === column) {
@@ -147,9 +138,9 @@ export default function FilesPage() {
       setSortColumn(column);
       setSortDirection("asc");
     }
-  };
+  }, [sortColumn, sortDirection]);
 
-  const handleReindex = async (filePath: string) => {
+  const handleReindex = useCallback(async (filePath: string) => {
     setIsScanning(true);
     try {
       const res = await fetch("/api/files", {
@@ -166,9 +157,9 @@ export default function FilesPage() {
     } finally {
       setIsScanning(false);
     }
-  };
+  }, [queryClient]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
     const file = e.target.files[0];
@@ -217,9 +208,9 @@ export default function FilesPage() {
       setIsScanning(false);
       e.target.value = "";
     }
-  };
+  }, [queryClient]);
 
-  const handleDelete = async (filePath: string) => {
+  const handleDelete = useCallback(async (filePath: string) => {
     const isPaperless = filePath.startsWith("paperless://");
     const isGoodreads = filePath.startsWith("goodreads://");
     const isUploadedOcr = filePath.startsWith("uploaded://");
@@ -259,9 +250,9 @@ export default function FilesPage() {
     } catch (error) {
       console.error("Error deleting file:", error);
     }
-  };
+  }, [queryClient]);
 
-  const handleUseCustomOcr = async (paperlessId: number) => {
+  const handleUseCustomOcr = useCallback(async (paperlessId: number) => {
     if (
       !confirm(
         `Use Vision OCR for this document?\n\n` +
@@ -298,125 +289,128 @@ export default function FilesPage() {
     } finally {
       setIsScanning(false);
     }
-  };
+  }, [queryClient]);
 
-  const filteredFiles = files
-    .filter((file) => {
-      const isUploaded = file.source === "uploaded";
-      const isSynced =
-        file.source === "synced" || file.source === "local" || !file.source;
-      const isPaperless = file.source === "paperless";
-      const isGoodreads = file.source === "goodreads";
-      const isCustomOcr = file.source === "custom_ocr";
-      const isCalendar = file.source === "google-calendar";
-      const isNote = file.source === "user_note";
+  // Filter + sort the full list. This is O(n log n) over every file, so it must
+  // only run when the inputs actually change — not on every render (e.g. every
+  // keystroke re-rendering the page).
+  const filteredFiles = useMemo(() => {
+    return files
+      .filter((file) => {
+        const isUploaded = file.source === "uploaded";
+        const isSynced =
+          file.source === "synced" || file.source === "local" || !file.source;
+        const isPaperless = file.source === "paperless";
+        const isGoodreads = file.source === "goodreads";
+        const isCustomOcr = file.source === "custom_ocr";
+        const isCalendar = file.source === "google-calendar";
+        const isNote = file.source === "user_note";
 
-      if (isUploaded && !showUploaded) return false;
-      if (isSynced && !showSynced) return false;
-      if (isPaperless && !showPaperless) return false;
-      if (isGoodreads && !showGoodreads) return false;
-      if (isCustomOcr && !showCustomOcr) return false;
-      if (isCalendar && !showCalendar) return false;
-      if (isNote && !showNotes) return false;
+        if (isUploaded && !showUploaded) return false;
+        if (isSynced && !showSynced) return false;
+        if (isPaperless && !showPaperless) return false;
+        if (isGoodreads && !showGoodreads) return false;
+        if (isCustomOcr && !showCustomOcr) return false;
+        if (isCalendar && !showCalendar) return false;
+        if (isNote && !showNotes) return false;
 
-      // Apply tagged/untagged filter
-      if (taggedFilter === "tagged" && (!file.tags || file.tags.length === 0)) {
-        return false;
-      }
-      if (taggedFilter === "untagged" && file.tags && file.tags.length > 0) {
-        return false;
-      }
-
-      // Apply tag filter (if specific tags selected, file must have at least one)
-      if (selectedTags.length > 0) {
-        const fileTags = file.tags || [];
-        const hasMatchingTag = selectedTags.some((selectedTag) =>
-          fileTags.includes(selectedTag),
-        );
-        if (!hasMatchingTag) return false;
-      }
-
-      // Apply search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesPath = file.filePath.toLowerCase().includes(query);
-        const matchesTitle =
-          file.paperlessTitle?.toLowerCase().includes(query) ||
-          file.goodreadsTitle?.toLowerCase().includes(query) ||
-          file.eventTitle?.toLowerCase().includes(query);
-        const matchesAuthor = file.goodreadsAuthor
-          ?.toLowerCase()
-          .includes(query);
-        const matchesTags = file.paperlessTags?.toLowerCase().includes(query);
-        const matchesCorrespondent = file.paperlessCorrespondent
-          ?.toLowerCase()
-          .includes(query);
-        const matchesUser = file.userName?.toLowerCase().includes(query);
-        const matchesLocation = file.eventLocation?.toLowerCase().includes(query);
-        const matchesCalendar = file.calendarName?.toLowerCase().includes(query);
-
-        if (
-          !matchesPath &&
-          !matchesTitle &&
-          !matchesAuthor &&
-          !matchesTags &&
-          !matchesCorrespondent &&
-          !matchesUser &&
-          !matchesLocation &&
-          !matchesCalendar
-        ) {
+        // Apply tagged/untagged filter
+        if (taggedFilter === "tagged" && (!file.tags || file.tags.length === 0)) {
           return false;
         }
-      }
+        if (taggedFilter === "untagged" && file.tags && file.tags.length > 0) {
+          return false;
+        }
 
-      return true;
-    })
-    .sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
+        // Apply tag filter (if specific tags selected, file must have at least one)
+        if (selectedTags.length > 0) {
+          const fileTags = file.tags || [];
+          const hasMatchingTag = selectedTags.some((selectedTag) =>
+            fileTags.includes(selectedTag),
+          );
+          if (!hasMatchingTag) return false;
+        }
 
-      switch (sortColumn) {
-        case "source":
-          aValue = a.source || "";
-          bValue = b.source || "";
-          break;
-        case "fileName":
-          // Extract filename from path for sorting
-          const getFileName = (file: IndexedFile) => {
-            if (file.paperlessTitle) return file.paperlessTitle.toLowerCase();
-            if (file.goodreadsTitle) return file.goodreadsTitle.toLowerCase();
-            if (file.eventTitle) return file.eventTitle.toLowerCase();
-            // Extract filename from path
-            const pathParts = file.filePath.split("/");
-            return pathParts[pathParts.length - 1].toLowerCase();
-          };
-          aValue = getFileName(a);
-          bValue = getFileName(b);
-          break;
-        case "chunkCount":
-          aValue = a.chunkCount;
-          bValue = b.chunkCount;
-          break;
-        case "status":
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        case "lastIndexed":
-          aValue = new Date(a.lastIndexed).getTime();
-          bValue = new Date(b.lastIndexed).getTime();
-          break;
-        default:
-          return 0;
-      }
+        // Apply search filter
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const matchesPath = file.filePath.toLowerCase().includes(query);
+          const matchesTitle =
+            file.paperlessTitle?.toLowerCase().includes(query) ||
+            file.goodreadsTitle?.toLowerCase().includes(query) ||
+            file.eventTitle?.toLowerCase().includes(query);
+          const matchesAuthor = file.goodreadsAuthor
+            ?.toLowerCase()
+            .includes(query);
+          const matchesTags = file.paperlessTags?.toLowerCase().includes(query);
+          const matchesCorrespondent = file.paperlessCorrespondent
+            ?.toLowerCase()
+            .includes(query);
+          const matchesUser = file.userName?.toLowerCase().includes(query);
+          const matchesLocation = file.eventLocation?.toLowerCase().includes(query);
+          const matchesCalendar = file.calendarName?.toLowerCase().includes(query);
 
-      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
-      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
+          if (
+            !matchesPath &&
+            !matchesTitle &&
+            !matchesAuthor &&
+            !matchesTags &&
+            !matchesCorrespondent &&
+            !matchesUser &&
+            !matchesLocation &&
+            !matchesCalendar
+          ) {
+            return false;
+          }
+        }
 
-  // Memoize filtered files to prevent unnecessary recalculations
-  const memoizedFilteredFiles = React.useMemo(() => filteredFiles, [
-    filteredFiles.length,
+        return true;
+      })
+      .sort((a, b) => {
+        let aValue: string | number;
+        let bValue: string | number;
+
+        switch (sortColumn) {
+          case "source":
+            aValue = a.source || "";
+            bValue = b.source || "";
+            break;
+          case "fileName": {
+            // Extract filename from path for sorting
+            const getFileName = (file: IndexedFile) => {
+              if (file.paperlessTitle) return file.paperlessTitle.toLowerCase();
+              if (file.goodreadsTitle) return file.goodreadsTitle.toLowerCase();
+              if (file.eventTitle) return file.eventTitle.toLowerCase();
+              // Extract filename from path
+              const pathParts = file.filePath.split("/");
+              return pathParts[pathParts.length - 1].toLowerCase();
+            };
+            aValue = getFileName(a);
+            bValue = getFileName(b);
+            break;
+          }
+          case "chunkCount":
+            aValue = a.chunkCount;
+            bValue = b.chunkCount;
+            break;
+          case "status":
+            aValue = a.status;
+            bValue = b.status;
+            break;
+          case "lastIndexed":
+            aValue = new Date(a.lastIndexed).getTime();
+            bValue = new Date(b.lastIndexed).getTime();
+            break;
+          default:
+            return 0;
+        }
+
+        if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+        if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+        return 0;
+      });
+  }, [
+    files,
     showUploaded,
     showSynced,
     showPaperless,
@@ -431,60 +425,92 @@ export default function FilesPage() {
     sortDirection,
   ]);
 
-  // Helper function to check if a file matches the search query
-  const matchesSearch = (file: IndexedFile) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    const matchesPath = file.filePath.toLowerCase().includes(query);
-    const matchesTitle =
-      file.paperlessTitle?.toLowerCase().includes(query) ||
-      file.goodreadsTitle?.toLowerCase().includes(query) ||
-      file.eventTitle?.toLowerCase().includes(query);
-    const matchesAuthor = file.goodreadsAuthor?.toLowerCase().includes(query);
-    const matchesTags = file.paperlessTags?.toLowerCase().includes(query);
-    const matchesCorrespondent = file.paperlessCorrespondent
-      ?.toLowerCase()
-      .includes(query);
-    const matchesUser = file.userName?.toLowerCase().includes(query);
-    const matchesLocation = file.eventLocation?.toLowerCase().includes(query);
-    const matchesCalendar = file.calendarName?.toLowerCase().includes(query);
+  // Calculate per-source counts based on the current search. Recomputing these
+  // 7 full passes on every render is wasteful, so memoize on (files, search).
+  const counts = useMemo(() => {
+    const matchesSearch = (file: IndexedFile) => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        file.filePath.toLowerCase().includes(query) ||
+        !!file.paperlessTitle?.toLowerCase().includes(query) ||
+        !!file.goodreadsTitle?.toLowerCase().includes(query) ||
+        !!file.eventTitle?.toLowerCase().includes(query) ||
+        !!file.goodreadsAuthor?.toLowerCase().includes(query) ||
+        !!file.paperlessTags?.toLowerCase().includes(query) ||
+        !!file.paperlessCorrespondent?.toLowerCase().includes(query) ||
+        !!file.userName?.toLowerCase().includes(query) ||
+        !!file.eventLocation?.toLowerCase().includes(query) ||
+        !!file.calendarName?.toLowerCase().includes(query)
+      );
+    };
 
-    return (
-      matchesPath ||
-      matchesTitle ||
-      matchesAuthor ||
-      matchesTags ||
-      matchesCorrespondent ||
-      matchesUser ||
-      matchesLocation ||
-      matchesCalendar
-    );
-  };
+    const c = {
+      uploaded: 0,
+      synced: 0,
+      paperless: 0,
+      goodreads: 0,
+      customOcr: 0,
+      calendar: 0,
+      notes: 0,
+    };
 
-  // Calculate counts based on current search
-  const uploadedCount = files.filter(
-    (f) => f.source === "uploaded" && matchesSearch(f),
-  ).length;
-  const syncedCount = files.filter(
-    (f) =>
-      (f.source === "synced" || f.source === "local" || !f.source) &&
-      matchesSearch(f),
-  ).length;
-  const paperlessCount = files.filter(
-    (f) => f.source === "paperless" && matchesSearch(f),
-  ).length;
-  const goodreadsCount = files.filter(
-    (f) => f.source === "goodreads" && matchesSearch(f),
-  ).length;
-  const customOcrCount = files.filter(
-    (f) => f.source === "custom_ocr" && matchesSearch(f),
-  ).length;
-  const calendarCount = files.filter(
-    (f) => f.source === "google-calendar" && matchesSearch(f),
-  ).length;
-  const notesCount = files.filter(
-    (f) => f.source === "user_note" && matchesSearch(f),
-  ).length;
+    for (const f of files) {
+      if (!matchesSearch(f)) continue;
+      switch (f.source) {
+        case "uploaded":
+          c.uploaded++;
+          break;
+        case "paperless":
+          c.paperless++;
+          break;
+        case "goodreads":
+          c.goodreads++;
+          break;
+        case "custom_ocr":
+          c.customOcr++;
+          break;
+        case "google-calendar":
+          c.calendar++;
+          break;
+        case "user_note":
+          c.notes++;
+          break;
+        case "synced":
+        case "local":
+        default:
+          // synced/local/empty source all count as "synced"
+          if (
+            f.source === "synced" ||
+            f.source === "local" ||
+            !f.source
+          ) {
+            c.synced++;
+          }
+          break;
+      }
+    }
+
+    return c;
+  }, [files, searchQuery]);
+
+  // Virtualize the table body so only the rows near the viewport are mounted.
+  // Row heights vary (tags, authors, event details), so measure them
+  // dynamically with an estimate to seed the initial layout.
+  const rowVirtualizer = useVirtualizer({
+    count: filteredFiles.length,
+    getScrollElement: () => tableParentRef.current,
+    estimateSize: () => 73,
+    overscan: 10,
+  });
+
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0;
+  const paddingBottom =
+    virtualRows.length > 0
+      ? totalSize - virtualRows[virtualRows.length - 1].end
+      : 0;
 
   return (
     <div className={styles.container}>
@@ -512,14 +538,14 @@ export default function FilesPage() {
         showCustomOcr={showCustomOcr}
         showCalendar={showCalendar}
         showNotes={showNotes}
-        uploadedCount={uploadedCount}
-        syncedCount={syncedCount}
-        paperlessCount={paperlessCount}
-        goodreadsCount={goodreadsCount}
-        customOcrCount={customOcrCount}
-        calendarCount={calendarCount}
-        notesCount={notesCount}
-        filteredCount={memoizedFilteredFiles.length}
+        uploadedCount={counts.uploaded}
+        syncedCount={counts.synced}
+        paperlessCount={counts.paperless}
+        goodreadsCount={counts.goodreads}
+        customOcrCount={counts.customOcr}
+        calendarCount={counts.calendar}
+        notesCount={counts.notes}
+        filteredCount={filteredFiles.length}
         totalCount={files.length}
         onToggleUploaded={() => {
           const allSelected = showUploaded && showSynced && showPaperless && showGoodreads && showCustomOcr && showCalendar && showNotes;
@@ -702,14 +728,7 @@ export default function FilesPage() {
         }}
       />
 
-      <div
-        ref={tableParentRef}
-        className={styles.tableWrapper}
-        style={{
-          height: '600px',
-          overflow: 'auto',
-        }}
-      >
+      <div ref={tableParentRef} className={styles.tableWrapper}>
         <table className={styles.table}>
           <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--background)', zIndex: 1 }}>
             <tr>
@@ -778,7 +797,7 @@ export default function FilesPage() {
                   Loading files...
                 </td>
               </tr>
-            ) : memoizedFilteredFiles.length === 0 ? (
+            ) : filteredFiles.length === 0 ? (
               <tr>
                 <td colSpan={6} className={styles.empty}>
                   {files.length === 0
@@ -787,16 +806,39 @@ export default function FilesPage() {
                 </td>
               </tr>
             ) : (
-              memoizedFilteredFiles.map((file) => (
-                <FileTableRow
-                  key={file.id}
-                  file={file}
-                  isScanning={isScanning}
-                  onReindex={handleReindex}
-                  onDelete={handleDelete}
-                  onUseCustomOcr={handleUseCustomOcr}
-                />
-              ))
+              <>
+                {paddingTop > 0 && (
+                  <tr aria-hidden>
+                    <td
+                      colSpan={6}
+                      style={{ height: paddingTop, padding: 0, border: "none" }}
+                    />
+                  </tr>
+                )}
+                {virtualRows.map((virtualRow) => {
+                  const file = filteredFiles[virtualRow.index];
+                  return (
+                    <FileTableRow
+                      key={file.id}
+                      data-index={virtualRow.index}
+                      ref={rowVirtualizer.measureElement}
+                      file={file}
+                      isScanning={isScanning}
+                      onReindex={handleReindex}
+                      onDelete={handleDelete}
+                      onUseCustomOcr={handleUseCustomOcr}
+                    />
+                  );
+                })}
+                {paddingBottom > 0 && (
+                  <tr aria-hidden>
+                    <td
+                      colSpan={6}
+                      style={{ height: paddingBottom, padding: 0, border: "none" }}
+                    />
+                  </tr>
+                )}
+              </>
             )}
           </tbody>
         </table>

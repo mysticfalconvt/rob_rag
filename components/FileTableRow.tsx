@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import styles from "./FileTableRow.module.css";
 
@@ -35,15 +36,22 @@ interface FileTableRowProps {
   onReindex: (filePath: string) => void;
   onDelete: (filePath: string) => void;
   onUseCustomOcr?: (paperlessId: number) => void;
+  // Forwarded by the virtualizer for dynamic row measurement.
+  "data-index"?: number;
 }
 
-export default function FileTableRow({
-  file,
-  isScanning,
-  onReindex,
-  onDelete,
-  onUseCustomOcr,
-}: FileTableRowProps) {
+const FileTableRow = React.forwardRef<HTMLTableRowElement, FileTableRowProps>(
+  function FileTableRow(
+    {
+      file,
+      isScanning,
+      onReindex,
+      onDelete,
+      onUseCustomOcr,
+      "data-index": dataIndex,
+    },
+    ref,
+  ) {
   const isPaperless = file.source === "paperless";
   const isCustomOcr = file.source === "custom_ocr" || file.useCustomOcr;
   const isGoodreads = file.source === "goodreads";
@@ -67,6 +75,8 @@ export default function FileTableRow({
 
   return (
     <tr
+      ref={ref}
+      data-index={dataIndex}
       className={
         isPaperless
           ? styles.paperlessRow
@@ -295,4 +305,7 @@ export default function FileTableRow({
       </td>
     </tr>
   );
-}
+  },
+);
+
+export default React.memo(FileTableRow);
