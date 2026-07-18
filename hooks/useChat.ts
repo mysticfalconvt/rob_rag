@@ -155,11 +155,21 @@ export function useChat(
           if (ev.kind === "thinking") {
             steps = [...steps, { label: ev.label, status: "running" }];
           } else if (ev.kind === "tool_start") {
-            markRunningDone();
-            steps = [
-              ...steps,
-              { tool: ev.tool, label: ev.label, status: "running" },
-            ];
+            const last = steps[steps.length - 1];
+            if (last && last.label === ev.label) {
+              // Collapse consecutive identical activity into one line.
+              steps = steps.map((s, i) =>
+                i === steps.length - 1
+                  ? { ...s, status: "running" as const }
+                  : s,
+              );
+            } else {
+              markRunningDone();
+              steps = [
+                ...steps,
+                { tool: ev.tool, label: ev.label, status: "running" },
+              ];
+            }
           } else if (ev.kind === "tool_end") {
             // Mark the matching running step done/error.
             let matched = false;

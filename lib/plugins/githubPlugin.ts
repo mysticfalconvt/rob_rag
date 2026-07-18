@@ -98,6 +98,27 @@ export class GithubPlugin implements DataSourcePlugin {
         ],
         hasCustomExecution: true,
       },
+      {
+        name: "github_recent_commits",
+        description:
+          "List the most recent commits on a repository, with real short SHA, date, author, and message. Use this for 'recent commits' / 'what did I commit' questions.",
+        parameters: [
+          {
+            name: "repo",
+            type: "string",
+            required: true,
+            description:
+              "Repository as 'owner/name', or just 'name' to use your own account as the owner.",
+          },
+          {
+            name: "limit",
+            type: "number",
+            required: false,
+            description: "How many commits to return (default 10, max 30).",
+          },
+        ],
+        hasCustomExecution: true,
+      },
     ];
   }
 
@@ -135,6 +156,8 @@ export class GithubPlugin implements DataSourcePlugin {
           return await this.executeListRepos(config, params);
         case "github_repo_activity":
           return await this.executeRepoActivity(config, params);
+        case "github_recent_commits":
+          return await this.executeRecentCommits(config, params);
         default:
           return `Unknown github tool: ${toolName}`;
       }
@@ -344,6 +367,42 @@ export class GithubPlugin implements DataSourcePlugin {
     result += `**Open issues + PRs (GitHub count):** ${repo.open_issues_count ?? 0}\n`;
     result += `**Last commit:** ${lastCommitLine}`;
     return result;
+  }
+
+  private async executeRecentCommits(
+    config: GithubConfig,
+    params: QueryParams,
+  ): Promise<string> {
+    const raw = String(params.repo || "").trim();
+    if (!raw) {
+      return "Please provide a repository (as 'owner/name' or just 'name').";
+    }
+    const fullName = raw.includes("/")
+      ? raw
+      : `${await this.getLogin(config)}/${raw}`;
+    const limit = Math.min(30, Math.max(1, Number(params.limit) || 10));
+
+    const commits = await this.githubFetch<any[]>(
+      config,
+      `/repos/${fullName}/commits?per_page=${limit}`,
+    );
+    if (!Array.isArray(commits) || commits.length === 0) {
+      return `No commits found for ${fullName}.`;
+    }
+
+    const formatted = commits
+      .map((c) => {
+        const sha = (c.sha || "").slice(0, 7);
+        const msg = (c.commit?.message || "").split("\n")[0];
+        const author = c.commit?.author?.name || c.author?.login || "unknown";
+        const date = c.commit?.author?.date
+          ? new Date(c.commit.author.date).toLocaleString()
+          : "";
+        return `- ${sha} — ${msg} (${author}${date ? `, ${date}` : ""})`;
+      })
+      .join("\n");
+
+    return `${commits.length} most recent commit(s) on ${fullName}:\n\n${formatted}`;
   }
 }
 

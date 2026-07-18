@@ -35,7 +35,10 @@ export function buildToolGuidance(toolNames: string[]): string {
     "and TRUST THE TOOL'S COUNT RESULT. The tools query the FULL database and return ACCURATE counts. " +
     "You may call tools multiple times and chain them: search, read the result, then search again or " +
     "use another tool before giving your final answer. When you have enough information, answer directly " +
-    "without calling further tools.";
+    "without calling further tools. " +
+    "Report ONLY facts that came from tool results — never invent identifiers, commit SHAs, dates, PR/issue " +
+    "numbers, names, or counts. If a tool didn't return something the user asked for, say so and offer to " +
+    "fetch it with the right tool rather than guessing.";
 
   if (has("web_search")) {
     guidance +=
@@ -61,15 +64,19 @@ export function buildToolGuidance(toolNames: string[]): string {
   }
   if (hasAny((n) => n.startsWith("github_"))) {
     guidance +=
-      " You have read-only GitHub tools: what's assigned to you, your open PRs, PRs awaiting your review, " +
-      "listing your repositories, and per-repo activity (open PRs, count, last commit). Use them for any GitHub question.";
+      " You have read-only GitHub tools: what's assigned to you (github_assigned), your open PRs (github_my_prs), " +
+      "PRs awaiting your review (github_review_requests), your repositories (github_list_repos), per-repo activity " +
+      "(github_repo_activity), and recent commits (github_recent_commits). For a list of commits use " +
+      "github_recent_commits — do NOT list commits from github_repo_activity, which only returns the single latest one. " +
+      "These GitHub tools are READ-ONLY: you cannot comment, merge, close, or create anything, so do not offer to.";
   }
   if (hasAny((n) => n.startsWith("todo_"))) {
     guidance +=
       " You have read-only Todo XP tools for the family's tasks: what's due today/overdue for the account owner (todo_today), " +
       "the upcoming week (todo_week), and the family roster + who's assigned which chores (todo_family). " +
       "For what a SPECIFIC family member (e.g. a kid) is assigned or needs to do, use todo_family with their name — it covers every " +
-      "member. Only use todo_today for a person who has their own configured token (usually you).";
+      "member. Only use todo_today for a person who has their own configured token (usually you). " +
+      "These Todo tools are READ-ONLY: you cannot check off, add, or edit tasks, so do not offer to.";
   }
 
   return guidance;

@@ -56,6 +56,7 @@ function toolLabel(name: string, args: any): string {
   if (name === "get_current_datetime" || name.startsWith("calculate_date"))
     return "Checking the date";
   if (name === "save_assistant_response") return "Saving a note";
+  if (name === "github_recent_commits") return "Checking recent commits";
   if (name === "github_list_repos" || name === "github_repo_activity")
     return "Checking GitHub repositories";
   if (name.startsWith("github_")) return "Checking GitHub";
