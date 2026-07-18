@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import ModelConfiguration from "@/components/ModelConfiguration";
-import PaperlessConfiguration from "@/components/PaperlessConfiguration";
+import ContextWindowSettings from "@/components/ContextWindowSettings";
 import CustomOcrConfiguration from "@/components/CustomOcrConfiguration";
-import SyncedFilesConfiguration from "@/components/SyncedFilesConfiguration";
+import EmailConfiguration from "@/components/EmailConfiguration";
+import GithubConfiguration from "@/components/GithubConfiguration";
 import GoodreadsIntegration from "@/components/GoodreadsIntegration";
 import GoogleCalendarConfig from "@/components/GoogleCalendarConfig";
-import EmailConfiguration from "@/components/EmailConfiguration";
 import MatrixConfiguration from "@/components/MatrixConfiguration";
+import ModelConfiguration from "@/components/ModelConfiguration";
+import PaperlessConfiguration from "@/components/PaperlessConfiguration";
 import PortainerConfiguration from "@/components/PortainerConfiguration";
 import PromptConfiguration from "@/components/PromptConfiguration";
+import SyncedFilesConfiguration from "@/components/SyncedFilesConfiguration";
+import TodoConfiguration from "@/components/TodoConfiguration";
 import UserProfile from "@/components/UserProfile";
-import ContextWindowSettings from "@/components/ContextWindowSettings";
+import { useAuth } from "@/hooks/useAuth";
 import styles from "./page.module.css";
 
 interface Settings {
@@ -32,6 +34,10 @@ interface Settings {
   portainerEndpointId: number;
   portainerEnabled: boolean;
   portainerConfigured: boolean;
+  githubEnabled?: boolean;
+  githubConfigured?: boolean;
+  todoBaseUrl?: string | null;
+  todoEnabled?: boolean;
 }
 
 interface User {
@@ -73,6 +79,12 @@ export default function ConfigPage() {
   const [portainerApiKey, setPortainerApiKey] = useState("");
   const [portainerEnabled, setPortainerEnabled] = useState(false);
   const [isTestingPortainer, setIsTestingPortainer] = useState(false);
+  const [githubToken, setGithubToken] = useState("");
+  const [githubEnabled, setGithubEnabled] = useState(false);
+  const [isTestingGithub, setIsTestingGithub] = useState(false);
+  const [todoBaseUrl, setTodoBaseUrl] = useState("");
+  const [todoEnabled, setTodoEnabled] = useState(false);
+  const [isTestingTodo, setIsTestingTodo] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -131,13 +143,16 @@ export default function ConfigPage() {
         setPortainerUrl(data.portainerUrl || "");
         setPortainerEndpointId(data.portainerEndpointId || 1);
         setPortainerEnabled(data.portainerEnabled || false);
+        setGithubEnabled(data.githubEnabled || false);
+        setTodoBaseUrl(data.todoBaseUrl || "");
+        setTodoEnabled(data.todoEnabled || false);
 
         // Load synced files config
         if (data.syncedFilesConfig) {
           try {
             setSyncedFilesConfig(JSON.parse(data.syncedFilesConfig));
           } catch (e) {
-            console.error('Failed to parse syncedFilesConfig:', e);
+            console.error("Failed to parse syncedFilesConfig:", e);
             setSyncedFilesConfig(null);
           }
         } else {
@@ -181,13 +196,13 @@ export default function ConfigPage() {
     if (embeddingModelChanged) {
       const confirmed = confirm(
         "⚠️ Warning: Changing Embedding Model\n\n" +
-        "Changing the embedding model will require re-indexing ALL documents.\n" +
-        "Different embedding models produce incompatible vector representations.\n\n" +
-        "You will need to:\n" +
-        "1. Go to the Files page\n" +
-        '2. Click "Force Reindex All"\n' +
-        "3. Wait for re-indexing to complete\n\n" +
-        "Are you sure you want to continue?",
+          "Changing the embedding model will require re-indexing ALL documents.\n" +
+          "Different embedding models produce incompatible vector representations.\n\n" +
+          "You will need to:\n" +
+          "1. Go to the Files page\n" +
+          '2. Click "Force Reindex All"\n' +
+          "3. Wait for re-indexing to complete\n\n" +
+          "Are you sure you want to continue?",
       );
 
       if (!confirmed) return;
@@ -212,9 +227,9 @@ export default function ConfigPage() {
         await fetchSettings();
         alert(
           "✅ Settings saved successfully!" +
-          (embeddingModelChanged
-            ? "\n\n⚠️ Remember to re-index all files!"
-            : ""),
+            (embeddingModelChanged
+              ? "\n\n⚠️ Remember to re-index all files!"
+              : ""),
         );
       } else {
         alert("❌ Failed to save settings");
@@ -403,7 +418,9 @@ export default function ConfigPage() {
 
       if (res.ok) {
         await fetchSettings();
-        alert("✅ Synced files configuration saved! Run a scan from the Status page to apply changes.");
+        alert(
+          "✅ Synced files configuration saved! Run a scan from the Status page to apply changes.",
+        );
       } else {
         alert("❌ Failed to save configuration");
       }
@@ -414,7 +431,6 @@ export default function ConfigPage() {
       setIsSaving(false);
     }
   };
-
 
   const handleSaveRSSFeed = async (userId: string, rssUrl: string) => {
     try {
@@ -484,10 +500,14 @@ export default function ConfigPage() {
       const testRes = await fetch("/api/docker/test");
       if (testRes.ok) {
         const data = await testRes.json();
-        alert(`Connection successful! Found ${data.containerCount} container(s).`);
+        alert(
+          `Connection successful! Found ${data.containerCount} container(s).`,
+        );
       } else {
         const errorData = await testRes.json().catch(() => ({}));
-        alert(`Connection failed: ${errorData.error || "Check your URL and API key."}`);
+        alert(
+          `Connection failed: ${errorData.error || "Check your URL and API key."}`,
+        );
       }
     } catch (error) {
       console.error("Error testing Portainer connection:", error);
@@ -523,6 +543,110 @@ export default function ConfigPage() {
       alert("Failed to save settings");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveGithubSettings = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          githubToken: githubToken || undefined,
+          githubEnabled,
+        }),
+      });
+      if (res.ok) {
+        await fetchSettings();
+        alert("GitHub settings saved successfully!");
+        setGithubToken("");
+      } else {
+        alert("Failed to save settings");
+      }
+    } catch (error) {
+      console.error("Error saving GitHub settings:", error);
+      alert("Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTestGithubConnection = async () => {
+    setIsTestingGithub(true);
+    try {
+      // Persist current values first so the test endpoint reads them.
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          githubToken: githubToken || undefined,
+          githubEnabled: true,
+        }),
+      });
+      const res = await fetch("/api/github/test");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`GitHub connection OK — authenticated as ${data.login}`);
+      } else {
+        alert(`GitHub test failed: ${data.error || "unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error testing GitHub connection:", error);
+      alert("GitHub test failed");
+    } finally {
+      setIsTestingGithub(false);
+    }
+  };
+
+  const handleSaveTodoSettings = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          todoBaseUrl: todoBaseUrl || null,
+          todoEnabled,
+        }),
+      });
+      if (res.ok) {
+        await fetchSettings();
+        alert("Todo XP settings saved successfully!");
+      } else {
+        alert("Failed to save settings");
+      }
+    } catch (error) {
+      console.error("Error saving Todo XP settings:", error);
+      alert("Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTestTodoConnection = async () => {
+    setIsTestingTodo(true);
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          todoBaseUrl: todoBaseUrl || null,
+          todoEnabled: true,
+        }),
+      });
+      const res = await fetch("/api/todo/test");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Todo XP connection OK — tested ${data.testedMember}'s token`);
+      } else {
+        alert(`Todo XP test failed: ${data.error || "unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error testing Todo XP connection:", error);
+      alert("Todo XP test failed");
+    } finally {
+      setIsTestingTodo(false);
     }
   };
 
@@ -616,6 +740,29 @@ export default function ConfigPage() {
               onEnabledChange={setPortainerEnabled}
               onTest={handleTestPortainerConnection}
               onSave={handleSavePortainerSettings}
+            />
+
+            <GithubConfiguration
+              githubToken={githubToken}
+              githubEnabled={githubEnabled}
+              githubConfigured={settings?.githubConfigured || false}
+              isTesting={isTestingGithub}
+              isSaving={isSaving}
+              onTokenChange={setGithubToken}
+              onEnabledChange={setGithubEnabled}
+              onTest={handleTestGithubConnection}
+              onSave={handleSaveGithubSettings}
+            />
+
+            <TodoConfiguration
+              todoBaseUrl={todoBaseUrl}
+              todoEnabled={todoEnabled}
+              isTesting={isTestingTodo}
+              isSaving={isSaving}
+              onBaseUrlChange={setTodoBaseUrl}
+              onEnabledChange={setTodoEnabled}
+              onTest={handleTestTodoConnection}
+              onSave={handleSaveTodoSettings}
             />
 
             <MatrixConfiguration />

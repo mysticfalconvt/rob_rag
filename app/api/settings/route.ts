@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import prisma from "@/lib/prisma";
-import { requireAuth, requireAdmin } from "@/lib/session";
+import { requireAdmin, requireAuth } from "@/lib/session";
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,6 +31,10 @@ export async function GET(req: NextRequest) {
         portainerEndpointId: 1,
         portainerEnabled: false,
         portainerConfigured: false,
+        githubEnabled: false,
+        githubConfigured: false,
+        todoBaseUrl: null,
+        todoEnabled: false,
       });
     }
 
@@ -52,6 +56,10 @@ export async function GET(req: NextRequest) {
       portainerEndpointId: settings.portainerEndpointId || 1,
       portainerEnabled: settings.portainerEnabled,
       portainerConfigured: !!settings.portainerApiKey,
+      githubEnabled: settings.githubEnabled,
+      githubConfigured: !!settings.githubToken,
+      todoBaseUrl: settings.todoBaseUrl,
+      todoEnabled: settings.todoEnabled,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -86,6 +94,10 @@ export async function POST(req: NextRequest) {
       portainerApiKey,
       portainerEndpointId,
       portainerEnabled,
+      githubToken,
+      githubEnabled,
+      todoBaseUrl,
+      todoEnabled,
     } = await req.json();
 
     // Validate Paperless URL if provided
@@ -119,6 +131,18 @@ export async function POST(req: NextRequest) {
       } catch (_error) {
         return NextResponse.json(
           { error: "Invalid Portainer URL format" },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Validate Todo XP base URL if provided
+    if (todoBaseUrl) {
+      try {
+        new URL(todoBaseUrl);
+      } catch (_error) {
+        return NextResponse.json(
+          { error: "Invalid Todo XP URL format" },
           { status: 400 },
         );
       }
@@ -179,6 +203,22 @@ export async function POST(req: NextRequest) {
       updateData.portainerEnabled = portainerEnabled;
     }
 
+    // Handle GitHub settings
+    if (githubToken !== undefined) {
+      updateData.githubToken = githubToken || null;
+    }
+    if (githubEnabled !== undefined) {
+      updateData.githubEnabled = githubEnabled;
+    }
+
+    // Handle Todo XP settings
+    if (todoBaseUrl !== undefined) {
+      updateData.todoBaseUrl = todoBaseUrl || null;
+    }
+    if (todoEnabled !== undefined) {
+      updateData.todoEnabled = todoEnabled;
+    }
+
     // Handle sync settings
     if (syncedFilesConfig !== undefined) {
       updateData.syncedFilesConfig = syncedFilesConfig;
@@ -198,8 +238,11 @@ export async function POST(req: NextRequest) {
       // Create new settings - require embeddingModel and chatModel
       if (!embeddingModel || !chatModel) {
         return NextResponse.json(
-          { error: "embeddingModel and chatModel are required for initial setup" },
-          { status: 400 }
+          {
+            error:
+              "embeddingModel and chatModel are required for initial setup",
+          },
+          { status: 400 },
         );
       }
       settings = await prisma.settings.create({
@@ -236,6 +279,10 @@ export async function POST(req: NextRequest) {
       portainerEndpointId: settings.portainerEndpointId || 1,
       portainerEnabled: settings.portainerEnabled,
       portainerConfigured: !!settings.portainerApiKey,
+      githubEnabled: settings.githubEnabled,
+      githubConfigured: !!settings.githubToken,
+      todoBaseUrl: settings.todoBaseUrl,
+      todoEnabled: settings.todoEnabled,
     });
   } catch (error) {
     if (error instanceof Error) {

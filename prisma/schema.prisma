@@ -185,8 +185,23 @@ model Settings {
   matrixUserId            String?
   matrixEnabled           Boolean   @default(false)
   matrixAllowedUsers      String?   // JSON array of allowed Matrix user IDs
+  // GitHub (read-only) configuration
+  githubToken             String?
+  githubEnabled           Boolean   @default(false)
+  // Todo XP (read-only) configuration — per-member tokens live in TodoAccount
+  todoBaseUrl             String?
+  todoEnabled             Boolean   @default(false)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
+}
+
+model TodoAccount {
+  id        String   @id @default(uuid())
+  label     String
+  apiToken  String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model GoodreadsUser {

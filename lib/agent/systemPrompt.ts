@@ -59,6 +59,18 @@ export function buildToolGuidance(toolNames: string[]): string {
       "When the user asks about emails, inbox, unread messages, or wants to manage mail, ALWAYS use the email tools. " +
       "Never say you cannot access the user's email.";
   }
+  if (hasAny((n) => n.startsWith("github_"))) {
+    guidance +=
+      " You have read-only GitHub tools: what's assigned to you, your open PRs, PRs awaiting your review, " +
+      "listing your repositories, and per-repo activity (open PRs, count, last commit). Use them for any GitHub question.";
+  }
+  if (hasAny((n) => n.startsWith("todo_"))) {
+    guidance +=
+      " You have read-only Todo XP tools for the family's tasks: what's due today/overdue for the account owner (todo_today), " +
+      "the upcoming week (todo_week), and the family roster + who's assigned which chores (todo_family). " +
+      "For what a SPECIFIC family member (e.g. a kid) is assigned or needs to do, use todo_family with their name — it covers every " +
+      "member. Only use todo_today for a person who has their own configured token (usually you).";
+  }
 
   return guidance;
 }

@@ -4,18 +4,29 @@
  */
 
 import { dataSourceRegistry } from "../dataSourceRegistry";
+import { calendarPlugin } from "./calendarPlugin";
+import { dockerPlugin } from "./dockerPlugin";
+import { emailPlugin } from "./emailPlugin";
+import { filesPlugin } from "./filesPlugin";
+import { githubPlugin } from "./githubPlugin";
 import { goodreadsPlugin } from "./goodreadsPlugin";
 import { paperlessPlugin } from "./paperlessPlugin";
-import { filesPlugin } from "./filesPlugin";
-import { calendarPlugin } from "./calendarPlugin";
-import { emailPlugin } from "./emailPlugin";
-import { dockerPlugin } from "./dockerPlugin";
+import { todoPlugin } from "./todoPlugin";
 
 /**
  * Initialize all plugins
  * Call this on app startup to register all available data sources
  */
-const ALL_PLUGINS = [goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin, emailPlugin, dockerPlugin];
+const ALL_PLUGINS = [
+  goodreadsPlugin,
+  paperlessPlugin,
+  filesPlugin,
+  calendarPlugin,
+  emailPlugin,
+  dockerPlugin,
+  githubPlugin,
+  todoPlugin,
+];
 let pluginsLogged = false;
 
 export function initializePlugins(): void {
@@ -24,7 +35,12 @@ export function initializePlugins(): void {
   }
 
   if (!pluginsLogged) {
-    console.log(`[Plugins] ${dataSourceRegistry.getAll().length} plugins: ${dataSourceRegistry.getAll().map((p) => p.name).join(", ")}`);
+    console.log(
+      `[Plugins] ${dataSourceRegistry.getAll().length} plugins: ${dataSourceRegistry
+        .getAll()
+        .map((p) => p.name)
+        .join(", ")}`,
+    );
     pluginsLogged = true;
   }
 }
@@ -47,4 +63,13 @@ export function getPlugin(name: string) {
 export { dataSourceRegistry };
 
 // Export individual plugins for direct import
-export { goodreadsPlugin, paperlessPlugin, filesPlugin, calendarPlugin, emailPlugin, dockerPlugin };
+export {
+  goodreadsPlugin,
+  paperlessPlugin,
+  filesPlugin,
+  calendarPlugin,
+  emailPlugin,
+  dockerPlugin,
+  githubPlugin,
+  todoPlugin,
+};
