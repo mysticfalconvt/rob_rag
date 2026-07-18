@@ -143,9 +143,17 @@ function resolveThreadRoot(
   useThreads: boolean,
 ): string | undefined {
   const rel = content?.["m.relates_to"];
+  // Already in a thread → reply in that thread.
   if (rel?.rel_type === "m.thread" && rel.event_id) {
     return rel.event_id;
   }
+  // The event already has some OTHER relation (a reply, edit, or reaction).
+  // Matrix rejects using such an event as a thread root ("Cannot start threads
+  // from an event with a relation"), so reply on the main timeline instead.
+  if (rel) {
+    return undefined;
+  }
+  // Plain top-level message → start a new thread here if the room uses threads.
   return useThreads ? eventId : undefined;
 }
 
@@ -199,6 +207,13 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
 
     if (!roomId || !sender || !messageText) return;
     if (sender === client.getUserId()) return; // ignore our own messages
+
+    // Ignore message edits (m.replace) — otherwise editing a message would
+    // trigger a second, duplicate response.
+    const relatesTo = content?.["m.relates_to"];
+    if (relatesTo?.rel_type === "m.replace" || content?.["m.new_content"]) {
+      return;
+    }
 
     const trimmedMessage = messageText.trim();
     const lowerTrimmed = trimmedMessage.toLowerCase();

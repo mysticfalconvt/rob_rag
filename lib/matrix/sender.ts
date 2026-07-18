@@ -156,6 +156,22 @@ export async function sendFormattedMessage(
 
     console.log(`[Matrix] Sent ${chunks.length} message(s) to room ${roomId}`);
   } catch (error) {
+    // If a threaded send was rejected (e.g. the thread root already has a
+    // relation, or the root is otherwise unusable), retry once on the main
+    // timeline so the reply still gets delivered rather than lost.
+    if (
+      threadRootId &&
+      error instanceof Error &&
+      /thread|relation|m_unknown/i.test(error.message)
+    ) {
+      console.warn(
+        "[Matrix] Threaded send failed, retrying on main timeline:",
+        error.message,
+      );
+      await sendFormattedMessage(roomId, message, sources);
+      return;
+    }
+
     // Check if it's an encryption error
     if (error instanceof Error && error.message.includes("encryption")) {
       const friendlyError = new Error(
