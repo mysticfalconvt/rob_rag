@@ -91,6 +91,23 @@ export async function startFreshMatrixConversation(
   return created.id;
 }
 
+/**
+ * Find the conversation for a Matrix thread (any user), if the bot has an
+ * ongoing conversation in it — i.e. the bot has replied in this thread before.
+ * Returns the conversation id, or null.
+ */
+export async function findMatrixThreadConversation(
+  matrixRoomId: string,
+  matrixThreadId: string,
+): Promise<string | null> {
+  const conv = await prisma.conversation.findFirst({
+    where: { matrixRoomId, matrixThreadId },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+  return conv?.id ?? null;
+}
+
 /** Load recent conversation history in the shape the agent expects. */
 export async function loadConversationHistory(
   conversationId: string,

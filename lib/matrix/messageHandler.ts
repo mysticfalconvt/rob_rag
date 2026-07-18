@@ -1,11 +1,14 @@
+import { HumanMessage } from "@langchain/core/messages";
 import { type MatrixEvent, type Room, RoomEvent } from "matrix-js-sdk";
 import { resolveMatrixIdentity } from "../agent/identity";
 import {
+  findMatrixThreadConversation,
   loadConversationHistory,
   resolveConversation,
   startFreshMatrixConversation,
 } from "../agent/persistence";
 import { runAgent } from "../agent/runAgent";
+import { getFastChatModel } from "../ai";
 import prisma from "../prisma";
 import { matrixClient } from "./client";
 import { sendFormattedMessage } from "./sender";
@@ -180,6 +183,49 @@ function isBotMentioned(
 }
 
 /**
+ * For a follow-up in a thread the bot is already part of, ask a fast LLM whether
+ * the new message is actually directed at the bot (vs people talking to each
+ * other). Defaults to replying if the check is unavailable/unclear, since the
+ * user is in an active thread with the bot.
+ */
+async function shouldReplyInThread(
+  threadConversationId: string,
+  messageText: string,
+  botName: string,
+): Promise<boolean> {
+  try {
+    const history = await loadConversationHistory(threadConversationId, 12);
+    const historyText = history
+      .map((m) => `${m.role === "assistant" ? botName : "User"}: ${m.content}`)
+      .join("\n")
+      .slice(-4000);
+
+    const prompt = `You are "${botName}", an AI assistant in a Matrix chat thread you have been participating in. Decide whether the NEW message is directed at you and expects a response from you, versus people talking to each other, thinking out loud, or an acknowledgement ("thanks!", "ok") that needs no reply.
+
+Thread so far:
+${historyText || "(no prior messages)"}
+
+NEW message: ${messageText}
+
+Answer with ONLY JSON: {"reply": true} or {"reply": false}`;
+
+    const model = await getFastChatModel();
+    const resp = await model.invoke([new HumanMessage(prompt)]);
+    const text = typeof resp.content === "string" ? resp.content : "";
+    const match = text.match(/\{[\s\S]*?\}/);
+    if (!match) return true;
+    const obj = JSON.parse(match[0]);
+    return obj?.reply !== false; // default to replying unless explicitly false
+  } catch (error) {
+    console.error(
+      "[Matrix] shouldReplyInThread check failed, defaulting to reply:",
+      error,
+    );
+    return true;
+  }
+}
+
+/**
  * Process an incoming Matrix message
  */
 async function handleMessage(event: MatrixEvent): Promise<void> {
@@ -270,9 +316,27 @@ async function handleMessage(event: MatrixEvent): Promise<void> {
     // Regular message — room must be registered + enabled.
     if (!room || !room.enabled) return;
 
-    // Mention-only rooms: ignore messages that don't mention the bot.
+    // Mention-only rooms: ignore messages that don't mention the bot — UNLESS
+    // the message is a follow-up in a thread the bot is already part of, in which
+    // case a fast LLM decides whether the message is actually directed at the bot.
     if (room.mentionsOnly && !isBotMentioned(roomId, content, messageText)) {
-      return;
+      const incomingThreadRoot =
+        relatesTo?.rel_type === "m.thread" ? relatesTo.event_id : null;
+      const threadConvId = incomingThreadRoot
+        ? await findMatrixThreadConversation(roomId, incomingThreadRoot)
+        : null;
+
+      if (!threadConvId) return; // not a bot thread and not mentioned → ignore
+
+      const botName =
+        client.getRoom(roomId)?.getMember(client.getUserId() || "")?.name ||
+        "the assistant";
+      const shouldReply = await shouldReplyInThread(
+        threadConvId,
+        messageText,
+        botName,
+      );
+      if (!shouldReply) return; // in a bot thread, but not directed at the bot
     }
 
     const useRag = room.useRag ?? true;
