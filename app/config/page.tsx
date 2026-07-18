@@ -15,6 +15,7 @@ import PromptConfiguration from "@/components/PromptConfiguration";
 import SyncedFilesConfiguration from "@/components/SyncedFilesConfiguration";
 import TodoConfiguration from "@/components/TodoConfiguration";
 import UserProfile from "@/components/UserProfile";
+import WeatherConfiguration from "@/components/WeatherConfiguration";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./page.module.css";
 
@@ -38,6 +39,9 @@ interface Settings {
   githubConfigured?: boolean;
   todoBaseUrl?: string | null;
   todoEnabled?: boolean;
+  weatherEnabled?: boolean;
+  weatherDefaultLocation?: string | null;
+  weatherUnits?: string;
 }
 
 interface User {
@@ -85,6 +89,10 @@ export default function ConfigPage() {
   const [todoBaseUrl, setTodoBaseUrl] = useState("");
   const [todoEnabled, setTodoEnabled] = useState(false);
   const [isTestingTodo, setIsTestingTodo] = useState(false);
+  const [weatherDefaultLocation, setWeatherDefaultLocation] = useState("");
+  const [weatherUnits, setWeatherUnits] = useState("imperial");
+  const [weatherEnabled, setWeatherEnabled] = useState(false);
+  const [isTestingWeather, setIsTestingWeather] = useState(false);
 
   const [users, setUsers] = useState<User[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
@@ -146,6 +154,9 @@ export default function ConfigPage() {
         setGithubEnabled(data.githubEnabled || false);
         setTodoBaseUrl(data.todoBaseUrl || "");
         setTodoEnabled(data.todoEnabled || false);
+        setWeatherDefaultLocation(data.weatherDefaultLocation || "");
+        setWeatherUnits(data.weatherUnits || "imperial");
+        setWeatherEnabled(data.weatherEnabled || false);
 
         // Load synced files config
         if (data.syncedFilesConfig) {
@@ -650,6 +661,59 @@ export default function ConfigPage() {
     }
   };
 
+  const handleSaveWeatherSettings = async () => {
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weatherDefaultLocation: weatherDefaultLocation || null,
+          weatherUnits,
+          weatherEnabled,
+        }),
+      });
+      if (res.ok) {
+        await fetchSettings();
+        alert("Weather settings saved successfully!");
+      } else {
+        alert("Failed to save settings");
+      }
+    } catch (error) {
+      console.error("Error saving Weather settings:", error);
+      alert("Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTestWeather = async () => {
+    setIsTestingWeather(true);
+    try {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weatherDefaultLocation: weatherDefaultLocation || null,
+          weatherUnits,
+          weatherEnabled: true,
+        }),
+      });
+      const res = await fetch("/api/weather/test");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Weather OK — resolved location: ${data.resolved}`);
+      } else {
+        alert(`Weather test failed: ${data.error || "unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error testing weather:", error);
+      alert("Weather test failed");
+    } finally {
+      setIsTestingWeather(false);
+    }
+  };
+
   const hasChanges = !!(
     settings &&
     (selectedEmbeddingModel !== settings.embeddingModel ||
@@ -763,6 +827,19 @@ export default function ConfigPage() {
               onEnabledChange={setTodoEnabled}
               onTest={handleTestTodoConnection}
               onSave={handleSaveTodoSettings}
+            />
+
+            <WeatherConfiguration
+              weatherDefaultLocation={weatherDefaultLocation}
+              weatherUnits={weatherUnits}
+              weatherEnabled={weatherEnabled}
+              isTesting={isTestingWeather}
+              isSaving={isSaving}
+              onDefaultLocationChange={setWeatherDefaultLocation}
+              onUnitsChange={setWeatherUnits}
+              onEnabledChange={setWeatherEnabled}
+              onTest={handleTestWeather}
+              onSave={handleSaveWeatherSettings}
             />
 
             <MatrixConfiguration />

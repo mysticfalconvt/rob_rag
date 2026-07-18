@@ -61,6 +61,7 @@ function toolLabel(name: string, args: any): string {
     return "Checking GitHub repositories";
   if (name.startsWith("github_")) return "Checking GitHub";
   if (name.startsWith("todo_")) return "Checking your todos";
+  if (name.startsWith("weather_")) return "Checking the weather";
   return `Using ${name}`;
 }
 

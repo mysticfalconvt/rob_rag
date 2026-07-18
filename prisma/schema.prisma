@@ -191,6 +191,10 @@ model Settings {
   // Todo XP (read-only) configuration — per-member tokens live in TodoAccount
   todoBaseUrl             String?
   todoEnabled             Boolean   @default(false)
+  // Weather (read-only, Open-Meteo, no API key)
+  weatherEnabled          Boolean   @default(false)
+  weatherDefaultLocation  String?
+  weatherUnits            String?   @default("imperial")
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 }

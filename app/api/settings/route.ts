@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
         githubConfigured: false,
         todoBaseUrl: null,
         todoEnabled: false,
+        weatherEnabled: false,
+        weatherDefaultLocation: null,
+        weatherUnits: "imperial",
       });
     }
 
@@ -60,6 +63,9 @@ export async function GET(req: NextRequest) {
       githubConfigured: !!settings.githubToken,
       todoBaseUrl: settings.todoBaseUrl,
       todoEnabled: settings.todoEnabled,
+      weatherEnabled: settings.weatherEnabled,
+      weatherDefaultLocation: settings.weatherDefaultLocation,
+      weatherUnits: settings.weatherUnits || "imperial",
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Unauthorized") {
@@ -98,6 +104,9 @@ export async function POST(req: NextRequest) {
       githubEnabled,
       todoBaseUrl,
       todoEnabled,
+      weatherEnabled,
+      weatherDefaultLocation,
+      weatherUnits,
     } = await req.json();
 
     // Validate Paperless URL if provided
@@ -219,6 +228,17 @@ export async function POST(req: NextRequest) {
       updateData.todoEnabled = todoEnabled;
     }
 
+    // Handle Weather settings
+    if (weatherEnabled !== undefined) {
+      updateData.weatherEnabled = weatherEnabled;
+    }
+    if (weatherDefaultLocation !== undefined) {
+      updateData.weatherDefaultLocation = weatherDefaultLocation || null;
+    }
+    if (weatherUnits !== undefined) {
+      updateData.weatherUnits = weatherUnits;
+    }
+
     // Handle sync settings
     if (syncedFilesConfig !== undefined) {
       updateData.syncedFilesConfig = syncedFilesConfig;
@@ -283,6 +303,9 @@ export async function POST(req: NextRequest) {
       githubConfigured: !!settings.githubToken,
       todoBaseUrl: settings.todoBaseUrl,
       todoEnabled: settings.todoEnabled,
+      weatherEnabled: settings.weatherEnabled,
+      weatherDefaultLocation: settings.weatherDefaultLocation,
+      weatherUnits: settings.weatherUnits || "imperial",
     });
   } catch (error) {
     if (error instanceof Error) {

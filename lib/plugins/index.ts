@@ -12,6 +12,7 @@ import { githubPlugin } from "./githubPlugin";
 import { goodreadsPlugin } from "./goodreadsPlugin";
 import { paperlessPlugin } from "./paperlessPlugin";
 import { todoPlugin } from "./todoPlugin";
+import { weatherPlugin } from "./weatherPlugin";
 
 /**
  * Initialize all plugins
@@ -26,6 +27,7 @@ const ALL_PLUGINS = [
   dockerPlugin,
   githubPlugin,
   todoPlugin,
+  weatherPlugin,
 ];
 let pluginsLogged = false;
 
@@ -72,4 +74,5 @@ export {
   dockerPlugin,
   githubPlugin,
   todoPlugin,
+  weatherPlugin,
 };

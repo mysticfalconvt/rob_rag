@@ -78,6 +78,11 @@ export function buildToolGuidance(toolNames: string[]): string {
       "member. Only use todo_today for a person who has their own configured token (usually you). " +
       "These Todo tools are READ-ONLY: you cannot check off, add, or edit tasks, so do not offer to.";
   }
+  if (hasAny((n) => n.startsWith("weather_"))) {
+    guidance +=
+      " You have weather tools: current conditions (weather_current) and a daily forecast (weather_forecast). " +
+      "Pass a city/place name, or omit it to use the configured default location.";
+  }
 
   return guidance;
 }
