@@ -5,6 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import ChatHeader from "@/components/ChatHeader";
 import ChatInput from "@/components/ChatInput";
 import ChatMessage from "@/components/ChatMessage";
+import SavePromptCard, { type TriageDraft } from "@/components/SavePromptCard";
 import SourceFilterBar from "@/components/SourceFilterBar";
 import Toast from "@/components/Toast";
 import { useChat } from "@/hooks/useChat";
@@ -43,6 +44,11 @@ function ChatPageContent() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+  const [savePrompt, setSavePrompt] = useState<TriageDraft | null>(null);
+  const triagedKeyRef = useRef<string | null>(null);
+  // Only triage conversations the user actually sent to this session — not old
+  // ones they merely opened (which would waste a model call and re-suggest saves).
+  const sentThisSessionRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -79,6 +85,42 @@ function ChatPageContent() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // After each completed assistant turn, ask the server whether anything is
+  // worth saving as a skill/memory. The endpoint is cheap and returns
+  // { decision: "none" } when auto-triage is off or nothing qualifies. Guarded
+  // to run at most once per (conversation, message-count).
+  useEffect(() => {
+    if (isLoading || !currentConversationId || !sentThisSessionRef.current) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || !last.content?.trim()) return;
+
+    const key = `${currentConversationId}:${messages.length}`;
+    if (triagedKeyRef.current === key) return;
+    triagedKeyRef.current = key;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/assistant/triage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId: currentConversationId }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.decision && data.decision !== "none") {
+          setSavePrompt(data as TriageDraft);
+        }
+      } catch {
+        // Triage is best-effort; ignore failures.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoading, currentConversationId, messages]);
 
   const getSourceFilter = ():
     | "all"
@@ -130,6 +172,7 @@ function ChatPageContent() {
     // user can start composing their next message while the reply streams.
     const text = input;
     setInput("");
+    sentThisSessionRef.current = true;
     const sourceFilter = getSourceFilter();
     await sendMessage(text, sourceFilter, documentPath || undefined);
   };
@@ -207,6 +250,16 @@ function ChatPageContent() {
               <span className={styles.typing}>Thinking...</span>
             </div>
           </div>
+        )}
+        {savePrompt && (
+          <SavePromptCard
+            draft={savePrompt}
+            onDismiss={() => setSavePrompt(null)}
+            onSaved={(message) => {
+              setSavePrompt(null);
+              setToast({ message, type: "success" });
+            }}
+          />
         )}
         <div ref={messagesEndRef} />
       </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import AssistantConfiguration from "@/components/AssistantConfiguration";
 import ContextWindowSettings from "@/components/ContextWindowSettings";
 import CustomOcrConfiguration from "@/components/CustomOcrConfiguration";
 import EmailConfiguration from "@/components/EmailConfiguration";
@@ -783,6 +784,8 @@ export default function ConfigPage() {
             />
 
             <PromptConfiguration />
+
+            <AssistantConfiguration />
 
             <ContextWindowSettings />
 

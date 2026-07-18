@@ -99,11 +99,26 @@ export function buildSystemPrompt(opts: {
   isScheduled: boolean;
   matrixFormattingPrompt: string;
   webIntent?: "search" | "research";
+  /** Assistant persona ("soul"), injected before everything else. */
+  soul?: string;
+  /** Compact catalog of available skills (see lib/assistant/store.ts). */
+  skillsCatalog?: string;
+  /** Compact index of known memories (see lib/assistant/store.ts). */
+  memoryIndex?: string;
 }): string {
   let prompt = opts.basePrompt;
 
+  // Persona comes first so it colors everything that follows.
+  if (opts.soul?.trim()) {
+    prompt += `\n\n${opts.soul.trim()}`;
+  }
+
   if (opts.userContext) {
     prompt += `\n\n${opts.userContext}`;
+  }
+
+  if (opts.memoryIndex?.trim()) {
+    prompt += `\n\n${opts.memoryIndex.trim()}`;
   }
 
   // Matrix (and scheduled, which posts to Matrix) needs formatting guidance +
@@ -115,6 +130,10 @@ export function buildSystemPrompt(opts: {
   const guidance = buildToolGuidance(opts.toolNames);
   if (guidance) {
     prompt += `\n\n${guidance}`;
+  }
+
+  if (opts.skillsCatalog?.trim()) {
+    prompt += `\n\n${opts.skillsCatalog.trim()}`;
   }
 
   if (opts.webIntent === "search") {

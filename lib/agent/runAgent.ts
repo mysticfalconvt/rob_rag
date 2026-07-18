@@ -15,6 +15,14 @@ import { analyzeReferencedSources } from "../sourceAnalysis";
 import { generateToolsForConfiguredPlugins } from "../toolGenerator";
 import { createRagTool } from "../tools/ragTool";
 import { generateUtilityTools } from "../utilityTools";
+import { generateAssistantTools } from "../assistant/tools";
+import {
+  buildMemoryIndex,
+  buildSkillsCatalog,
+  listMemories,
+  listSkills,
+  readSoul,
+} from "../assistant/store";
 import { runToolLoop } from "./loop";
 import {
   createAssistantMessage,
@@ -79,8 +87,8 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   }));
   const attributedQuery = attribute(lastMessage);
 
-  // 1. Prompts + context settings.
-  const [prompts, contextSettings] = await Promise.all([
+  // 1. Prompts + context settings + assistant soul/skills/memory.
+  const [prompts, contextSettings, soul, skills, memories] = await Promise.all([
     getPrompts(),
     prisma.settings.findUnique({
       where: { id: "singleton" },
@@ -91,6 +99,9 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
         enableContextSummary: true,
       },
     }),
+    readSoul(),
+    listSkills(),
+    listMemories(),
   ]);
 
   // 2. Conversation + persist the user's message.
@@ -155,7 +166,12 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
           })
         : null;
 
-    tools = [...pluginTools, ...utilityTools, ...(ragTool ? [ragTool] : [])];
+    tools = [
+      ...pluginTools,
+      ...utilityTools,
+      ...generateAssistantTools(),
+      ...(ragTool ? [ragTool] : []),
+    ];
 
     // Reminder tools depend on a Matrix room and only make sense there.
     if (channel !== "matrix") {
@@ -168,14 +184,23 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     userProfile.userName,
     userProfile.userBio,
   );
+  const toolNames = tools.map((t) => t.name);
   const systemPrompt = buildSystemPrompt({
     basePrompt: prompts.noSourcesSystemPrompt,
     userContext: userContextString,
     channel,
-    toolNames: tools.map((t) => t.name),
+    toolNames,
     isScheduled: channel === "scheduled",
     matrixFormattingPrompt: prompts.matrixFormattingPrompt,
     webIntent,
+    soul,
+    // Only advertise skills/memory when their tools are actually bound.
+    skillsCatalog: toolNames.includes("use_skill")
+      ? buildSkillsCatalog(skills)
+      : undefined,
+    memoryIndex: toolNames.includes("recall_memory")
+      ? buildMemoryIndex(memories)
+      : undefined,
   });
 
   // 6. Context-window management over prior turns.

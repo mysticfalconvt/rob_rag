@@ -196,6 +196,8 @@ model Settings {
   weatherEnabled          Boolean   @default(false)
   weatherDefaultLocation  String?
   weatherUnits            String?   @default("imperial")
+  // Assistant soul/skills/memory: auto-suggest saves after each conversation.
+  assistantAutoTriage     Boolean   @default(true)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 }
