@@ -66,9 +66,12 @@ export function buildToolGuidance(toolNames: string[]): string {
     guidance +=
       " You have read-only GitHub tools: what's assigned to you (github_assigned), your open PRs (github_my_prs), " +
       "PRs awaiting your review (github_review_requests), your repositories (github_list_repos), per-repo activity " +
-      "(github_repo_activity), and recent commits (github_recent_commits). For a list of commits use " +
-      "github_recent_commits — do NOT list commits from github_repo_activity, which only returns the single latest one. " +
-      "These GitHub tools are READ-ONLY: you cannot comment, merge, close, or create anything, so do not offer to.";
+      "(github_repo_activity), recent commits (github_recent_commits), and full detail on a single PR (github_pr_details). " +
+      "The PR-list tools already report how long each PR has been open and its author; pass includeChangeStats=true to " +
+      "those tools when the user asks about files changed or lines added/removed. For depth on one specific PR (files, " +
+      "lines, commits, reviewers, merge state) use github_pr_details with the repo + number or the PR URL. For a list of " +
+      "commits use github_recent_commits — do NOT list commits from github_repo_activity, which only returns the single " +
+      "latest one. These GitHub tools are READ-ONLY: you cannot comment, merge, close, or create anything, so do not offer to.";
   }
   if (hasAny((n) => n.startsWith("todo_"))) {
     guidance +=

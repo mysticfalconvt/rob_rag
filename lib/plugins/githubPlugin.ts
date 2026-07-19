@@ -18,6 +18,19 @@ import type { SearchResult } from "../retrieval";
 const GITHUB_API = "https://api.github.com";
 const USER_AGENT = "rob-rag";
 
+/**
+ * Optional flag on the PR-list tools. Age + author are always shown (free — they
+ * come back in the search payload); files/lines require one extra API call per
+ * PR, so they're opt-in and the agent sets this when the user asks about size.
+ */
+const CHANGE_STATS_PARAM = {
+  name: "includeChangeStats",
+  type: "boolean",
+  required: false,
+  description:
+    "When true, also fetch and show files changed and lines added/removed for each PR (one extra API call per PR). Set this when the user asks about the size of PRs, files touched, or lines changed.",
+} as const;
+
 interface GithubConfig {
   token: string;
 }
@@ -50,22 +63,22 @@ export class GithubPlugin implements DataSourcePlugin {
       {
         name: "github_assigned",
         description:
-          "List open GitHub issues and pull requests assigned to you. Use for questions like 'what's assigned to me on GitHub' or 'what do I need to work on'.",
-        parameters: [],
+          "List open GitHub issues and pull requests assigned to you. Each item shows how long it has been open and its author. Use for questions like 'what's assigned to me on GitHub' or 'what do I need to work on'.",
+        parameters: [CHANGE_STATS_PARAM],
         hasCustomExecution: true,
       },
       {
         name: "github_my_prs",
         description:
-          "List your own open pull requests (PRs you authored that are still open).",
-        parameters: [],
+          "List your own open pull requests (PRs you authored that are still open). Each item shows how long it has been open and its author.",
+        parameters: [CHANGE_STATS_PARAM],
         hasCustomExecution: true,
       },
       {
         name: "github_review_requests",
         description:
-          "List open pull requests where your review has been requested (PRs waiting on you to review).",
-        parameters: [],
+          "List open pull requests where your review has been requested (PRs waiting on you to review). Each item shows how long it has been open and its author.",
+        parameters: [CHANGE_STATS_PARAM],
         hasCustomExecution: true,
       },
       {
@@ -119,6 +132,34 @@ export class GithubPlugin implements DataSourcePlugin {
         ],
         hasCustomExecution: true,
       },
+      {
+        name: "github_pr_details",
+        description:
+          "Get detailed metadata for ONE pull request: title, author, how long it's been open, files changed, lines added/removed, commit count, requested reviewers, and merge state. Use when the user wants depth on a specific PR. Accept either repo + number, or a full PR URL.",
+        parameters: [
+          {
+            name: "repo",
+            type: "string",
+            required: false,
+            description:
+              "Repository as 'owner/name' (or just 'name' for your own account). Omit if you pass a full PR url.",
+          },
+          {
+            name: "number",
+            type: "number",
+            required: false,
+            description: "The pull request number. Omit if you pass a full PR url.",
+          },
+          {
+            name: "url",
+            type: "string",
+            required: false,
+            description:
+              "Full PR URL (https://github.com/owner/name/pull/123) as an alternative to repo + number.",
+          },
+        ],
+        hasCustomExecution: true,
+      },
     ];
   }
 
@@ -139,18 +180,21 @@ export class GithubPlugin implements DataSourcePlugin {
             config,
             "assignee:@me is:open archived:false",
             "assigned to you",
+            params.includeChangeStats === true,
           );
         case "github_my_prs":
           return await this.executeSearch(
             config,
             "is:pr is:open author:@me archived:false",
             "your open pull requests",
+            params.includeChangeStats === true,
           );
         case "github_review_requests":
           return await this.executeSearch(
             config,
             "is:pr is:open review-requested:@me archived:false",
             "awaiting your review",
+            params.includeChangeStats === true,
           );
         case "github_list_repos":
           return await this.executeListRepos(config, params);
@@ -158,6 +202,8 @@ export class GithubPlugin implements DataSourcePlugin {
           return await this.executeRepoActivity(config, params);
         case "github_recent_commits":
           return await this.executeRecentCommits(config, params);
+        case "github_pr_details":
+          return await this.executePrDetails(config, params);
         default:
           return `Unknown github tool: ${toolName}`;
       }
@@ -233,10 +279,28 @@ export class GithubPlugin implements DataSourcePlugin {
     return idx >= 0 ? url.slice(idx + "/repos/".length) : "";
   }
 
+  /** Human-friendly "how long open" from an ISO timestamp. */
+  private formatAge(createdAt?: string): string {
+    if (!createdAt) return "";
+    const created = new Date(createdAt).getTime();
+    if (Number.isNaN(created)) return "";
+    const ms = Date.now() - created;
+    const days = Math.floor(ms / 86_400_000);
+    if (days <= 0) {
+      const hours = Math.floor(ms / 3_600_000);
+      return hours <= 1 ? "open <1h" : `open ${hours}h`;
+    }
+    if (days === 1) return "open 1 day";
+    if (days < 30) return `open ${days} days`;
+    const months = Math.floor(days / 30);
+    return months <= 1 ? "open ~1 month" : `open ~${months} months`;
+  }
+
   private async executeSearch(
     config: GithubConfig,
     query: string,
     label: string,
+    includeChangeStats = false,
   ): Promise<string> {
     const data = await this.githubFetch<{ items: any[]; total_count: number }>(
       config,
@@ -247,15 +311,56 @@ export class GithubPlugin implements DataSourcePlugin {
       return `No GitHub items ${label}.`;
     }
 
+    // Optionally enrich PRs with files/lines changed (one extra call each).
+    const statsByKey = new Map<
+      string,
+      { additions: number; deletions: number; changed_files: number }
+    >();
+    if (includeChangeStats) {
+      const prItems = items.filter((it) => it.pull_request);
+      const details = await Promise.all(
+        prItems.map(async (it) => {
+          const repo = this.repoFullName(it);
+          try {
+            const pr = await this.githubFetch<any>(
+              config,
+              `/repos/${repo}/pulls/${it.number}`,
+            );
+            return {
+              key: `${repo}#${it.number}`,
+              additions: pr.additions ?? 0,
+              deletions: pr.deletions ?? 0,
+              changed_files: pr.changed_files ?? 0,
+            };
+          } catch {
+            return null; // e.g. no access to that PR — skip its stats
+          }
+        }),
+      );
+      for (const d of details) if (d) statsByKey.set(d.key, d);
+    }
+
     const formatted = items
       .map((it, i) => {
         const kind = it.pull_request ? "PR" : "Issue";
         const repo = this.repoFullName(it);
         const draft = it.draft ? " (draft)" : "";
-        return (
-          `${i + 1}. **${it.title}**${draft} — ${kind} #${it.number} in ${repo}\n` +
-          `   ${it.html_url}`
-        );
+        const author = it.user?.login ? ` by @${it.user.login}` : "";
+        let line =
+          `${i + 1}. **${it.title}**${draft} — ${kind} #${it.number} in ${repo}${author}\n` +
+          `   ${it.html_url}`;
+
+        const meta: string[] = [];
+        const age = this.formatAge(it.created_at);
+        if (age) meta.push(age);
+        const stat = statsByKey.get(`${repo}#${it.number}`);
+        if (stat) {
+          meta.push(
+            `+${stat.additions}/-${stat.deletions} across ${stat.changed_files} file${stat.changed_files === 1 ? "" : "s"}`,
+          );
+        }
+        if (meta.length) line += `\n   ${meta.join(" · ")}`;
+        return line;
       })
       .join("\n");
 
@@ -403,6 +508,58 @@ export class GithubPlugin implements DataSourcePlugin {
       .join("\n");
 
     return `${commits.length} most recent commit(s) on ${fullName}:\n\n${formatted}`;
+  }
+
+  private async executePrDetails(
+    config: GithubConfig,
+    params: QueryParams,
+  ): Promise<string> {
+    let fullName = String(params.repo || "").trim();
+    let number = Number(params.number) || 0;
+
+    // A full PR URL can stand in for repo + number.
+    const url = String(params.url || "").trim();
+    if (url) {
+      const m = url.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+      if (m) {
+        fullName = m[1];
+        number = Number(m[2]);
+      }
+    }
+
+    if (fullName && !fullName.includes("/")) {
+      fullName = `${await this.getLogin(config)}/${fullName}`;
+    }
+    if (!fullName || !number) {
+      return "Please provide a repository and PR number, or a full pull request URL.";
+    }
+
+    const pr = await this.githubFetch<any>(
+      config,
+      `/repos/${fullName}/pulls/${number}`,
+    );
+
+    const age = this.formatAge(pr.created_at);
+    const state = pr.merged ? "merged" : pr.draft ? "draft" : pr.state;
+    const reviewers =
+      (pr.requested_reviewers || [])
+        .map((r: any) => `@${r.login}`)
+        .join(", ") || "none";
+
+    const lines = [
+      `**${pr.title}** — PR #${pr.number} in ${fullName}`,
+      `${pr.html_url}`,
+      "",
+      `- Author: @${pr.user?.login ?? "unknown"}`,
+      `- State: ${state}`,
+      `- ${age || "age unknown"}`,
+      `- Changes: +${pr.additions ?? 0}/-${pr.deletions ?? 0} across ${pr.changed_files ?? 0} file(s), ${pr.commits ?? 0} commit(s)`,
+      `- Requested reviewers: ${reviewers}`,
+    ];
+    if (pr.mergeable_state) {
+      lines.push(`- Mergeable state: ${pr.mergeable_state}`);
+    }
+    return lines.join("\n");
   }
 }
 
