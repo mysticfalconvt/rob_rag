@@ -67,6 +67,10 @@ export function buildToolGuidance(toolNames: string[]): string {
       " You have read-only GitHub tools: what's assigned to you (github_assigned), your open PRs (github_my_prs), " +
       "PRs awaiting your review (github_review_requests), your repositories (github_list_repos), per-repo activity " +
       "(github_repo_activity), recent commits (github_recent_commits), and full detail on a single PR (github_pr_details). " +
+      "To see EVERY open PR in specific repos (any author, with author + how long open, oldest first), use github_open_prs with a " +
+      "list of repos. For a cross-repo overview of what's going on in the repos you're involved with — automatically the repos where " +
+      "you have an open PR you authored, are assigned to, or were asked to review, plus any extra repos passed in — use " +
+      "github_involved_prs (a skill may supply a pinned repo list via its extraRepos argument). " +
       "The PR-list tools already report how long each PR has been open and its author; pass includeChangeStats=true to " +
       "those tools when the user asks about files changed or lines added/removed. For depth on one specific PR (files, " +
       "lines, commits, reviewers, merge state) use github_pr_details with the repo + number or the PR URL. For a list of " +

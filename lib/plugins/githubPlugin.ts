@@ -160,6 +160,38 @@ export class GithubPlugin implements DataSourcePlugin {
         ],
         hasCustomExecution: true,
       },
+      {
+        name: "github_open_prs",
+        description:
+          "List ALL open pull requests in the given repository or repositories, regardless of author. Each PR shows its author and how long it has been open (oldest first). Use this when the user wants every open PR in specific repos — not just their own.",
+        parameters: [
+          {
+            name: "repos",
+            type: "array",
+            required: true,
+            description:
+              "Repositories to list open PRs for, each as 'owner/name' (or just 'name' for your own account).",
+          },
+          CHANGE_STATS_PARAM,
+        ],
+        hasCustomExecution: true,
+      },
+      {
+        name: "github_involved_prs",
+        description:
+          "Show open pull-request activity across every repository you're involved with — automatically collected from repos where you have an open PR you authored, are assigned to, or have been asked to review — plus any extra repos passed in. Lists ALL open PRs in each of those repos (any author) with author and how long open (oldest first). Use for 'what's going on across my repos' / 'PRs in the repos I'm involved with'.",
+        parameters: [
+          {
+            name: "extraRepos",
+            type: "array",
+            required: false,
+            description:
+              "Additional repositories to always include, each as 'owner/name'. Use to pass a pinned/watched repo list (e.g. one maintained in a skill).",
+          },
+          CHANGE_STATS_PARAM,
+        ],
+        hasCustomExecution: true,
+      },
     ];
   }
 
@@ -204,6 +236,10 @@ export class GithubPlugin implements DataSourcePlugin {
           return await this.executeRecentCommits(config, params);
         case "github_pr_details":
           return await this.executePrDetails(config, params);
+        case "github_open_prs":
+          return await this.executeOpenPrs(config, params);
+        case "github_involved_prs":
+          return await this.executeInvolvedPrs(config, params);
         default:
           return `Unknown github tool: ${toolName}`;
       }
@@ -560,6 +596,180 @@ export class GithubPlugin implements DataSourcePlugin {
       lines.push(`- Mergeable state: ${pr.mergeable_state}`);
     }
     return lines.join("\n");
+  }
+
+  /** Resolve a raw repo string ("owner/name" or bare "name") to a full name. */
+  private async resolveRepoName(
+    config: GithubConfig,
+    raw: string,
+  ): Promise<string> {
+    const trimmed = raw.trim();
+    return trimmed.includes("/")
+      ? trimmed
+      : `${await this.getLogin(config)}/${trimmed}`;
+  }
+
+  /**
+   * List every open PR in one repo, oldest-first, with author + age. Optionally
+   * enriches each PR with files/lines changed (one extra call per PR). Never
+   * throws: an inaccessible/missing repo becomes a warning line so a batch of
+   * repos doesn't fail wholesale.
+   */
+  private async listOpenPrsForRepo(
+    config: GithubConfig,
+    fullName: string,
+    includeChangeStats: boolean,
+  ): Promise<string> {
+    let prs: any[];
+    try {
+      prs = await this.githubFetch<any[]>(
+        config,
+        `/repos/${fullName}/pulls?state=open&per_page=100`,
+      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "unknown error";
+      return `⚠️ **${fullName}**: could not fetch (${msg})`;
+    }
+    if (!Array.isArray(prs) || prs.length === 0) {
+      return `**${fullName}** — no open PRs`;
+    }
+
+    // Oldest first (longest open at the top).
+    prs.sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
+
+    // Optional change stats: one extra call per PR.
+    const statsByNumber = new Map<
+      number,
+      { additions: number; deletions: number; changed_files: number }
+    >();
+    if (includeChangeStats) {
+      const details = await Promise.all(
+        prs.map(async (p) => {
+          try {
+            const detail = await this.githubFetch<any>(
+              config,
+              `/repos/${fullName}/pulls/${p.number}`,
+            );
+            return {
+              number: p.number,
+              additions: detail.additions ?? 0,
+              deletions: detail.deletions ?? 0,
+              changed_files: detail.changed_files ?? 0,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const d of details) if (d) statsByNumber.set(d.number, d);
+    }
+
+    const truncatedNote = prs.length >= 100 ? " (showing first 100)" : "";
+    const lines = prs.map((p) => {
+      const draft = p.draft ? " (draft)" : "";
+      const author = p.user?.login ? ` — @${p.user.login}` : "";
+      const meta: string[] = [];
+      const age = this.formatAge(p.created_at);
+      if (age) meta.push(age);
+      const stat = statsByNumber.get(p.number);
+      if (stat) {
+        meta.push(
+          `+${stat.additions}/-${stat.deletions} across ${stat.changed_files} file${stat.changed_files === 1 ? "" : "s"}`,
+        );
+      }
+      const metaLine = meta.length ? `\n    ${meta.join(" · ")}` : "";
+      return `  - #${p.number} ${p.title}${draft}${author}\n    ${p.html_url}${metaLine}`;
+    });
+
+    return `**${fullName}** — ${prs.length} open PR${prs.length === 1 ? "" : "s"}${truncatedNote}\n${lines.join("\n")}`;
+  }
+
+  /** Repos where the user has an open PR authored / assigned / review-requested. */
+  private async discoverInvolvedRepos(
+    config: GithubConfig,
+  ): Promise<string[]> {
+    const queries = [
+      "is:pr is:open author:@me archived:false",
+      "is:pr is:open assignee:@me archived:false",
+      "is:pr is:open review-requested:@me archived:false",
+    ];
+    const results = await Promise.all(
+      queries.map((q) =>
+        this.githubFetch<{ items: any[] }>(
+          config,
+          `/search/issues?q=${encodeURIComponent(q)}&per_page=100`,
+        ).catch(() => ({ items: [] as any[] })),
+      ),
+    );
+    const repos = new Set<string>();
+    for (const r of results) {
+      for (const item of r.items || []) {
+        const name = this.repoFullName(item);
+        if (name) repos.add(name);
+      }
+    }
+    return Array.from(repos);
+  }
+
+  private async executeOpenPrs(
+    config: GithubConfig,
+    params: QueryParams,
+  ): Promise<string> {
+    const repos = (Array.isArray(params.repos) ? params.repos : [])
+      .map((r) => String(r).trim())
+      .filter(Boolean);
+    if (repos.length === 0) {
+      return "Please provide one or more repositories (each as 'owner/name').";
+    }
+    const includeChangeStats = params.includeChangeStats === true;
+    const fullNames = await Promise.all(
+      repos.map((r) => this.resolveRepoName(config, r)),
+    );
+    const blocks = await Promise.all(
+      fullNames.map((fullName) =>
+        this.listOpenPrsForRepo(config, fullName, includeChangeStats),
+      ),
+    );
+    return `Open pull requests across ${fullNames.length} repositor${fullNames.length === 1 ? "y" : "ies"}:\n\n${blocks.join("\n\n")}`;
+  }
+
+  private async executeInvolvedPrs(
+    config: GithubConfig,
+    params: QueryParams,
+  ): Promise<string> {
+    const includeChangeStats = params.includeChangeStats === true;
+    const extra = (Array.isArray(params.extraRepos) ? params.extraRepos : [])
+      .map((r) => String(r).trim())
+      .filter(Boolean);
+
+    const [discovered, extraResolved] = await Promise.all([
+      this.discoverInvolvedRepos(config),
+      Promise.all(extra.map((r) => this.resolveRepoName(config, r))),
+    ]);
+
+    // Dedupe, discovered-first.
+    const all: string[] = [];
+    const seen = new Set<string>();
+    for (const name of [...discovered, ...extraResolved]) {
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        all.push(name);
+      }
+    }
+
+    if (all.length === 0) {
+      return "You have no open PRs authored, assigned, or awaiting your review, and no extra repos were provided — nothing to show.";
+    }
+
+    const blocks = await Promise.all(
+      all.map((fullName) =>
+        this.listOpenPrsForRepo(config, fullName, includeChangeStats),
+      ),
+    );
+    return `Open PRs across ${all.length} repositor${all.length === 1 ? "y" : "ies"} you're involved with:\n\n${blocks.join("\n\n")}`;
   }
 }
 
