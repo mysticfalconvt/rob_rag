@@ -1,6 +1,9 @@
 import { HumanMessage } from "@langchain/core/messages";
 import { type MatrixEvent, type Room, RoomEvent } from "matrix-js-sdk";
-import { resolveMatrixIdentity } from "../agent/identity";
+import {
+  resolveMatrixCapabilities,
+  resolveMatrixIdentity,
+} from "../agent/identity";
 import {
   findMatrixThreadConversation,
   loadConversationHistory,
@@ -166,6 +169,7 @@ async function runMatrixTurn(opts: {
     sender,
     displayName,
   );
+  const allowedCapabilities = await resolveMatrixCapabilities(sender);
   const conversationId = await resolveConversation({
     channel: "matrix",
     userId,
@@ -208,6 +212,7 @@ async function runMatrixTurn(opts: {
     matrixRoomId: roomId,
     sourceFilter: useRag ? undefined : "none",
     webIntent,
+    allowedCapabilities,
   });
 
   await sendFormattedMessage(

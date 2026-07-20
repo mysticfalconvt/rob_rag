@@ -542,5 +542,17 @@ class MatrixClientManager {
   }
 }
 
-// Singleton instance
-export const matrixClient = new MatrixClientManager();
+// Singleton instance.
+//
+// Parked on globalThis so ALL Next.js module instances (the instrumentation /
+// scheduler context that connects at boot, and the API-route context that reads
+// status) share the SAME client. Without this, API routes get a fresh,
+// uninitialized MatrixClientManager and isRunning() reports false even though
+// the bot is connected — which forced a "Save Configuration" to re-initialize
+// the client inside the route's own instance.
+const _matrixGlobal = globalThis as unknown as {
+  __robrag_matrixClient?: MatrixClientManager;
+};
+export const matrixClient: MatrixClientManager =
+  _matrixGlobal.__robrag_matrixClient ??
+  (_matrixGlobal.__robrag_matrixClient = new MatrixClientManager());

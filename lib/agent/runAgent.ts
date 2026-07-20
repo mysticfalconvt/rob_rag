@@ -23,6 +23,10 @@ import {
   listSkills,
   readSoul,
 } from "../assistant/store";
+import {
+  filterToolsByCapabilities,
+  ragSourceFilterForCapabilities,
+} from "./capabilities";
 import { runToolLoop } from "./loop";
 import {
   createAssistantMessage,
@@ -61,9 +65,14 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     documentPath,
     matrixRoomId,
     webIntent,
+    allowedCapabilities,
     onToken,
     onEvent,
   } = input;
+
+  // Per-user capability gating. null => unrestricted (default).
+  const allowedCaps =
+    allowedCapabilities != null ? new Set(allowedCapabilities) : null;
 
   const lastMessage = messages[messages.length - 1];
   const query = lastMessage?.content ?? ""; // raw text — for storage, RAG, tools
@@ -139,6 +148,16 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const sourceCollector = new SourceCollector();
   let tools: DynamicStructuredTool[] = [];
 
+  // Scope RAG document sources to the user's permitted sources. "none" from the
+  // caller (RAG explicitly off) always wins; otherwise capabilities may narrow
+  // the filter or disable RAG (knowledge_base denied).
+  let effectiveSourceFilter = sourceFilter;
+  if (sourceFilter !== "none" && allowedCaps) {
+    const capFilter = ragSourceFilterForCapabilities(allowedCaps);
+    if (capFilter === "none") effectiveSourceFilter = "none";
+    else if (Array.isArray(capFilter)) effectiveSourceFilter = capFilter;
+  }
+
   if (!disableTools) {
     const [pluginTools, utilityTools] = [
       await generateToolsForConfiguredPlugins(),
@@ -146,9 +165,9 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     ];
 
     const ragTool =
-      sourceFilter !== "none"
+      effectiveSourceFilter !== "none"
         ? createRagTool({
-            sourceFilter,
+            sourceFilter: effectiveSourceFilter,
             sourceCount: sourceCount || 35,
             documentPath:
               typeof documentPath === "string" ? documentPath.trim() : null,
@@ -177,6 +196,9 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     if (channel !== "matrix") {
       tools = tools.filter((t) => !REMINDER_TOOL_NAMES.includes(t.name));
     }
+
+    // Per-user capability gating: drop any tool outside the permitted groups.
+    tools = filterToolsByCapabilities(tools, allowedCaps);
   }
 
   // 5. System prompt (single canonical builder).

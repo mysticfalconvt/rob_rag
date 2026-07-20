@@ -466,6 +466,22 @@ model MatrixRoom {
   @@index([roomId])
 }
 
+// Per-Matrix-user tool/data-source permissions.
+// Keyed by MXID so a policy can be set before the user has ever messaged.
+// ABSENCE of a row means "allow everything" (non-breaking default). When a row
+// exists, allowedCapabilities is the exhaustive JSON list of permitted
+// capability-group keys (see lib/agent/capabilities.ts).
+model MatrixUserPolicy {
+  id                  String   @id @default(uuid())
+  matrixUserId        String   @unique
+  displayName         String?
+  allowedCapabilities String   @default("[]") // JSON string[] of capability keys
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([matrixUserId])
+}
+
 model ScheduledTask {
   id              String          @id @default(uuid())
   type            String          // "matrix_reminder", "auto_sync"

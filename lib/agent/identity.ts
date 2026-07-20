@@ -100,6 +100,40 @@ export async function resolveMatrixIdentity(
   }
 }
 
+/**
+ * Resolve the tool/data-source capabilities a Matrix sender is allowed to use.
+ *
+ * Returns:
+ *  - `null`      -> allow everything (no policy row, or the sender is the admin).
+ *                   This is the non-breaking default.
+ *  - `string[]`  -> the exhaustive list of permitted capability-group keys.
+ *
+ * Admins are never restricted (prevents the owner locking themselves out).
+ */
+export async function resolveMatrixCapabilities(
+  sender: string,
+): Promise<string[] | null> {
+  // Admin bypass: a sender linked to an admin AuthUser always gets full access.
+  const linked = await prisma.authUser.findUnique({
+    where: { matrixUserId: sender },
+    select: { role: true },
+  });
+  if (linked?.role === "admin") return null;
+
+  const policy = await prisma.matrixUserPolicy.findUnique({
+    where: { matrixUserId: sender },
+    select: { allowedCapabilities: true },
+  });
+  if (!policy) return null; // no policy -> allow all
+
+  try {
+    const parsed = JSON.parse(policy.allowedCapabilities);
+    return Array.isArray(parsed) ? parsed.map(String) : null;
+  } catch {
+    return null; // corrupt policy -> fail open (allow all), never lock out
+  }
+}
+
 /** Resolve the admin identity used for scheduled task execution. */
 export async function resolveScheduledIdentity(): Promise<{
   userId: string;

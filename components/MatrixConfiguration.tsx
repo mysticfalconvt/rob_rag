@@ -18,6 +18,20 @@ interface MatrixRoom {
   isJoined?: boolean;
 }
 
+interface CapabilityInfo {
+  key: string;
+  label: string;
+  description: string;
+}
+
+interface PermissionUser {
+  userId: string;
+  displayName: string;
+  rooms: string[];
+  /** null = unrestricted (full access); array = exhaustive allowed keys. */
+  allowedCapabilities: string[] | null;
+}
+
 export default function MatrixConfiguration() {
   const [homeserver, setHomeserver] = useState("");
   const [accessToken, setAccessToken] = useState("");
@@ -33,11 +47,123 @@ export default function MatrixConfiguration() {
   const [tokenChanged, setTokenChanged] = useState(false);
   const [allowedUsers, setAllowedUsers] = useState<string[]>([]);
   const [allowedUserInput, setAllowedUserInput] = useState("");
+  const [capabilities, setCapabilities] = useState<CapabilityInfo[]>([]);
+  const [permUsers, setPermUsers] = useState<PermissionUser[]>([]);
+  const [isLoadingPerms, setIsLoadingPerms] = useState(false);
+  const [savingUser, setSavingUser] = useState<string | null>(null);
+
+  // Lightweight status-only refresh (does not touch token/other fields, so it's
+  // safe to run on a timer while the user may be editing the form).
+  const refreshStatus = async () => {
+    try {
+      const res = await fetch("/api/matrix/config");
+      if (res.ok) {
+        const data = await res.json();
+        setIsRunning(data.isRunning || false);
+      }
+    } catch (error) {
+      // Ignore transient status-poll errors.
+    }
+  };
 
   useEffect(() => {
     fetchConfig();
     fetchRooms();
+    fetchPermissions();
   }, []);
+
+  // The bot may still be connecting when the page loads (init is triggered by
+  // the config fetch above). Poll connection status until it's running so the
+  // room/user actions enable on their own — no "Save Configuration" needed.
+  useEffect(() => {
+    if (isRunning) return;
+    let attempts = 0;
+    const id = setInterval(() => {
+      attempts += 1;
+      refreshStatus();
+      if (attempts >= 10) clearInterval(id);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [isRunning]);
+
+  // Once connected, (re)load rooms and discovered users.
+  useEffect(() => {
+    if (!isRunning) return;
+    fetchRooms();
+    fetchPermissions();
+  }, [isRunning]);
+
+  const fetchPermissions = async () => {
+    setIsLoadingPerms(true);
+    try {
+      const res = await fetch("/api/matrix/users");
+      if (res.ok) {
+        const data = await res.json();
+        setCapabilities(data.capabilities || []);
+        setPermUsers(data.users || []);
+      }
+    } catch (error) {
+      console.error("Error fetching Matrix user permissions:", error);
+    } finally {
+      setIsLoadingPerms(false);
+    }
+  };
+
+  const allCapabilityKeys = capabilities.map((c) => c.key);
+
+  // A user with a null policy is unrestricted → every capability is effectively on.
+  const isCapabilityOn = (user: PermissionUser, key: string): boolean =>
+    user.allowedCapabilities === null || user.allowedCapabilities.includes(key);
+
+  const savePermissions = async (
+    user: PermissionUser,
+    allowedCapabilities: string[] | null,
+  ) => {
+    setSavingUser(user.userId);
+    try {
+      const res = await fetch("/api/matrix/permissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          matrixUserId: user.userId,
+          displayName: user.displayName,
+          allowedCapabilities,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPermUsers((prev) =>
+          prev.map((u) =>
+            u.userId === user.userId
+              ? { ...u, allowedCapabilities: data.allowedCapabilities }
+              : u,
+          ),
+        );
+      } else {
+        alert("Failed to save permissions");
+      }
+    } catch (error) {
+      alert("Failed to save permissions");
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const toggleCapability = (user: PermissionUser, key: string) => {
+    // Materialize a null (full-access) policy into an explicit list before editing.
+    const current =
+      user.allowedCapabilities === null
+        ? [...allCapabilityKeys]
+        : [...user.allowedCapabilities];
+    const next = current.includes(key)
+      ? current.filter((k) => k !== key)
+      : [...current, key];
+    savePermissions(user, next);
+  };
+
+  const resetUserAccess = (user: PermissionUser) => {
+    savePermissions(user, null); // null → delete row → full access
+  };
 
   const fetchConfig = async () => {
     try {
@@ -432,6 +558,135 @@ export default function MatrixConfiguration() {
           >
             {message}
           </div>
+        )}
+      </div>
+
+      <div className={styles.section} style={{ marginTop: "32px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <h3>User Tool Permissions</h3>
+          <button
+            onClick={fetchPermissions}
+            disabled={isLoadingPerms}
+            style={{ padding: "8px 16px" }}
+          >
+            {isLoadingPerms ? "Loading..." : "Refresh Users"}
+          </button>
+        </div>
+        <p style={{ fontSize: "0.9em", color: "#666", marginTop: "4px" }}>
+          Users who share a room with the bot. By default everyone has full
+          access; uncheck capabilities to restrict someone (e.g. kids shouldn't
+          search Paperless documents). Changes save immediately. Admins always
+          have full access regardless of these settings.
+        </p>
+
+        {permUsers.length === 0 ? (
+          <p style={{ color: "#666" }}>
+            {isLoadingPerms
+              ? "Loading users..."
+              : "No users found. Make sure the bot is connected and shares a room with other people, then click Refresh Users."}
+          </p>
+        ) : (
+          permUsers.map((user) => {
+            const full = user.allowedCapabilities === null;
+            const saving = savingUser === user.userId;
+            return (
+              <div
+                key={user.userId}
+                style={{
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "8px",
+                  padding: "12px",
+                  marginBottom: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    gap: "8px",
+                  }}
+                >
+                  <div>
+                    <strong>{user.displayName}</strong>
+                    <div>
+                      <code style={{ fontSize: "0.85em", color: "#666" }}>
+                        {user.userId}
+                      </code>
+                    </div>
+                    {user.rooms.length > 0 && (
+                      <div style={{ fontSize: "0.8em", color: "#888" }}>
+                        Rooms: {user.rooms.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <span
+                      style={{
+                        fontSize: "0.8em",
+                        color: full ? "#2e7d32" : "#b26a00",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {full ? "✓ Full access" : "Restricted"}
+                    </span>
+                    {!full && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => resetUserAccess(user)}
+                          disabled={saving}
+                          style={{
+                            marginTop: "4px",
+                            padding: "4px 8px",
+                            fontSize: "0.8em",
+                          }}
+                        >
+                          Reset to full
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(220px, 1fr))",
+                    gap: "4px 12px",
+                    marginTop: "8px",
+                  }}
+                >
+                  {capabilities.map((cap) => (
+                    <label
+                      key={cap.key}
+                      title={cap.description}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "0.9em",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isCapabilityOn(user, cap.key)}
+                        disabled={saving}
+                        onChange={() => toggleCapability(user, cap.key)}
+                      />
+                      <span>{cap.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 

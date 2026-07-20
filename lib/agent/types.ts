@@ -63,6 +63,15 @@ export interface RunAgentInput {
   matrixRoomId?: string;
 
   /**
+   * Capability-group keys this caller is allowed to use (see
+   * lib/agent/capabilities.ts). `undefined`/`null` means unrestricted (the
+   * default for web/scheduled and for Matrix users with no policy). When set,
+   * tools outside these groups are not bound and RAG is scoped to permitted
+   * document sources.
+   */
+  allowedCapabilities?: string[] | null;
+
+  /**
    * Explicit web intent from the `#search` / `#research` commands. Rather than a
    * bespoke pre-pass, this nudges the agent to call the corresponding web tool.
    * (There is no general "web on/off" toggle — the agent decides when to search

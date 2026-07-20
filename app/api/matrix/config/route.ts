@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { matrixClient } from "@/lib/matrix/client";
+import { initializeApp, initializeMatrix } from "@/lib/init";
 import { initializeMessageHandler } from "@/lib/matrix/messageHandler";
 
 /**
@@ -21,6 +22,12 @@ export async function GET(req: NextRequest) {
     if (user?.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+
+    // Ensure core services + the Matrix client are coming up. Both are
+    // idempotent one-shots, so merely viewing the config page starts the bot
+    // (rather than requiring a Save to trigger initialization).
+    initializeApp();
+    initializeMatrix();
 
     const settings = await prisma.settings.findUnique({
       where: { id: "singleton" },
