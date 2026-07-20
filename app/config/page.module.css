@@ -10,16 +10,75 @@
   color: var(--foreground);
 }
 
-.grid {
+/* Two-column shell: left section-nav rail + content area. */
+.layout {
   display: grid;
+  grid-template-columns: 200px 1fr;
   gap: 2rem;
-  grid-template-columns: 1fr;
+  align-items: start;
 }
 
-@media (min-width: 768px) {
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+/* Left section-nav (vertical tabs). Sticks while the content scrolls. */
+.sectionNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: sticky;
+  top: 2rem;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  color: #666;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.navLink i {
+  width: 1.1rem;
+  text-align: center;
+}
+
+.navLink:hover {
+  background-color: #f3f4f6;
+  color: var(--foreground);
+}
+
+.navActive {
+  background-color: #e5e7eb;
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+/* Card area for the active section. A vertical flex stack of "blocks": each
+   full-width (heavy) card is its own block, and groups of compact cards live in
+   a .compactGrid. A single consistent gap separates every block, so spacing
+   never drifts. */
+.sectionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Compact cards tiled in equal-height rows. auto-fit collapses empty tracks so
+   a lone card in the last row fills the row instead of leaving an empty cell;
+   align-items: stretch makes every card in a row the same height, which removes
+   both the ragged gaps and the mismatched-height look. */
+.compactGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
 }
 
 .loading {
@@ -31,39 +90,47 @@
   color: var(--foreground);
 }
 
-/* Mobile Responsive Styles */
+@media (prefers-color-scheme: dark) {
+  .navLink {
+    color: #999;
+  }
+
+  .navLink:hover {
+    background-color: #1f2937;
+    color: #fff;
+  }
+
+  .navActive {
+    background-color: #374151;
+    color: #fff;
+  }
+}
+
+/* Mobile: stack the nav above the content as a horizontal scrollable strip. */
 @media (max-width: 768px) {
   .container {
     padding-top: calc(3.5rem + 1rem);
   }
-}
 
-.adminOnly {
-  grid-column: 1 / -1;
-  padding: 3rem 2rem;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border: 2px dashed #dee2e6;
-  border-radius: 12px;
-  text-align: center;
-  color: #6c757d;
-}
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
 
-.adminOnly i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  color: #adb5bd;
-}
+  .sectionNav {
+    flex-direction: row;
+    overflow-x: auto;
+    position: static;
+    gap: 0.25rem;
+    padding-bottom: 0.5rem;
+  }
 
-.adminOnly h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.5rem;
-  color: #495057;
-}
+  .navLink {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 
-.adminOnly p {
-  margin: 0;
-  font-size: 1rem;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
+  .compactGrid {
+    grid-template-columns: 1fr;
+  }
 }

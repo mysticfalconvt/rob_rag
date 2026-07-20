@@ -20,6 +20,15 @@ import WeatherConfiguration from "@/components/WeatherConfiguration";
 import { useAuth } from "@/hooks/useAuth";
 import styles from "./page.module.css";
 
+/** Config sections shown in the left nav. Non-admins only see "profile". */
+const TABS = [
+  { key: "profile", label: "Profile", icon: "fa-user" },
+  { key: "ai", label: "AI & Models", icon: "fa-robot" },
+  { key: "documents", label: "Documents", icon: "fa-file-lines" },
+  { key: "integrations", label: "Integrations", icon: "fa-plug" },
+  { key: "matrix", label: "Matrix", icon: "fa-comments" },
+] as const;
+
 interface Settings {
   embeddingModel: string;
   chatModel: string;
@@ -61,6 +70,7 @@ interface User {
 
 export default function ConfigPage() {
   const { isAdmin } = useAuth();
+  const [activeTab, setActiveTab] = useState<string>("profile");
   const [isLoading, setIsLoading] = useState(true);
   const [embeddingModels, setEmbeddingModels] = useState<string[]>([]);
   const [chatModels, setChatModels] = useState<string[]>([]);
@@ -72,6 +82,13 @@ export default function ConfigPage() {
   const [selectedVisionModel, setSelectedVisionModel] = useState("");
   const [customOcrEnabled, setCustomOcrEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Restore the active tab from the ?tab= query param on load. Done client-side
+  // (rather than useSearchParams) to avoid the Suspense-boundary requirement.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t && TABS.some((tab) => tab.key === t)) setActiveTab(t);
+  }, []);
 
   const [paperlessUrl, setPaperlessUrl] = useState("");
   const [paperlessExternalUrl, setPaperlessExternalUrl] = useState("");
@@ -725,139 +742,183 @@ export default function ConfigPage() {
   if (isLoading)
     return <div className={styles.loading}>Loading configuration...</div>;
 
+  const availableTabs = isAdmin
+    ? TABS
+    : TABS.filter((t) => t.key === "profile");
+  // Fall back to Profile if the current tab isn't available (e.g. non-admin
+  // landing on ?tab=matrix, or an unknown value).
+  const currentTab = availableTabs.some((t) => t.key === activeTab)
+    ? activeTab
+    : "profile";
+
+  const selectTab = (key: string) => {
+    setActiveTab(key);
+    window.history.replaceState(null, "", `/config?tab=${key}`);
+  };
+
   return (
     <div className={styles.container}>
       <h1 className={styles.title}>Configuration</h1>
 
-      <div className={styles.grid}>
-        {/* User Profile - Available to all users */}
-        <UserProfile />
+      <div className={styles.layout}>
+        <nav className={styles.sectionNav}>
+          {availableTabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`${styles.navLink} ${currentTab === t.key ? styles.navActive : ""}`}
+              onClick={() => selectTab(t.key)}
+            >
+              <i className={`fas ${t.icon}`} />
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
 
-        {/* Admin-only sections */}
-        {isAdmin && (
-          <>
-            <ModelConfiguration
-              settings={settings}
-              embeddingModels={embeddingModels}
-              chatModels={chatModels}
-              selectedEmbeddingModel={selectedEmbeddingModel}
-              selectedChatModel={selectedChatModel}
-              selectedFastChatModel={selectedFastChatModel}
-              isSaving={isSaving}
-              hasChanges={hasChanges}
-              onEmbeddingModelChange={setSelectedEmbeddingModel}
-              onChatModelChange={setSelectedChatModel}
-              onFastChatModelChange={setSelectedFastChatModel}
-              onSave={handleSaveSettings}
-            />
+        <div className={styles.sectionContent}>
+          {/* Profile - available to all users */}
+          {currentTab === "profile" && <UserProfile />}
 
-            <PaperlessConfiguration
-              paperlessUrl={paperlessUrl}
-              paperlessExternalUrl={paperlessExternalUrl}
-              paperlessApiToken={paperlessApiToken}
-              paperlessEnabled={paperlessEnabled}
-              paperlessConfigured={settings?.paperlessConfigured || false}
-              isTesting={isTesting}
-              isSaving={isSaving}
-              onUrlChange={setPaperlessUrl}
-              onExternalUrlChange={setPaperlessExternalUrl}
-              onTokenChange={setPaperlessApiToken}
-              onEnabledChange={setPaperlessEnabled}
-              onTest={handleTestPaperlessConnection}
-              onSave={handleSavePaperlessSettings}
-            />
+          {/* AI & Models */}
+          {isAdmin && currentTab === "ai" && (
+            <>
+              <div className={styles.compactGrid}>
+                <ModelConfiguration
+                  settings={settings}
+                  embeddingModels={embeddingModels}
+                  chatModels={chatModels}
+                  selectedEmbeddingModel={selectedEmbeddingModel}
+                  selectedChatModel={selectedChatModel}
+                  selectedFastChatModel={selectedFastChatModel}
+                  isSaving={isSaving}
+                  hasChanges={hasChanges}
+                  onEmbeddingModelChange={setSelectedEmbeddingModel}
+                  onChatModelChange={setSelectedChatModel}
+                  onFastChatModelChange={setSelectedFastChatModel}
+                  onSave={handleSaveSettings}
+                />
 
-            <CustomOcrConfiguration
-              visionModels={visionModels}
-              selectedVisionModel={selectedVisionModel}
-              customOcrEnabled={customOcrEnabled}
-              onVisionModelChange={setSelectedVisionModel}
-              onEnabledChange={setCustomOcrEnabled}
-              onSave={handleSaveOcrSettings}
-              isSaving={isSaving}
-            />
+                <CustomOcrConfiguration
+                  visionModels={visionModels}
+                  selectedVisionModel={selectedVisionModel}
+                  customOcrEnabled={customOcrEnabled}
+                  onVisionModelChange={setSelectedVisionModel}
+                  onEnabledChange={setCustomOcrEnabled}
+                  onSave={handleSaveOcrSettings}
+                  isSaving={isSaving}
+                />
+              </div>
 
-            <SyncedFilesConfiguration
-              config={syncedFilesConfig}
-              onSave={handleSaveSyncedFilesConfig}
-              isSaving={isSaving}
-            />
+              <ContextWindowSettings />
 
-            <PromptConfiguration />
+              <PromptConfiguration />
 
-            <AssistantConfiguration />
+              <AssistantConfiguration />
+            </>
+          )}
 
-            <ContextWindowSettings />
+          {/* Documents */}
+          {isAdmin && currentTab === "documents" && (
+            <div className={styles.compactGrid}>
+              <PaperlessConfiguration
+                paperlessUrl={paperlessUrl}
+                paperlessExternalUrl={paperlessExternalUrl}
+                paperlessApiToken={paperlessApiToken}
+                paperlessEnabled={paperlessEnabled}
+                paperlessConfigured={settings?.paperlessConfigured || false}
+                isTesting={isTesting}
+                isSaving={isSaving}
+                onUrlChange={setPaperlessUrl}
+                onExternalUrlChange={setPaperlessExternalUrl}
+                onTokenChange={setPaperlessApiToken}
+                onEnabledChange={setPaperlessEnabled}
+                onTest={handleTestPaperlessConnection}
+                onSave={handleSavePaperlessSettings}
+              />
 
-            <GoogleCalendarConfig />
+              <SyncedFilesConfiguration
+                config={syncedFilesConfig}
+                onSave={handleSaveSyncedFilesConfig}
+                isSaving={isSaving}
+              />
+            </div>
+          )}
 
-            <EmailConfiguration />
+          {/* Integrations */}
+          {isAdmin && currentTab === "integrations" && (
+            <>
+              <GoogleCalendarConfig />
 
-            <PortainerConfiguration
-              portainerUrl={portainerUrl}
-              portainerEndpointId={portainerEndpointId}
-              portainerApiKey={portainerApiKey}
-              portainerEnabled={portainerEnabled}
-              portainerConfigured={settings?.portainerConfigured || false}
-              isTesting={isTestingPortainer}
-              isSaving={isSaving}
-              onUrlChange={setPortainerUrl}
-              onEndpointIdChange={setPortainerEndpointId}
-              onApiKeyChange={setPortainerApiKey}
-              onEnabledChange={setPortainerEnabled}
-              onTest={handleTestPortainerConnection}
-              onSave={handleSavePortainerSettings}
-            />
+              <EmailConfiguration />
 
-            <GithubConfiguration
-              githubToken={githubToken}
-              githubEnabled={githubEnabled}
-              githubConfigured={settings?.githubConfigured || false}
-              isTesting={isTestingGithub}
-              isSaving={isSaving}
-              onTokenChange={setGithubToken}
-              onEnabledChange={setGithubEnabled}
-              onTest={handleTestGithubConnection}
-              onSave={handleSaveGithubSettings}
-            />
+              <div className={styles.compactGrid}>
+                <PortainerConfiguration
+                  portainerUrl={portainerUrl}
+                  portainerEndpointId={portainerEndpointId}
+                  portainerApiKey={portainerApiKey}
+                  portainerEnabled={portainerEnabled}
+                  portainerConfigured={settings?.portainerConfigured || false}
+                  isTesting={isTestingPortainer}
+                  isSaving={isSaving}
+                  onUrlChange={setPortainerUrl}
+                  onEndpointIdChange={setPortainerEndpointId}
+                  onApiKeyChange={setPortainerApiKey}
+                  onEnabledChange={setPortainerEnabled}
+                  onTest={handleTestPortainerConnection}
+                  onSave={handleSavePortainerSettings}
+                />
 
-            <TodoConfiguration
-              todoBaseUrl={todoBaseUrl}
-              todoEnabled={todoEnabled}
-              isTesting={isTestingTodo}
-              isSaving={isSaving}
-              onBaseUrlChange={setTodoBaseUrl}
-              onEnabledChange={setTodoEnabled}
-              onTest={handleTestTodoConnection}
-              onSave={handleSaveTodoSettings}
-            />
+                <GithubConfiguration
+                  githubToken={githubToken}
+                  githubEnabled={githubEnabled}
+                  githubConfigured={settings?.githubConfigured || false}
+                  isTesting={isTestingGithub}
+                  isSaving={isSaving}
+                  onTokenChange={setGithubToken}
+                  onEnabledChange={setGithubEnabled}
+                  onTest={handleTestGithubConnection}
+                  onSave={handleSaveGithubSettings}
+                />
 
-            <WeatherConfiguration
-              weatherDefaultLocation={weatherDefaultLocation}
-              weatherUnits={weatherUnits}
-              weatherEnabled={weatherEnabled}
-              isTesting={isTestingWeather}
-              isSaving={isSaving}
-              onDefaultLocationChange={setWeatherDefaultLocation}
-              onUnitsChange={setWeatherUnits}
-              onEnabledChange={setWeatherEnabled}
-              onTest={handleTestWeather}
-              onSave={handleSaveWeatherSettings}
-            />
+                <TodoConfiguration
+                  todoBaseUrl={todoBaseUrl}
+                  todoEnabled={todoEnabled}
+                  isTesting={isTestingTodo}
+                  isSaving={isSaving}
+                  onBaseUrlChange={setTodoBaseUrl}
+                  onEnabledChange={setTodoEnabled}
+                  onTest={handleTestTodoConnection}
+                  onSave={handleSaveTodoSettings}
+                />
 
-            <MatrixConfiguration />
+                <WeatherConfiguration
+                  weatherDefaultLocation={weatherDefaultLocation}
+                  weatherUnits={weatherUnits}
+                  weatherEnabled={weatherEnabled}
+                  isTesting={isTestingWeather}
+                  isSaving={isSaving}
+                  onDefaultLocationChange={setWeatherDefaultLocation}
+                  onUnitsChange={setWeatherUnits}
+                  onEnabledChange={setWeatherEnabled}
+                  onTest={handleTestWeather}
+                  onSave={handleSaveWeatherSettings}
+                />
 
-            {/* Goodreads - Admin only */}
-            <GoodreadsIntegration
-              users={users}
-              isLoadingUsers={isLoadingUsers}
-              onAddUser={handleAddUser}
-              onUploadCSV={handleUploadCSV}
-              onSaveRSSFeed={handleSaveRSSFeed}
-              onSyncRSS={handleSyncRSS}
-            />
-          </>
-        )}
+                <GoodreadsIntegration
+                  users={users}
+                  isLoadingUsers={isLoadingUsers}
+                  onAddUser={handleAddUser}
+                  onUploadCSV={handleUploadCSV}
+                  onSaveRSSFeed={handleSaveRSSFeed}
+                  onSyncRSS={handleSyncRSS}
+                />
+              </div>
+            </>
+          )}
+
+          {/* Matrix */}
+          {isAdmin && currentTab === "matrix" && <MatrixConfiguration />}
+        </div>
       </div>
     </div>
   );
