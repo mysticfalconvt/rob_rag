@@ -161,6 +161,32 @@ export default function ScheduledPage() {
     });
   };
 
+  // Cron day-of-week fields can be ranges ("1-5") or lists ("1,3,5"), not just a
+  // single digit — `parseInt("1-5")` is 1, which is why weekday schedules used to
+  // be mislabelled as "Mondays".
+  const formatDayOfWeek = (dayOfWeek: string): string => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayName = (value: string) => days[parseInt(value) % 7] ?? value;
+
+    if (/^\d+$/.test(dayOfWeek)) return `${dayName(dayOfWeek)}s`;
+    if (dayOfWeek === '1-5') return 'Weekdays';
+    if (dayOfWeek === '0,6' || dayOfWeek === '6,0') return 'Weekends';
+
+    const rangeMatch = dayOfWeek.match(/^(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      return `${dayName(rangeMatch[1])}–${dayName(rangeMatch[2])}`;
+    }
+
+    if (/^\d+(,\d+)+$/.test(dayOfWeek)) {
+      return dayOfWeek
+        .split(',')
+        .map((d) => dayName(d))
+        .join(', ');
+    }
+
+    return dayOfWeek;
+  };
+
   const formatSchedule = (cron: string): string => {
     // Convert common cron patterns to human-readable format
     const patterns: Record<string, string> = {
@@ -193,10 +219,8 @@ export default function ScheduledPage() {
         return `Daily at ${time}`;
       }
 
-      // Weekly on specific day
+      // Weekly on specific day(s)
       if (dayOfMonth === '*' && month === '*' && dayOfWeek !== '*') {
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const day = days[parseInt(dayOfWeek)] || dayOfWeek;
         const h = parseInt(hour);
         const m = parseInt(minute);
         const time = new Date(2000, 0, 1, h, m).toLocaleTimeString('en-US', {
@@ -204,7 +228,7 @@ export default function ScheduledPage() {
           minute: '2-digit',
           hour12: true
         });
-        return `${day}s at ${time}`;
+        return `${formatDayOfWeek(dayOfWeek)} at ${time}`;
       }
     }
 

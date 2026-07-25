@@ -1,30 +1,53 @@
-import { CronExpressionParser } from "cron-parser";
-import { config as appConfig } from "./config";
-import { sendFormattedMessage } from "./matrix/sender";
 import prisma from "./prisma";
+import { claimDueTask, runScheduledTask } from "./scheduledTaskRunner";
 
 /**
  * Background scheduler for periodic tasks
  * Runs in the Next.js server context
  */
+
+/**
+ * Scheduler state lives on globalThis, not on the class instance.
+ *
+ * Next.js compiles `instrumentation.ts` into a different bundle than the API
+ * route handlers, so `import { backgroundScheduler }` can resolve to two
+ * separate module instances in the same process — each with its own `isRunning`
+ * flag. Both then started their own 60s interval and every due task fired twice.
+ * `lib/init.ts` handles the same hazard the same way.
+ */
+interface SchedulerState {
+  intervalId: NodeJS.Timeout | null;
+  isRunning: boolean;
+  matrixInitTriggered: boolean;
+}
+
+const globalScheduler = globalThis as typeof globalThis & {
+  __robrag_scheduler?: SchedulerState;
+};
+
+globalScheduler.__robrag_scheduler ??= {
+  intervalId: null,
+  isRunning: false,
+  matrixInitTriggered: false,
+};
+
+const state = globalScheduler.__robrag_scheduler;
+
 class BackgroundScheduler {
-  private intervalId: NodeJS.Timeout | null = null;
-  private isRunning = false;
   private checkIntervalMs = 60000; // Check every minute
-  private matrixInitTriggered = false;
 
   start() {
-    if (this.isRunning) {
+    if (state.isRunning) {
       console.log("[Scheduler] Already running");
       return;
     }
 
     // Background scheduler started
-    this.isRunning = true;
+    state.isRunning = true;
 
     // Initialize Matrix client after a delay to avoid module loading issues
-    if (!this.matrixInitTriggered) {
-      this.matrixInitTriggered = true;
+    if (!state.matrixInitTriggered) {
+      state.matrixInitTriggered = true;
       setTimeout(async () => {
         try {
           const { initializeMatrix } = await import("./init");
@@ -39,17 +62,17 @@ class BackgroundScheduler {
     this.checkScheduledTasks();
 
     // Then run periodically
-    this.intervalId = setInterval(() => {
+    state.intervalId = setInterval(() => {
       this.checkScheduledTasks();
     }, this.checkIntervalMs);
   }
 
   stop() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    if (state.intervalId) {
+      clearInterval(state.intervalId);
+      state.intervalId = null;
     }
-    this.isRunning = false;
+    state.isRunning = false;
     console.log("[Scheduler] Stopped background scheduler");
   }
 
@@ -106,6 +129,22 @@ class BackgroundScheduler {
         }
       }
 
+      // Claim the run before starting it, by compare-and-swapping the
+      // `dailySyncLastRun` value we just read. `syncAllDataSources` only stamps
+      // that field when it *finishes*, so without this a sync that outlasts the
+      // check interval gets started again on every tick.
+      const claimed = await prisma.settings.updateMany({
+        where: {
+          id: "singleton",
+          dailySyncLastRun: settings.dailySyncLastRun,
+        },
+        data: { dailySyncLastRun: now },
+      });
+
+      if (claimed.count !== 1) {
+        return; // Someone else already claimed today's sync
+      }
+
       // Time to run the daily sync!
       console.log("[Scheduler] Running daily data sync...");
       const { syncAllDataSources } = await import("./syncAll");
@@ -141,7 +180,18 @@ class BackgroundScheduler {
       // Execute each task
       for (const task of dueTasks) {
         try {
-          await this.executeTask(task);
+          // Claim before executing: this advances `nextRun` atomically, so a
+          // concurrent loop — or a later tick while this run is still in flight
+          // — can't send the same reminder a second time.
+          const claimed = await claimDueTask(task);
+          if (!claimed) {
+            console.log(
+              `[Scheduler] Task ${task.name} already claimed elsewhere, skipping`,
+            );
+            continue;
+          }
+
+          await runScheduledTask(task, { trigger: "scheduled" });
         } catch (error) {
           console.error(`[Scheduler] Error executing task ${task.id}:`, error);
         }
@@ -151,144 +201,9 @@ class BackgroundScheduler {
     }
   }
 
-  /**
-   * Execute a single scheduled task
-   */
-  private async executeTask(task: any) {
-    const startedAt = new Date();
-    let status = "success";
-    let error: string | null = null;
-    let response: string | null = null;
-    let metadata: any = {};
-
-    console.log(`[Scheduler] Executing task: ${task.name} (${task.type})`);
-
-    try {
-      if (task.type === "matrix_reminder") {
-        // Execute Matrix reminder
-        if (!task.query || !task.matrixRoomId) {
-          throw new Error("Missing query or matrixRoomId for reminder");
-        }
-
-        // Check if this is a simple reminder (notification) or a query
-        const isSimpleReminder = task.query.startsWith("SIMPLE_REMINDER:");
-
-        if (isSimpleReminder) {
-          // Simple notification - just send the reminder text directly
-          const reminderText = task.query
-            .replace("SIMPLE_REMINDER:", "")
-            .trim();
-          const message = `🔔 **Reminder**\n\n${reminderText}`;
-
-          await sendFormattedMessage(task.matrixRoomId, message);
-
-          response = message;
-          metadata = {
-            roomId: task.matrixRoomId,
-            type: "simple_notification",
-            reminderText,
-          };
-        } else {
-          // Query reminder — run the unified agent in-process (no HTTP self-call).
-          const { runAgent } = await import("./agent/runAgent");
-          const { resolveScheduledIdentity } = await import("./agent/identity");
-
-          const { userId, userProfile } = await resolveScheduledIdentity();
-          const result = await runAgent({
-            messages: [{ role: "user", content: task.query }],
-            channel: "scheduled",
-            userId,
-            userProfile,
-            matrixRoomId: task.matrixRoomId,
-          });
-
-          response = result.text.trim();
-
-          // Send to Matrix room
-          await sendFormattedMessage(
-            task.matrixRoomId,
-            response,
-            result.sources,
-          );
-
-          metadata = {
-            roomId: task.matrixRoomId,
-            query: task.query,
-            type: "query_reminder",
-            sourceCount: result.sources.length,
-          };
-        }
-      } else {
-        throw new Error(`Unknown task type: ${task.type}`);
-      }
-
-      console.log(`[Scheduler] Task ${task.name} completed successfully`);
-    } catch (err) {
-      console.error(`[Scheduler] Task ${task.name} failed:`, err);
-      status = "failed";
-      error = err instanceof Error ? err.message : "Unknown error";
-    }
-
-    const completedAt = new Date();
-    const duration = completedAt.getTime() - startedAt.getTime();
-
-    // Create execution record
-    await prisma.taskExecution.create({
-      data: {
-        taskId: task.id,
-        status,
-        startedAt,
-        completedAt,
-        duration,
-        error,
-        response,
-        metadata: JSON.stringify(metadata),
-      },
-    });
-
-    // Calculate next run time and check if this is a one-time task
-    let nextRun: Date | null = null;
-    let isOneTimeTask = false;
-
-    try {
-      const interval = CronExpressionParser.parse(task.schedule, {
-        tz: appConfig.USER_TIMEZONE,
-      });
-      nextRun = interval.next().toDate();
-
-      // Check if this is a one-time cron (has specific date fields like day and month)
-      // One-time crons have specific day and month values (not * or */n)
-      const cronParts = task.schedule.trim().split(/\s+/);
-      if (cronParts.length >= 5) {
-        const dayOfMonth = cronParts[2];
-        const month = cronParts[3];
-        // If both day and month are specific numbers (not wildcards), it's likely one-time
-        isOneTimeTask = /^\d+$/.test(dayOfMonth) && /^\d+$/.test(month);
-      }
-    } catch (err) {
-      console.error(
-        `[Scheduler] Failed to calculate nextRun for task ${task.id}:`,
-        err,
-      );
-    }
-
-    // Update task last run info
-    // Disable one-time tasks after execution
-    await prisma.scheduledTask.update({
-      where: { id: task.id },
-      data: {
-        lastRun: startedAt,
-        lastRunStatus: status,
-        lastRunError: error,
-        nextRun,
-        enabled: isOneTimeTask ? false : task.enabled, // Disable one-time tasks
-      },
-    });
-  }
-
   getStatus() {
     return {
-      isRunning: this.isRunning,
+      isRunning: state.isRunning,
       checkIntervalMs: this.checkIntervalMs,
     };
   }
