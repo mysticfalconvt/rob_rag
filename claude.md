@@ -23,7 +23,7 @@ Next.js 16 RAG application with multi-source document indexing, intelligent retr
 ## Development Setup
 
 ### Prerequisites
-- Node.js 18+, pnpm
+- Node.js 22.12+, pnpm 10 (pinned via `packageManager`; run `corepack enable`)
 - Docker & Docker Compose
 - LM Studio running locally with embedding and chat models loaded
 

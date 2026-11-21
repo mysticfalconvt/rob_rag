@@ -37,7 +37,7 @@ A self-hosted RAG (Retrieval-Augmented Generation) application built with Next.j
 
 ## Prerequisites
 
-- Node.js 18+ and pnpm
+- Node.js 22.12+ and pnpm 10 (pinned via `packageManager`; run `corepack enable`)
 - Docker and Docker Compose
 - LM Studio running locally with an embedding model and chat model loaded
 

@@ -1,26 +1,27 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY pnpm-lock.yaml* ./
+# Copy package files. pnpm-workspace.yaml carries pnpm settings, including
+# which packages may run install scripts (bcrypt, Prisma engines).
+COPY package*.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install pnpm and dependencies
-RUN npm install -g pnpm && pnpm install --frozen-lockfile
+# pnpm comes from corepack at the version pinned in package.json
+# (packageManager), not whatever is latest on npm.
+RUN corepack enable && pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Generate Prisma Client
-RUN npx prisma generate
+RUN pnpm exec prisma generate
 
 # Build the application
 RUN pnpm run build
 
 # Production stage
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -28,24 +29,21 @@ WORKDIR /app
 # Also install GraphicsMagick and Ghostscript for pdf2pic OCR functionality
 RUN apk add --no-cache openssl libc6-compat graphicsmagick ghostscript
 
-# Install pnpm
-RUN npm install -g pnpm
+# pnpm via corepack, pinned by package.json (packageManager)
+RUN corepack enable
 
 # Copy package files
-COPY package*.json ./
-COPY pnpm-lock.yaml* ./
+COPY package*.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Copy Prisma schema and migrations to a separate location (will be copied to mounted volume on startup)
 COPY prisma ./prisma-schema
 
-# Install production dependencies
+# Install production dependencies. The Prisma CLI is a regular dependency
+# (docker-entrypoint.sh runs migrations with it), so it matches @prisma/client.
 RUN pnpm install --prod --frozen-lockfile
 
-# Install Prisma CLI separately (needed for migrations)
-RUN pnpm add -D prisma@5.22.0
-
 # Generate Prisma client using the schema from prisma-schema
-RUN npx prisma generate --schema=./prisma-schema/schema.prisma
+RUN pnpm exec prisma generate --schema=./prisma-schema/schema.prisma
 
 # Copy built application from builder
 COPY --from=builder /app/.next ./.next
